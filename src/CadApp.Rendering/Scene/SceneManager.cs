@@ -1,19 +1,19 @@
-﻿using CadApp.Core.Document;
+using CadApp.Core.Document;
 using CadApp.Core.Entities;
 using CadApp.Rendering.EntityRenderers;
-using HelixToolkit.Wpf;
+using HelixToolkit.Wpf.SharpDX;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Windows.Media.Media3D;
 
 namespace CadApp.Rendering.Scene;
 
 public class SceneManager
 {
-    private readonly HelixViewport3D _viewport;
+    private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
-    private readonly Dictionary<Visual3D, CadEntity> _visualToEntity = new();
-    public SceneManager(HelixViewport3D viewport, CadDocument document)
+    private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new();
+
+    public SceneManager(Viewport3DX viewport, CadDocument document)
     {
         _viewport = viewport;
         _document = document;
@@ -30,10 +30,10 @@ public class SceneManager
 
     private void RenderAll()
     {
-        _viewport.Children.Clear();
+        _viewport.Items.Clear();
         _visualToEntity.Clear();
 
-        _viewport.Children.Add(new SunLight());
+        _viewport.Items.Add(new SunLight());
 
         foreach (var entity in _document.Entities)
         {
@@ -41,13 +41,13 @@ public class SceneManager
 
             if (visual != null)
             {
-                _viewport.Children.Add(visual);
+                _viewport.Items.Add(visual);
                 _visualToEntity[visual] = entity;
             }
         }
     }
 
-    public CadEntity? GetEntityFromVisual(Visual3D visual)
+    public CadEntity? GetEntityFromVisual(Element3D visual)
     {
         if (_visualToEntity.TryGetValue(visual, out var entity))
             return entity;
@@ -55,7 +55,7 @@ public class SceneManager
         return null;
     }
 
-    private Visual3D? CreateVisual(CadEntity entity)
+    private Element3D? CreateVisual(CadEntity entity)
     {
         if (entity is LineEntity line)
             return LineRenderer.Create(line);
