@@ -2,6 +2,7 @@ using CadApp.Core.Document;
 using CadApp.Core.Entities;
 using CadApp.Rendering.EntityRenderers;
 using HelixToolkit.Wpf.SharpDX;
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 
@@ -12,12 +13,13 @@ public class SceneManager
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
     private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new();
+    private readonly GroupModel3D _entityRoot = new();
 
     public SceneManager(Viewport3DX viewport, CadDocument document)
     {
         _viewport = viewport;
+        _viewport.Items.Add(_entityRoot);
         _document = document;
-
         _document.Entities.CollectionChanged += OnEntitiesChanged;
 
         RenderAll();
@@ -30,10 +32,10 @@ public class SceneManager
 
     private void RenderAll()
     {
-        _viewport.Items.Clear();
+        _entityRoot.Children.Clear();
         _visualToEntity.Clear();
 
-        _viewport.Items.Add(new SunLight());
+        //_viewport.Items.Add(new SunLight());
 
         foreach (var entity in _document.Entities)
         {
@@ -41,7 +43,7 @@ public class SceneManager
 
             if (visual != null)
             {
-                _viewport.Items.Add(visual);
+                _entityRoot.Children.Add(visual);
                 _visualToEntity[visual] = entity;
             }
         }
@@ -62,4 +64,5 @@ public class SceneManager
 
         return null;
     }
+
 }

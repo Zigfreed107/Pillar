@@ -4,9 +4,12 @@ using CadApp.Core.Selection;
 using CadApp.Core.Tools;
 using CadApp.Rendering.Scene;
 using CadApp.Rendering.Tools;
+using HelixToolkit.SharpDX;
+using HelixToolkit.Wpf.SharpDX;
 using System.Numerics;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace CadApp.UI;
 
@@ -22,6 +25,22 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        var builder = new LineBuilder();
+        builder.AddLine(new Vector3(0, 0, 0), new Vector3(10, 0, 0));
+
+        var line = new LineGeometryModel3D
+        {
+            Geometry = builder.ToLineGeometry3D(),
+            Color = Colors.Red,
+            Thickness = 2
+        };
+
+        Viewport.Items.Add(line);
+
+
+
+
 
         _document = new CadDocument();
 

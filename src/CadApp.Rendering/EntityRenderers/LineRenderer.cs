@@ -1,7 +1,10 @@
 using CadApp.Core.Entities;
+using HelixToolkit.SharpDX;
 using HelixToolkit.SharpDX.Core;
 using HelixToolkit.Wpf.SharpDX;
 using SharpDX;
+using System.Numerics;
+using System.Windows.Media;
 
 namespace CadApp.Rendering.EntityRenderers;
 
@@ -17,7 +20,7 @@ public static class LineRenderer
         return new LineGeometryModel3D
         {
             Geometry = builder.ToLineGeometry3D(),
-            Color = Color.Blue,
+            Color = Color.FromRgb(0, 0, 255),
             Thickness = 2
         };
     }

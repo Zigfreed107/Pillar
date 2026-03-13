@@ -1,3 +1,4 @@
+using CadApp.Core.Entities;
 using CadApp.Core.Selection;
 using CadApp.Core.Tools;
 using CadApp.Rendering.Scene;
@@ -28,7 +29,7 @@ public class SelectTool : ITool
 
         if (hits.Count > 0)
         {
-            var entity = _scene.GetEntityFromVisual(hits[0].ModelHit);
+            CadEntity entity = _scene.GetEntityFromVisual((Element3D)hits[0].ModelHit);
             _selection.Select(entity);
         }
         else
