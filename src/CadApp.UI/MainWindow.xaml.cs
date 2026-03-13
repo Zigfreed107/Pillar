@@ -4,8 +4,6 @@ using CadApp.Core.Selection;
 using CadApp.Core.Tools;
 using CadApp.Rendering.Scene;
 using CadApp.Rendering.Tools;
-using HelixToolkit.Wpf;
-using SharpDX.Direct3D9;
 using System.Numerics;
 using System.Windows;
 using System.Windows.Input;

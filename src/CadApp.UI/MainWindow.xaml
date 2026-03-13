@@ -9,9 +9,10 @@
             x:Name="Viewport"
             ShowCoordinateSystem="True"
             ShowViewCube="True"
-            CameraRotationMode="Trackball">
-
-        </helix:Viewport3DX>
+            CameraRotationMode="Trackball"
+            MouseDown="Viewport_MouseDown"
+            MouseMove="Viewport_MouseMove"
+            MouseUp="Viewport_MouseUp" />
     </Grid>
 
 </Window>

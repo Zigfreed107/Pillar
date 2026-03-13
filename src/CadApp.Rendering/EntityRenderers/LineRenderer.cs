@@ -1,25 +1,24 @@
 using CadApp.Core.Entities;
-using HelixToolkit.Wpf;
-using System.Windows.Media;
-using System.Windows.Media.Media3D;
+using HelixToolkit.SharpDX.Core;
+using HelixToolkit.Wpf.SharpDX;
+using SharpDX;
 
 namespace CadApp.Rendering.EntityRenderers;
 
 public static class LineRenderer
 {
-    public static LinesVisual3D Create(LineEntity line)
+    public static LineGeometryModel3D Create(LineEntity line)
     {
-        var visual = new LinesVisual3D
+        var builder = new LineBuilder();
+        builder.AddLine(
+            new Vector3(line.Start.X, line.Start.Y, line.Start.Z),
+            new Vector3(line.End.X, line.End.Y, line.End.Z));
+
+        return new LineGeometryModel3D
         {
-            Color = Colors.Blue,
+            Geometry = builder.ToLineGeometry3D(),
+            Color = Color.Blue,
             Thickness = 2
         };
-
-        visual.Points.Add(new Point3D(line.Start.X, line.Start.Y, line.Start.Z));
-        visual.Points.Add(new Point3D(line.End.X, line.End.Y, line.End.Z));
-
-        // Important: attach entity reference
-
-        return visual;
     }
 }
