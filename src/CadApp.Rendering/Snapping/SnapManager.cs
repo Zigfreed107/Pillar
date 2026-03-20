@@ -31,9 +31,9 @@ public class SnapManager
 
     public bool TrySnap(Vector3 worldPos, float threshold, out SnapPoint snap)
     {
-        snap = null;
-
+        snap = default;
         float bestDist = float.MaxValue;
+        bool found = false;
 
         foreach (var sp in _snapPoints)
         {
@@ -43,9 +43,10 @@ public class SnapManager
             {
                 bestDist = dist;
                 snap = sp;
+                found = true;
             }
         }
 
-        return snap != null;
+        return found;
     }
 }

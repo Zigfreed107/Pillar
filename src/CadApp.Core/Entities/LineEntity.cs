@@ -1,13 +1,13 @@
+using CadApp.Core.Entities;
 using CadApp.Core.Snapping;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Security.Principal;
 
-namespace CadApp.Core.Entities;
-
-public class LineEntity : CadEntity
+public class LineEntity : CadEntity, ISnapProvider
 {
-    public Vector3 Start { get; set; }
-    public Vector3 End { get; set; }
+    public Vector3 Start { get; }
+    public Vector3 End { get; }
 
     public LineEntity(Vector3 start, Vector3 end)
     {
@@ -15,24 +15,14 @@ public class LineEntity : CadEntity
         End = end;
     }
 
-    public override IEnumerable<SnapPoint> GetSnapPoints()
+    public void GetSnapPoints(List<SnapPoint> snapPoints)
     {
-        yield return new SnapPoint
-        {
-            Position = Start,
-            Type = SnapType.Endpoint
-        };
+        // Endpoints
+        snapPoints.Add(new SnapPoint(Start, SnapType.Endpoint));
+        snapPoints.Add(new SnapPoint(End, SnapType.Endpoint));
 
-        yield return new SnapPoint
-        {
-            Position = End,
-            Type = SnapType.Endpoint
-        };
-
-        yield return new SnapPoint
-        {
-            Position = (Start + End) * 0.5f,
-            Type = SnapType.Midpoint
-        };
+        // Midpoint
+        var mid = (Start + End) * 0.5f;
+        snapPoints.Add(new SnapPoint(mid, SnapType.Midpoint));
     }
 }

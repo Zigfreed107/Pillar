@@ -14,9 +14,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CadApp.UI", "src\CadApp.UI\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CadApp.ViewModels", "src\CadApp.ViewModels\CadApp.ViewModels.csproj", "{37CF276D-3AF8-2C6F-B22F-360DC299B549}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2CA95D3F-9516-44EB-9F6F-B4C52E48612E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Documentation", "{2CA95D3F-9516-44EB-9F6F-B4C52E48612E}"
 	ProjectSection(SolutionItems) = preProject
 		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
+		AI Prompt.txt = AI Prompt.txt
 	EndProjectSection
 EndProject
 Global
