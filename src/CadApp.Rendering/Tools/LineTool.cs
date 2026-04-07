@@ -70,7 +70,7 @@ public class LineTool : ITool
         else
         {
             _document.Entities.Add(new LineEntity(_startPoint.Value, _currentPoint));
-            _scene.ClearPreview();
+            _scene.HidePreviewLine();
             _startPoint = null;
         }
     }
@@ -109,8 +109,6 @@ public class LineTool : ITool
 
         _scene.ShowPreviewLine(_startPoint.Value, _currentPoint);
         
-
-
     }
 
 }

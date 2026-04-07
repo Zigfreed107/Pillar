@@ -2,10 +2,13 @@ using CadApp.Core.Document;
 using CadApp.Core.Entities;
 using CadApp.Core.Spatial;
 using CadApp.Rendering.EntityRenderers;
+using CadApp.Rendering.Preview;
+using HelixToolkit;
 using HelixToolkit.Geometry;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
+using SharpDX;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -13,7 +16,6 @@ using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
-using SharpDX;
 
 namespace CadApp.Rendering.Scene;
 
@@ -23,37 +25,27 @@ public class SceneManager
     private readonly CadDocument _document;
     private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new();
     private readonly GroupModel3D _entityRoot = new();  //Permanent CAD geometry
-    private readonly GroupModel3D _previewRoot = new();
-    private readonly MeshGeometryModel3D _snapMarker;
-    
+    private readonly GroupModel3D _previewRoot = new(); //Preview Geometry
+    private readonly SnapMarkerRenderer _snapMarkerRenderer;
+    private PreviewLineRenderer _previewLineRenderer;
+
     public SceneManager(Viewport3DX viewport, CadDocument document)
     {
         _viewport = viewport;
         _document = document;
 
-        var _grid = CreateGrid();
-        _viewport.Items.Add(_grid);
-        _viewport.Items.Add(_entityRoot);
+        // Add Preview Objects
+        _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
+        _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
-        var builder = new MeshBuilder();
-        builder.AddSphere(new Vector3(0, 0, 0), 0.2f); // make it BIG for testing
-
-        _snapMarker = new MeshGeometryModel3D
-        {
-            Geometry = builder.ToMeshGeometry3D(),
-            Material = new PhongMaterial
-            {
-                DiffuseColor = new Color4(1f, 0f, 0f, 1f), // red
-                AmbientColor = new Color4(1f, 0f, 0f, 1f)
-
-            },
-            Name = "SnapMarker",
-            CullMode = SharpDX.Direct3D11.CullMode.None, // IMPORTANT
-            Visibility = Visibility.Visible
-        };
-
-        _previewRoot.Children.Add(_snapMarker);
+        // Add background grid
+        var _grid = CreateGrid();
+        
+        
+        
+        _viewport.Items.Add(_grid);
+        _viewport.Items.Add(_entityRoot);
 
 
 
@@ -144,70 +136,40 @@ public class SceneManager
         };
     }
 
-    //TODO : optimize by reusing a single preview line visual instead of creating/removing each time
+
+
+    /// <summary>
+    /// Updates the preview line positions without recreating the visual.
+    /// This is called frequently during mouse move.
+    /// </summary>
     public void ShowPreviewLine(Vector3 start, Vector3 end)
     {
-        // Find existing preview named "PreviewLine" without modifying the collection during enumeration
-        Element3D? existingPreview = null;
-        foreach (var child in _previewRoot.Children)
-        {
-            if (child is not null && child.Name == "PreviewLine")
-            {
-                existingPreview = child;
-                break;
-            }
-        }
-
-        if (existingPreview != null)
-        {
-            _previewRoot.Children.Remove(existingPreview);
-        }
-
-        var builder = new LineBuilder();
-        builder.AddLine(start, end);
-
-        var preview = new LineGeometryModel3D
-        {
-            Geometry = builder.ToLineGeometry3D(),
-            Color = System.Windows.Media.Color.FromRgb(255,255,0),
-            Thickness = 2,
-            Name = "PreviewLine"
-        };
-
-        _previewRoot.Children.Add(preview);
+        _previewLineRenderer.Show(start, end);
     }
 
+    /// <summary>
+    /// Hides the preview line when not in use.
+    /// </summary>
+    public void HidePreviewLine()
+    {
+        _previewLineRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows Snapping Marker at given position.
+    /// </summary>
+    /// <param name="position"></param>
     public void ShowSnappingPoint(Vector3 position)
     {
-        _snapMarker.Transform = new TranslateTransform3D(position.X, position.Y, position.Z);
-
-        _snapMarker.Visibility = Visibility.Visible;
+        _snapMarkerRenderer.Show(position);
     }
 
+    /// <summary>
+    /// Hides Snapping Marker.
+    /// </summary>
     public void HideSnappingPoint()
     {
-        _snapMarker.Visibility = Visibility.Hidden;
-    }
-
-    public void ClearPreview()
-    {
-        // Find existing preview named "PreviewLine" without modifying the collection during enumeration
-        Element3D? existingPreview = null;
-        foreach (var child in _previewRoot.Children)
-        {
-            if (child is not null && child.Name == "PreviewLine")
-            {
-                existingPreview = child;
-                break;
-            }
-        }
-
-        if (existingPreview != null)
-        {
-            _previewRoot.Children.Remove(existingPreview);
-        }
-
-        _snapMarker.Visibility = Visibility.Hidden;
+        _snapMarkerRenderer.HideSnappingPoint();
     }
 
     private void InsertEntity(CadEntity entity)
