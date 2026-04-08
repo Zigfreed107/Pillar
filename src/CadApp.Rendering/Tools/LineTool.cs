@@ -38,9 +38,6 @@ public class LineTool : ITool
         _scene = scene;
         _snapManager = snapManager;
 
-        var builder = new MeshBuilder();
-        builder.AddSphere(Vector3.Zero, 0.05f);
-
     }
 
     public void OnMouseDown(MouseButtonEventArgs e, Viewport3DX viewport)
@@ -63,6 +60,7 @@ public class LineTool : ITool
             _hasSnap = false;
         }
 
+        // Draw start point or line
         if (_startPoint == null)
         {
             _startPoint = _currentPoint;
@@ -77,8 +75,7 @@ public class LineTool : ITool
 
     public void OnMouseMove(MouseEventArgs e, Viewport3DX viewport)
     {
-        if (_startPoint == null)
-            return;
+
 
         var pos = e.GetPosition(viewport);
 
@@ -106,6 +103,9 @@ public class LineTool : ITool
         {
             _scene.HideSnappingPoint();
         }
+
+        if (_startPoint == null)
+            return;
 
         _scene.ShowPreviewLine(_startPoint.Value, _currentPoint);
         

@@ -2,7 +2,6 @@ using CadApp.Core.Entities;
 using CadApp.Core.Snapping;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Security.Principal;
 
 public class LineEntity : CadEntity, ISnapProvider
 {
@@ -24,5 +23,12 @@ public class LineEntity : CadEntity, ISnapProvider
         // Midpoint
         var mid = (Start + End) * 0.5f;
         snapPoints.Add(new SnapPoint(mid, SnapType.Midpoint));
+    }
+
+    public override (Vector3 Min, Vector3 Max) GetBounds()
+    {
+        Vector3 min = Vector3.Min(Start, End);
+        Vector3 max = Vector3.Max(Start, End);
+        return (min, max);
     }
 }

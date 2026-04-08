@@ -3,6 +3,7 @@ using CadApp.Core.Entities;
 using CadApp.Core.Spatial;
 using CadApp.Rendering.EntityRenderers;
 using CadApp.Rendering.Preview;
+using CadApp.Rendering.BackgroundGrid;
 using HelixToolkit;
 using HelixToolkit.Geometry;
 using HelixToolkit.Maths;
@@ -25,27 +26,42 @@ public class SceneManager
     private readonly CadDocument _document;
     private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new();
     private readonly GroupModel3D _entityRoot = new();  //Permanent CAD geometry
+    private readonly GroupModel3D _backgroundGridRoot = new();
     private readonly GroupModel3D _previewRoot = new(); //Preview Geometry
+    private readonly BackgroundGridRenderer _BackgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private PreviewLineRenderer _previewLineRenderer;
 
+    /// <summary>
+    /// Manages the 3D scene for the CAD application.
+    /// 
+    /// Responsibilities:
+    /// - Maintains separation between permanent geometry and preview visuals
+    /// - Converts domain entities into renderable visuals
+    /// - Coordinates preview and snapping renderers
+    /// 
+    /// Important:
+    /// - Avoids recreating scene objects during interaction
+    /// - Uses incremental updates for performance
+    /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document)
     {
         _viewport = viewport;
         _document = document;
+
+        // Add background grid
+        _BackgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot);
+        _viewport.Items.Add(_backgroundGridRoot);
+
+        //Add CAD Geometry Root - add before preview so previews render over CAD Geometry.
+        _viewport.Items.Add(_entityRoot);
 
         // Add Preview Objects
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
-        // Add background grid
-        var _grid = CreateGrid();
-        
-        
-        
-        _viewport.Items.Add(_grid);
-        _viewport.Items.Add(_entityRoot);
+
 
 
 
@@ -71,8 +87,6 @@ public class SceneManager
                 RemoveEntity(entity);
             }
         }
-
-        RenderAll();
     }
 
     private void RenderAll()
@@ -107,35 +121,6 @@ public class SceneManager
 
         return null;
     }
-
-    private Element3D CreateGrid()
-    {
-        var builder = new LineBuilder();
-
-        int size = 50;
-        int step = 1;
-
-        for (int i = -size; i <= size; i += step)
-        {
-            // vertical lines
-            builder.AddLine(
-                new Vector3(i, -size, 0),
-                new Vector3(i, size, 0));
-
-            // horizontal lines
-            builder.AddLine(
-                new Vector3(-size, i, 0),
-                new Vector3(size, i, 0));
-        }
-
-        return new LineGeometryModel3D
-        {
-            Geometry = builder.ToLineGeometry3D(),
-            Color = System.Windows.Media.Color.FromRgb(150,150,150),
-            Thickness = 0.5f
-        };
-    }
-
 
 
     /// <summary>
@@ -174,19 +159,42 @@ public class SceneManager
 
     private void InsertEntity(CadEntity entity)
     {
-        if (entity is LineEntity line)
+        Element3D? visual = CreateVisual(entity);
+
+        if (visual != null)
         {
-            _document.SpatialGrid.Insert(line, line.Start); // temporary
+            _entityRoot.Children.Add(visual);
+            _visualToEntity[visual] = entity;
         }
 
-        // future: handle other entity types
+        if (entity is LineEntity line)
+        {
+            _document.SpatialGrid.Insert(line);
+        }
     }
 
     private void RemoveEntity(CadEntity entity)
     {
+        Element3D? visualToRemove = null;
+
+        foreach (var pair in _visualToEntity)
+        {
+            if (pair.Value == entity)
+            {
+                visualToRemove = pair.Key;
+                break;
+            }
+        }
+
+        if (visualToRemove != null)
+        {
+            _entityRoot.Children.Remove(visualToRemove);
+            _visualToEntity.Remove(visualToRemove);
+        }
+
         if (entity is LineEntity line)
         {
-            _document.SpatialGrid.Remove(line, line.Start);
+            _document.SpatialGrid.Remove(line);
         }
     }
 }

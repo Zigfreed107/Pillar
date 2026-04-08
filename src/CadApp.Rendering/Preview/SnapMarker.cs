@@ -19,7 +19,7 @@ namespace CadApp.Rendering.Preview
         public SnapMarkerRenderer(GroupModel3D sceneRoot)
         {
             var builder = new MeshBuilder();
-            builder.AddSphere(new Vector3(0, 0, 0), 0.1f);
+            builder.AddSphere(new Vector3(0, 0, 0), 0.075f);
 
             _snapMarker = new MeshGeometryModel3D
             {

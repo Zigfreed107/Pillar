@@ -43,6 +43,10 @@ public class PreviewLineRenderer
         _geometry.Positions[0] = start;
         _geometry.Positions[1] = end;
 
+        // CRITICAL: Notify Helix that geometry changed
+        _geometry.UpdateVertices();
+        _geometry.UpdateBounds();
+
         _lineModel.Visibility = System.Windows.Visibility.Visible;
     }
 

@@ -16,7 +16,7 @@
                 BackgroundColor="White"
                 ModelUpDirection="0,0,1"
                 MouseDown="Viewport_MouseDown" 
-                MouseMove="Viewport_MouseMove">
+                MouseMove="Viewport_MouseMove" RotateAroundMouseDownPoint="True" Orthographic="True" MSAA="Maximum">
 
             <hx:Viewport3DX.Camera>
                 <hx:OrthographicCamera Position="10,10,10"

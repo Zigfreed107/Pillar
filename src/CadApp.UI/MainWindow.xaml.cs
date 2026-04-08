@@ -28,7 +28,7 @@ public partial class MainWindow : Window
     private LineTool _lineTool;
     private SnapManager _snapManager;
     
-    public IEffectsManager EffectsManager { get; }
+    public DefaultEffectsManager EffectsManager { get; }
     public MainWindow()
     {
         InitializeComponent();
@@ -36,18 +36,7 @@ public partial class MainWindow : Window
         this.DataContext = this;        //QUick Fix - should be using a ViewModel
 
         EffectsManager = new DefaultEffectsManager();
-
-        var builder = new LineBuilder();
-        builder.AddLine(new Vector3(0, 0, 0), new Vector3(10, 0, 0));
-
-        var line = new LineGeometryModel3D
-        {
-            Geometry = builder.ToLineGeometry3D(),
-            Color = Colors.Red,
-            Thickness = 2
-        };
-
-        Viewport.Items.Add(line);// temporary
+ 
 
         _document = new CadDocument();
 

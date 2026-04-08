@@ -4,6 +4,11 @@ using System.Numerics;
 
 namespace CadApp.Core.Spatial
 {
+    //TODO applies an XYZ axis aligned grid, but we could also consider an adaptive grid that follows the geometry better (only grids cells that the object passes through...)
+
+    /// <summary>
+    /// Divides the document up into smaller spatial regions so that we can quickly query for nearby entities.
+    /// </summary>
     public class SpatialGrid
     {
         private readonly Dictionary<GridKey, List<CadEntity>> _cells = new();
@@ -15,38 +20,57 @@ namespace CadApp.Core.Spatial
             CellSize = cellSize;
         }
 
-        // -----------------------------
-        // INSERT
-        // -----------------------------
-        public void Insert(CadEntity entity, Vector3 position)
+        /// <summary>
+        /// Inserts an entity into all grid cells overlapped by its bounding box.
+        /// </summary>
+        public void Insert(CadEntity entity)
         {
-            GridKey key = ToKey(position);
+            (Vector3 min, Vector3 max) = entity.GetBounds();
 
-            if (!_cells.TryGetValue(key, out var list))
-            {
-                list = new List<CadEntity>(4);
-                _cells[key] = list;
-            }
+            GridKey minKey = ToKey(min);
+            GridKey maxKey = ToKey(max);
 
-            list.Add(entity);
+            for (int x = minKey.X; x <= maxKey.X; x++)
+                for (int y = minKey.Y; y <= maxKey.Y; y++)
+                    for (int z = minKey.Z; z <= maxKey.Z; z++)
+                    {
+                        GridKey key = new GridKey(x, y, z);
+
+                        if (!_cells.TryGetValue(key, out List<CadEntity>? list))
+                        {
+                            list = new List<CadEntity>(4);
+                            _cells[key] = list;
+                        }
+
+                        list.Add(entity);
+                    }
         }
 
-        // -----------------------------
-        // REMOVE
-        // -----------------------------
-        public void Remove(CadEntity entity, Vector3 position)
+        /// <summary>
+        /// Removes an entity into all grid cells overlapped by its bounding box.
+        /// </summary>
+        /// <param name="entity"></param>
+        public void Remove(CadEntity entity)
         {
-            GridKey key = ToKey(position);
+            (Vector3 min, Vector3 max) = entity.GetBounds();
 
-            if (_cells.TryGetValue(key, out var list))
-            {
-                list.Remove(entity);
+            GridKey minKey = ToKey(min);
+            GridKey maxKey = ToKey(max);
 
-                if (list.Count == 0)
-                {
-                    _cells.Remove(key);
-                }
-            }
+            for (int x = minKey.X; x <= maxKey.X; x++)
+                for (int y = minKey.Y; y <= maxKey.Y; y++)
+                    for (int z = minKey.Z; z <= maxKey.Z; z++)
+                    {
+                        GridKey key = new GridKey(x, y, z);
+
+                        if (_cells.TryGetValue(key, out List<CadEntity>? list))
+                        {
+                            list.Remove(entity);
+
+                            if (list.Count == 0)
+                                _cells.Remove(key);
+                        }
+                    }
         }
 
         // -----------------------------
