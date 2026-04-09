@@ -1,4 +1,5 @@
-﻿using CadApp.Core.Entities;
+﻿// SelectionManager.cs
+// Domain-level selection state service used by tools and consumed by rendering via events.
 using System;
 using System.Collections.Generic;
 
@@ -8,6 +9,8 @@ using System.Collections.Generic;
 /// </summary>
 public class SelectionManager
 {
+    private static readonly Guid[] EmptyIds = Array.Empty<Guid>();
+
     /// <summary>
     /// Currently selected entities.
     /// </summary>
@@ -24,6 +27,11 @@ public class SelectionManager
     /// </summary>
     public void SelectSingle(ISelectable entity)
     {
+        if (_selectedEntityIds.Count == 1 && _selectedEntityIds.Contains(entity.Id))
+        {
+            return;
+        }
+
         List<Guid> removed = new List<Guid>(_selectedEntityIds);
         List<Guid> added = new List<Guid>();
 
@@ -43,9 +51,10 @@ public class SelectionManager
     /// </summary>
     public void AddToSelection(CadEntity entity)
     {
-        _selectedEntityIds.Add(entity.Id);
-
-        SelectionChanged?.Invoke(_selectedEntityIds, new List<Guid>());
+        if (_selectedEntityIds.Add(entity.Id))
+        {
+            SelectionChanged?.Invoke(new Guid[] { entity.Id }, EmptyIds);
+        }
     }
 
     /// <summary>
@@ -60,7 +69,7 @@ public class SelectionManager
 
         _selectedEntityIds.Clear();
 
-        SelectionChanged?.Invoke(new List<Guid>(), removed);
+        SelectionChanged?.Invoke(EmptyIds, removed);
     }
 
     /// <summary>

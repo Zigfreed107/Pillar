@@ -1,3 +1,5 @@
+// SceneManager.cs
+// Orchestrates document-to-visual mapping and incremental rendering state updates for the viewport.
 using CadApp.Core.Document;
 using CadApp.Core.Entities;
 using CadApp.Rendering.BackgroundGrid;
@@ -16,12 +18,12 @@ public class SceneManager
 {
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
-    private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new();
-    private readonly Dictionary<CadEntity, Element3D> _entityToVisual = new();
+    private readonly Dictionary<Element3D, CadEntity> _visualToEntity = new Dictionary<Element3D, CadEntity>();
+    private readonly Dictionary<CadEntity, Element3D> _entityToVisual = new Dictionary<CadEntity, Element3D>();
 
-    private readonly GroupModel3D _entityRoot = new();  //Permanent CAD geometry
-    private readonly GroupModel3D _backgroundGridRoot = new();
-    private readonly GroupModel3D _previewRoot = new(); //Preview Geometry
+    private readonly GroupModel3D _entityRoot = new GroupModel3D();  //Permanent CAD geometry
+    private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
+    private readonly GroupModel3D _previewRoot = new GroupModel3D(); //Preview Geometry
     private readonly BackgroundGridRenderer _BackgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private PreviewLineRenderer _previewLineRenderer;
@@ -105,20 +107,22 @@ public class SceneManager
     private void OnSelectionChanged(IEnumerable<Guid> addedIds, IEnumerable<Guid> removedIds)
     {
         // Reset visuals for removed entity ids
-        foreach (var id in removedIds)
+        foreach (Guid id in removedIds)
         {
             CadEntity? entity = FindEntityById(id);
-            if (entity != null && _entityToVisual.TryGetValue(entity, out var visual))
+            Element3D? visual;
+            if (entity != null && _entityToVisual.TryGetValue(entity, out visual))
             {
                 ApplyDefaultMaterial(visual);
             }
         }
 
         // Apply highlight for newly added entity ids
-        foreach (var id in addedIds)
+        foreach (Guid id in addedIds)
         {
-            var entity = FindEntityById(id);
-            if (entity != null && _entityToVisual.TryGetValue(entity, out var visual))
+            CadEntity? entity = FindEntityById(id);
+            Element3D? visual;
+            if (entity != null && _entityToVisual.TryGetValue(entity, out visual))
             {
                 ApplyHighlightMaterial(visual);
             }
@@ -146,7 +150,8 @@ public class SceneManager
 
     public CadEntity? GetEntityFromVisual(Element3D visual)
     {
-        if (_visualToEntity.TryGetValue(visual, out var entity))
+        CadEntity? entity;
+        if (_visualToEntity.TryGetValue(visual, out entity))
             return entity;
 
         return null;
@@ -239,7 +244,7 @@ public class SceneManager
     {
         Element3D? visualToRemove = null;
 
-        foreach (var pair in _visualToEntity)
+        foreach (KeyValuePair<Element3D, CadEntity> pair in _visualToEntity)
         {
             if (pair.Value == entity)
             {
@@ -266,6 +271,19 @@ public class SceneManager
     /// </summary>
     private void ApplyDefaultMaterial(Element3D visual)
     {
+        if (visual is GroupModel3D group)
+        {
+            foreach (Element3D child in group.Children)
+            {
+                if (LineRenderer.IsSelectionOverlay(child))
+                {
+                    child.Visibility = System.Windows.Visibility.Hidden;
+                }
+            }
+
+            return;
+        }
+
         if (visual is MeshGeometryModel3D mesh)
         {
             mesh.Material = _defaultMaterial;
@@ -277,6 +295,19 @@ public class SceneManager
     /// </summary>
     private void ApplyHighlightMaterial(Element3D visual)
     {
+        if (visual is GroupModel3D group)
+        {
+            foreach (Element3D child in group.Children)
+            {
+                if (LineRenderer.IsSelectionOverlay(child))
+                {
+                    child.Visibility = System.Windows.Visibility.Visible;
+                }
+            }
+
+            return;
+        }
+
         if (visual is MeshGeometryModel3D mesh)
         {
             mesh.Material = _highlightMaterial;
