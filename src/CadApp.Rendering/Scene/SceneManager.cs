@@ -6,6 +6,7 @@ using CadApp.Rendering.BackgroundGrid;
 using CadApp.Rendering.EntityRenderers;
 using CadApp.Rendering.Preview;
 using HelixToolkit.Maths;
+using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using System;
 using System.Collections.Generic;
@@ -17,6 +18,8 @@ namespace CadApp.Rendering.Scene;
 
 public class SceneManager
 {
+    private const string MeshHighlightPostEffect = "highlight";
+
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
 
@@ -69,6 +72,11 @@ public class SceneManager
     {
         _viewport = viewport;
         _document = document;
+
+        _viewport.Items.Add(new PostEffectMeshBorderHighlight
+        {
+            EffectName = MeshHighlightPostEffect
+        });
 
         // Add background grid
         _BackgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot);
@@ -201,6 +209,9 @@ public class SceneManager
         if (entity is LineEntity line)
             return LineRenderer.Create(line);
 
+        if (entity is MeshEntity mesh)
+            return MeshRenderer.Create(mesh);
+
         return null;
     }
 
@@ -303,7 +314,20 @@ public class SceneManager
 
         if (visual is GroupModel3D group)
         {
-            LineRenderer.GetGetSelectionOverlay(group).Visibility = System.Windows.Visibility.Hidden;
+            Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
+
+            if (lineOverlay != null)
+            {
+                lineOverlay.Visibility = System.Windows.Visibility.Hidden;
+                return;
+            }
+
+            MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+
+            if (meshModel != null)
+            {
+                meshModel.PostEffects = string.Empty;
+            }
 
             return;
         }
@@ -323,7 +347,20 @@ public class SceneManager
 
         if (visual is GroupModel3D group)
         {
-            LineRenderer.GetGetSelectionOverlay(group).Visibility = System.Windows.Visibility.Visible;
+            Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
+
+            if (lineOverlay != null)
+            {
+                lineOverlay.Visibility = System.Windows.Visibility.Visible;
+                return;
+            }
+
+            MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+
+            if (meshModel != null)
+            {
+                meshModel.PostEffects = MeshHighlightPostEffect;
+            }
 
             return;
         }

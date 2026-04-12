@@ -8,10 +8,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
         Title="{Binding WindowTitle}"
-        Height="720"
-        Width="1280"
+        Height="1080"
+        Width="1920"
         MinHeight="480"
-        MinWidth="900">
+        MinWidth="900"
+        KeyDown="Window_KeyDown">
 
     <Window.Resources>
         <Style x:Key="PaneChromeStyle" TargetType="Border">
@@ -65,9 +66,22 @@
                     <Border DockPanel.Dock="Top" Style="{StaticResource PaneHeaderStyle}">
                         <TextBlock Style="{StaticResource PaneHeaderTextStyle}" Text="{Binding ToolPanelTitle}" />
                     </Border>
-                    <TextBlock Margin="12"
-                               VerticalAlignment="Top"
-                               Text="{Binding ToolPanelText}" />
+                    <StackPanel Margin="12" VerticalAlignment="Top">
+                        <Button Margin="0,0,0,8"
+                                Padding="10,6"
+                                Click="SelectToolButton_Click"
+                                Content="Select" />
+                        <Button Margin="0,0,0,12"
+                                Padding="10,6"
+                                Click="LineToolButton_Click"
+                                Content="Line" />
+                        <Button Margin="0,0,0,12"
+                                Padding="10,6"
+                                Click="ImportStlButton_Click"
+                                Content="Import STL" />
+                        <TextBlock Text="{Binding ToolPanelText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
                 </DockPanel>
             </Border>
 
@@ -93,20 +107,23 @@
                                     ModelUpDirection="0,0,1"
                                     MouseDown="Viewport_MouseDown"
                                     MouseMove="Viewport_MouseMove"
+                                    MouseUp="Viewport_MouseUp"
                                     Orthographic="True"
                                     RotateAroundMouseDownPoint="True"
-                                    ShowCameraInfo="True"
                                     ShowCoordinateSystem="True"
                                     ShowFrameDetails="True"
                                     ShowFrameRate="True"
                                     ShowViewCube="True"
                                     ZoomAroundMouseDownPoint="True"
-                                    MSAA="Maximum">
+                                    MSAA="Maximum" ShowTriangleCountInfo="True" ShowCameraInfo="True">
 
                         <hx:Viewport3DX.Camera>
                             <hx:OrthographicCamera Position="10,10,10"
                                                    LookDirection="-10,-10,-10"
-                                                   UpDirection="0,0,1" />
+                                                   UpDirection="0,0,1" 
+                                                   FarPlaneDistance="10000"
+                                                   NearPlaneDistance="0.1"
+ />
                         </hx:Viewport3DX.Camera>
 
                         <hx:DirectionalLight3D Direction="-1,-1,-1" />

@@ -1,5 +1,4 @@
 using CadApp.Core.Entities;
-using CadApp.Core.Tools;
 using CadApp.Rendering.Scene;
 using HelixToolkit.Wpf.SharpDX;
 using System.Numerics;
@@ -27,15 +26,18 @@ public class SelectTool : CadApp.Core.Tools.ITool
     {
         var hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
 
-        if (hits.Count > 0)
+        if (hits.Count > 0 && hits[0].ModelHit is Element3D modelHit)
         {
-            CadEntity entity = _scene.GetEntityFromVisual((Element3D)hits[0].ModelHit);
-            _selection.SelectSingle(entity);
+            CadEntity? entity = _scene.GetEntityFromVisual(modelHit);
+
+            if (entity != null)
+            {
+                _selection.SelectSingle(entity);
+                return;
+            }
         }
-        else
-        {
-            _selection.ClearSelection();
-        }
+
+        _selection.ClearSelection();
     }
 
     public void OnMouseMove(Vector2 screenPosition) { }

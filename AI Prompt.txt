@@ -1,6 +1,6 @@
 TASK:
 I would like to implement the following features in my existing CAD project:
-1. I
+1. Create/enhance the ToolManager to manage different interaction tools (like LineTool, SelectTool) so that they are not all working at once like they are currently.
 
 BACKGROUND:
 You are helping me build a CAD application in C# using WPF and Helix Toolkit Sharp Dx.

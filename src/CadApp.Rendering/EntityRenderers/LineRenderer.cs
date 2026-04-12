@@ -59,8 +59,13 @@ public static class LineRenderer
 
     }
 
-    public static Element3D? GetGetSelectionOverlay(GroupModel3D Line)
+    public static Element3D? GetSelectionOverlay(GroupModel3D line)
     {
-        return Line.Children[1];
+        if (line.Children.Count <= 1)
+        {
+            return null;
+        }
+
+        return line.Children[1];
     }
 }

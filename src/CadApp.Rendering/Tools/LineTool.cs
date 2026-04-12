@@ -1,18 +1,9 @@
 using CadApp.Core.Document;
 using CadApp.Core.Entities;
 using CadApp.Core.Snapping;
-using CadApp.Core.Spatial;
-using CadApp.Core.Tools;
 using CadApp.Rendering.Math;
 using CadApp.Rendering.Scene;
-using HelixToolkit.Geometry;
-using HelixToolkit.SharpDX;
-using HelixToolkit.Wpf.SharpDX;
-using SharpDX;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Numerics;
-using System.Windows;
 
 namespace CadApp.Rendering.Tools;
 
@@ -107,6 +98,14 @@ public class LineTool : CadApp.Core.Tools.ITool
 
     public void OnMouseUp(Vector2 screenPosition)
     {
+    }
+
+    public void Cancel()
+    {
+        _scene.HidePreviewLine();
+        _scene.HideSnappingPoint();
+        _startPoint = null;
+        _hasSnap = false;
     }
 
 }
