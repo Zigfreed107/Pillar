@@ -2,6 +2,8 @@
 // Domain-level selection state service used by tools and consumed by rendering via events.
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using CadApp.Core.Document;
 using CadApp.Core.Entities;
 
 /// <summary>
@@ -16,6 +18,19 @@ public class SelectionManager
     /// Currently selected entities.
     /// </summary>
     private readonly HashSet<Guid> _selectedEntityIds = new HashSet<Guid>();
+
+    /// <summary>
+    /// Creates document-scoped selection state that automatically removes deleted entities from selection.
+    /// </summary>
+    public SelectionManager(CadDocument document)
+    {
+        if (document == null)
+        {
+            throw new ArgumentNullException(nameof(document));
+        }
+
+        document.EntitiesChanged += OnDocumentEntitiesChanged;
+    }
 
     /// <summary>
     /// Gets the identifiers currently selected by the active tool.
@@ -215,5 +230,28 @@ public class SelectionManager
     public bool IsSelected(Guid entityId)
     {
         return _selectedEntityIds.Contains(entityId);
+    }
+
+    /// <summary>
+    /// Removes entities from selection as soon as they leave the document.
+    /// </summary>
+    private void OnDocumentEntitiesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems == null)
+        {
+            return;
+        }
+
+        List<CadEntity> removedEntities = new List<CadEntity>();
+
+        foreach (object? oldItem in e.OldItems)
+        {
+            if (oldItem is CadEntity entity)
+            {
+                removedEntities.Add(entity);
+            }
+        }
+
+        RemoveRangeFromSelection(removedEntities);
     }
 }

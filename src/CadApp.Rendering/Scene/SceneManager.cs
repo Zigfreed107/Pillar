@@ -38,7 +38,7 @@ public class SceneManager
     private readonly BackgroundGridRenderer _BackgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private PreviewLineRenderer _previewLineRenderer;
-    private readonly SelectionManager _selectionManager = new SelectionManager();
+    private readonly SelectionManager _selectionManager;
 
     // Materials used for highlighting, selection, etc.
     private readonly PhongMaterial _defaultMaterial = new PhongMaterial
@@ -72,6 +72,7 @@ public class SceneManager
     {
         _viewport = viewport;
         _document = document;
+        _selectionManager = new SelectionManager(_document);
 
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
         {

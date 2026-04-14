@@ -34,6 +34,7 @@ You are helping me build a CAD application in C# using WPF and Helix Toolkit Sha
 - Please use explicit types instead of 'var' for clarity
 - Please comment your code for maintainability. Please briefly add comment for each function, and more detailed comments for complex logic. This will help me understand the code and maintain it in the future.
 - Please add a comment at the top of each file explaining its purpose and how it fits into the overall architecture of the application.
+- Use Windows (CR LF) line endings in all code files for consistency with the rest of the project.
 
 # Don't:
 - Hard code colours or other constants that might need to be changed later

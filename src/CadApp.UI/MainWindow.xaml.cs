@@ -20,7 +20,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using SelectionWindowOverlayController = CadApp.UI.Overlays.SelectionWindowOverlay;
 
 namespace CadApp.UI;
@@ -222,6 +226,11 @@ public partial class MainWindow : Window
     {
         if (IsControlShortcut(e, Key.Z))
         {
+            if (IsKeyboardFocusInsideEditableControl())
+            {
+                return;
+            }
+
             UndoLastCommand();
             e.Handled = true;
             return;
@@ -229,6 +238,11 @@ public partial class MainWindow : Window
 
         if (IsControlShortcut(e, Key.Y))
         {
+            if (IsKeyboardFocusInsideEditableControl())
+            {
+                return;
+            }
+
             RedoLastCommand();
             e.Handled = true;
             return;
@@ -387,7 +401,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        RemoveMissingSelectedEntities();
         RefreshPropertiesPanelFromSelection();
         _viewModel.SetStatusText($"Undid {command.DisplayName}");
     }
@@ -404,7 +417,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        RemoveMissingSelectedEntities();
         RefreshPropertiesPanelFromSelection();
         _viewModel.SetStatusText($"Redid {command.DisplayName}");
     }
@@ -458,45 +470,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Removes selected ids for entities that no longer exist after undo or redo.
-    /// </summary>
-    private void RemoveMissingSelectedEntities()
-    {
-        if (_scene.SelectionManager.SelectedCount == 0)
-        {
-            return;
-        }
-
-        List<CadEntity> existingSelectedEntities = new List<CadEntity>();
-        int selectedIdCount = 0;
-
-        foreach (Guid selectedId in _scene.SelectionManager.SelectedEntityIds)
-        {
-            selectedIdCount++;
-
-            CadEntity? selectedEntity = FindEntityById(selectedId);
-
-            if (selectedEntity != null)
-            {
-                existingSelectedEntities.Add(selectedEntity);
-            }
-        }
-
-        if (existingSelectedEntities.Count == selectedIdCount)
-        {
-            return;
-        }
-
-        if (existingSelectedEntities.Count == 0)
-        {
-            _scene.SelectionManager.ClearSelection();
-            return;
-        }
-
-        _scene.SelectionManager.SelectMany(existingSelectedEntities);
-    }
-
-    /// <summary>
     /// Refreshes the properties panel after undo or redo without changing the command status text.
     /// </summary>
     private void RefreshPropertiesPanelFromSelection()
@@ -541,6 +514,51 @@ public partial class MainWindow : Window
     {
         return e.Key == shortcutKey
             && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+    }
+
+    /// <summary>
+    /// Checks whether keyboard focus is currently inside a control that owns its own text undo and redo.
+    /// </summary>
+    private static bool IsKeyboardFocusInsideEditableControl()
+    {
+        DependencyObject? focusedElement = Keyboard.FocusedElement as DependencyObject;
+
+        while (focusedElement != null)
+        {
+            if (focusedElement is TextBoxBase || focusedElement is PasswordBox)
+            {
+                return true;
+            }
+
+            if (focusedElement is ComboBox comboBox && comboBox.IsEditable)
+            {
+                return true;
+            }
+
+            focusedElement = GetUiParent(focusedElement);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the logical or visual parent used when walking from the focused element back to the window.
+    /// </summary>
+    private static DependencyObject? GetUiParent(DependencyObject element)
+    {
+        DependencyObject? logicalParent = LogicalTreeHelper.GetParent(element);
+
+        if (logicalParent != null)
+        {
+            return logicalParent;
+        }
+
+        if (element is Visual || element is Visual3D)
+        {
+            return VisualTreeHelper.GetParent(element);
+        }
+
+        return null;
     }
 
     /// <summary>
