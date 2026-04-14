@@ -75,7 +75,7 @@ public class LineTool : CadApp.Core.Tools.ITool
         else
         {
             LineEntity line = new LineEntity(_startPoint.Value, _currentPoint);
-            _commandRunner.Execute(new AddEntityCommand(_document, line));
+            _commandRunner.Execute(new AddEntityCommand(_document, line, "Add Line"));
             _scene.HidePreviewLine();
             _startPoint = null;
         }

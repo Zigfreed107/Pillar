@@ -50,6 +50,7 @@
     </Window.Resources>
 
     <DockPanel LastChildFill="True" Background="#FFF3F3F3">
+        
         <Menu DockPanel.Dock="Top" Background="#FFF5F5F5">
             <MenuItem Header="_File">
                 <MenuItem Header="_New"
@@ -66,10 +67,19 @@
             <MenuItem Header="_Help" />
         </Menu>
 
+        <ToolBarTray DockPanel.Dock="Top" IsLocked="True">
+            <ToolBar x:Name="MainToolbar" Background="#FFF5F5F5">
+                <Button x:Name="UndoButton"
+                        Content="Undo"
+                        Click="UndoButton_Click" />
+                <Button x:Name="RedoButton"
+                        Content="Redo"
+                        Click="RedoButton_Click" />
+            </ToolBar>
+        </ToolBarTray>
+
         <StatusBar DockPanel.Dock="Bottom">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusText}" />
-            </StatusBarItem>
+            <TextBlock Text="{Binding StatusText}" />
         </StatusBar>
 
         <Grid Margin="6">
@@ -200,8 +210,11 @@
                             <TextBlock Grid.Column="0"
                                        Margin="0,3,8,0"
                                        Text="Name" />
-                            <TextBox Grid.Column="1"
+                            <TextBox x:Name="SelectedEntityNameTextBox"
+                                     Grid.Column="1"
                                      MinWidth="120"
+                                     KeyDown="SelectedEntityNameTextBox_KeyDown"
+                                     LostFocus="SelectedEntityNameTextBox_LostFocus"
                                      Text="{Binding SelectedEntityName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
                     </Grid>

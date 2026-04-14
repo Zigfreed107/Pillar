@@ -62,7 +62,7 @@ public partial class MainWindow : Window
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
         _toolManager = new ToolManager();
-        _commandRunner = new CadCommandRunner();
+        _commandRunner = new CadCommandRunner(Properties.Settings.Default.UndoHistoryLimit);
         _selectTool = new SelectTool(Viewport, _document, _scene, _scene.SelectionManager);
         _lineTool = new LineTool(_document, _projection, _scene, _snapManager, _commandRunner);
         _stlImporter = new StlImporter();
@@ -86,8 +86,10 @@ public partial class MainWindow : Window
     private void WireWorkspaceState()
     {
         _scene.SelectionManager.SelectionChanged += OnSelectionChanged;
+        _commandRunner.HistoryChanged += UpdateUndoRedoButtonState;
         _viewModel.SetStatusText("Ready");
         _viewModel.SetSelectedEntity(null);
+        UpdateUndoRedoButtonState();
     }
 
     /// <summary>
@@ -200,7 +202,7 @@ public partial class MainWindow : Window
         try
         {
             CadEntity importedEntity = _stlImporter.Import(dialog.FileName);
-            _commandRunner.Execute(new AddEntityCommand(_document, importedEntity));
+            _commandRunner.Execute(new AddEntityCommand(_document, importedEntity, "Import Mesh"));
 
             string fileName = Path.GetFileName(dialog.FileName);
             _viewModel.SetStatusText($"Imported {fileName}");
@@ -218,6 +220,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (IsControlShortcut(e, Key.Z))
+        {
+            UndoLastCommand();
+            e.Handled = true;
+            return;
+        }
+
+        if (IsControlShortcut(e, Key.Y))
+        {
+            RedoLastCommand();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != Key.Escape)
         {
             return;
@@ -226,6 +242,45 @@ public partial class MainWindow : Window
         _lineTool.Cancel();
         _selectTool.Cancel();
         SetActiveTool(_selectTool, "Select tool active");
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Undoes the most recent document command from the toolbar.
+    /// </summary>
+    private void UndoButton_Click(object sender, RoutedEventArgs e)
+    {
+        UndoLastCommand();
+    }
+
+    /// <summary>
+    /// Redoes the most recent undone document command from the toolbar.
+    /// </summary>
+    private void RedoButton_Click(object sender, RoutedEventArgs e)
+    {
+        RedoLastCommand();
+    }
+
+    /// <summary>
+    /// Commits a completed entity-name edit when the properties textbox loses focus.
+    /// </summary>
+    private void SelectedEntityNameTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        CommitSelectedEntityNameEdit();
+    }
+
+    /// <summary>
+    /// Commits a completed entity-name edit when the user presses Enter.
+    /// </summary>
+    private void SelectedEntityNameTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        CommitSelectedEntityNameEdit();
+        Keyboard.ClearFocus();
         e.Handled = true;
     }
 
@@ -318,6 +373,174 @@ public partial class MainWindow : Window
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Executes undo and writes the applied command name to the status bar.
+    /// </summary>
+    private void UndoLastCommand()
+    {
+        ICadCommand? command = _commandRunner.Undo();
+
+        if (command == null)
+        {
+            return;
+        }
+
+        RemoveMissingSelectedEntities();
+        RefreshPropertiesPanelFromSelection();
+        _viewModel.SetStatusText($"Undid {command.DisplayName}");
+    }
+
+    /// <summary>
+    /// Executes redo and writes the applied command name to the status bar.
+    /// </summary>
+    private void RedoLastCommand()
+    {
+        ICadCommand? command = _commandRunner.Redo();
+
+        if (command == null)
+        {
+            return;
+        }
+
+        RemoveMissingSelectedEntities();
+        RefreshPropertiesPanelFromSelection();
+        _viewModel.SetStatusText($"Redid {command.DisplayName}");
+    }
+
+    /// <summary>
+    /// Updates the toolbar buttons from the central command history state.
+    /// </summary>
+    private void UpdateUndoRedoButtonState()
+    {
+        UndoButton.IsEnabled = _commandRunner.CanUndo;
+        RedoButton.IsEnabled = _commandRunner.CanRedo;
+    }
+
+    /// <summary>
+    /// Commits the selected entity name as one undoable edit instead of per keystroke.
+    /// </summary>
+    private void CommitSelectedEntityNameEdit()
+    {
+        if (_scene.SelectionManager.SelectedCount != 1)
+        {
+            return;
+        }
+
+        Guid? selectedId = GetSingleSelectedEntityId();
+
+        if (!selectedId.HasValue)
+        {
+            return;
+        }
+
+        CadEntity? selectedEntity = FindEntityById(selectedId.Value);
+
+        if (selectedEntity == null)
+        {
+            RefreshPropertiesPanelFromSelection();
+            return;
+        }
+
+        string oldName = NormalizeEntityName(selectedEntity.Name);
+        string newName = NormalizeEntityName(_viewModel.SelectedEntityName);
+
+        if (string.Equals(oldName, newName, StringComparison.Ordinal))
+        {
+            _viewModel.SetSelectedEntity(selectedEntity);
+            return;
+        }
+
+        _commandRunner.Execute(new RenameEntityCommand(selectedEntity, oldName, newName));
+        _viewModel.SetSelectedEntity(selectedEntity);
+        _viewModel.SetStatusText("Renamed entity");
+    }
+
+    /// <summary>
+    /// Removes selected ids for entities that no longer exist after undo or redo.
+    /// </summary>
+    private void RemoveMissingSelectedEntities()
+    {
+        if (_scene.SelectionManager.SelectedCount == 0)
+        {
+            return;
+        }
+
+        List<CadEntity> existingSelectedEntities = new List<CadEntity>();
+        int selectedIdCount = 0;
+
+        foreach (Guid selectedId in _scene.SelectionManager.SelectedEntityIds)
+        {
+            selectedIdCount++;
+
+            CadEntity? selectedEntity = FindEntityById(selectedId);
+
+            if (selectedEntity != null)
+            {
+                existingSelectedEntities.Add(selectedEntity);
+            }
+        }
+
+        if (existingSelectedEntities.Count == selectedIdCount)
+        {
+            return;
+        }
+
+        if (existingSelectedEntities.Count == 0)
+        {
+            _scene.SelectionManager.ClearSelection();
+            return;
+        }
+
+        _scene.SelectionManager.SelectMany(existingSelectedEntities);
+    }
+
+    /// <summary>
+    /// Refreshes the properties panel after undo or redo without changing the command status text.
+    /// </summary>
+    private void RefreshPropertiesPanelFromSelection()
+    {
+        if (_scene.SelectionManager.SelectedCount == 1)
+        {
+            Guid? selectedId = GetSingleSelectedEntityId();
+
+            if (selectedId.HasValue)
+            {
+                _viewModel.SetSelectedEntity(FindEntityById(selectedId.Value));
+                return;
+            }
+        }
+
+        if (_scene.SelectionManager.SelectedCount > 1)
+        {
+            _viewModel.SetMultipleSelection(_scene.SelectionManager.SelectedCount);
+            return;
+        }
+
+        _viewModel.SetSelectedEntity(null);
+    }
+
+    /// <summary>
+    /// Normalizes user-entered entity names before comparing or applying rename commands.
+    /// </summary>
+    private static string NormalizeEntityName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Entity";
+        }
+
+        return name.Trim();
+    }
+
+    /// <summary>
+    /// Checks whether the current key event matches a control-key shortcut.
+    /// </summary>
+    private static bool IsControlShortcut(KeyEventArgs e, Key shortcutKey)
+    {
+        return e.Key == shortcutKey
+            && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
     }
 
     /// <summary>

@@ -11,7 +11,6 @@ namespace CadApp.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    private CadEntity? _selectedEntity;
     private bool _isEntitySelected;
     private string _selectedEntityType = "No selection";
     private string _selectedEntityName = string.Empty;
@@ -61,18 +60,7 @@ public partial class MainViewModel : ObservableObject
     public string SelectedEntityName
     {
         get { return _selectedEntityName; }
-        set
-        {
-            if (!SetProperty(ref _selectedEntityName, value))
-            {
-                return;
-            }
-
-            if (_selectedEntity != null)
-            {
-                _selectedEntity.Name = string.IsNullOrWhiteSpace(value) ? "Entity" : value.Trim();
-            }
-        }
+        set { SetProperty(ref _selectedEntityName, value); }
     }
 
     /// <summary>
@@ -96,7 +84,6 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void SetSelectedEntity(CadEntity? selectedEntity)
     {
-        _selectedEntity = selectedEntity;
         IsEntitySelected = selectedEntity != null;
         SelectedEntityType = selectedEntity == null ? "No selection" : selectedEntity.GetType().Name;
         SelectedEntityName = selectedEntity == null ? string.Empty : selectedEntity.Name;
@@ -108,7 +95,6 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     public void SetMultipleSelection(int selectedEntityCount)
     {
-        _selectedEntity = null;
         IsEntitySelected = false;
         SelectedEntityType = $"{selectedEntityCount} entities selected";
         SelectedEntityName = string.Empty;

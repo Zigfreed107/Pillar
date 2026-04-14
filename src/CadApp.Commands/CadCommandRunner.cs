@@ -10,15 +10,29 @@ namespace CadApp.Commands;
 /// </summary>
 public sealed class CadCommandRunner
 {
-    private readonly Stack<ICadCommand> _undoStack = new Stack<ICadCommand>();
-    private readonly Stack<ICadCommand> _redoStack = new Stack<ICadCommand>();
+    private readonly List<ICadCommand> _undoHistory = new List<ICadCommand>();
+    private readonly List<ICadCommand> _redoHistory = new List<ICadCommand>();
+    private readonly int _maxUndoSteps;
+
+    /// <summary>
+    /// Creates a command runner with a bounded undo history.
+    /// </summary>
+    public CadCommandRunner(int maxUndoSteps)
+    {
+        _maxUndoSteps = Math.Max(1, maxUndoSteps);
+    }
+
+    /// <summary>
+    /// Raised whenever undo or redo availability changes.
+    /// </summary>
+    public event Action? HistoryChanged;
 
     /// <summary>
     /// Gets whether there is a command that can be undone.
     /// </summary>
     public bool CanUndo
     {
-        get { return _undoStack.Count > 0; }
+        get { return _undoHistory.Count > 0; }
     }
 
     /// <summary>
@@ -26,7 +40,7 @@ public sealed class CadCommandRunner
     /// </summary>
     public bool CanRedo
     {
-        get { return _redoStack.Count > 0; }
+        get { return _redoHistory.Count > 0; }
     }
 
     /// <summary>
@@ -40,40 +54,53 @@ public sealed class CadCommandRunner
         }
 
         command.Execute();
-        _undoStack.Push(command);
-        _redoStack.Clear();
+        _undoHistory.Add(command);
+        TrimUndoHistoryToLimit();
+        _redoHistory.Clear();
+        RaiseHistoryChanged();
     }
 
     /// <summary>
     /// Undoes the most recently executed command when one is available.
     /// </summary>
-    public bool Undo()
+    public ICadCommand? Undo()
     {
-        if (_undoStack.Count == 0)
+        if (_undoHistory.Count == 0)
         {
-            return false;
+            return null;
         }
 
-        ICadCommand command = _undoStack.Pop();
+        int commandIndex = _undoHistory.Count - 1;
+        ICadCommand command = _undoHistory[commandIndex];
+        _undoHistory.RemoveAt(commandIndex);
+
         command.Undo();
-        _redoStack.Push(command);
-        return true;
+        _redoHistory.Add(command);
+        RaiseHistoryChanged();
+
+        return command;
     }
 
     /// <summary>
     /// Re-executes the most recently undone command when one is available.
     /// </summary>
-    public bool Redo()
+    public ICadCommand? Redo()
     {
-        if (_redoStack.Count == 0)
+        if (_redoHistory.Count == 0)
         {
-            return false;
+            return null;
         }
 
-        ICadCommand command = _redoStack.Pop();
+        int commandIndex = _redoHistory.Count - 1;
+        ICadCommand command = _redoHistory[commandIndex];
+        _redoHistory.RemoveAt(commandIndex);
+
         command.Execute();
-        _undoStack.Push(command);
-        return true;
+        _undoHistory.Add(command);
+        TrimUndoHistoryToLimit();
+        RaiseHistoryChanged();
+
+        return command;
     }
 
     /// <summary>
@@ -81,7 +108,27 @@ public sealed class CadCommandRunner
     /// </summary>
     public void ClearHistory()
     {
-        _undoStack.Clear();
-        _redoStack.Clear();
+        _undoHistory.Clear();
+        _redoHistory.Clear();
+        RaiseHistoryChanged();
+    }
+
+    /// <summary>
+    /// Removes the oldest undo commands when the history grows beyond the configured limit.
+    /// </summary>
+    private void TrimUndoHistoryToLimit()
+    {
+        while (_undoHistory.Count > _maxUndoSteps)
+        {
+            _undoHistory.RemoveAt(0);
+        }
+    }
+
+    /// <summary>
+    /// Notifies UI code that command availability may have changed.
+    /// </summary>
+    private void RaiseHistoryChanged()
+    {
+        HistoryChanged?.Invoke();
     }
 }
