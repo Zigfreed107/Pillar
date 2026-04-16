@@ -5,17 +5,17 @@ Repository: https://github.com/Zigfreed107/Graphite
 Your project has already evolved into a clean layered CAD architecture, which is great for long-term growth. Below is a clear overview of how everything fits together.
 
 High-Level Architecture
-CadApp.UI (WPF application)
+Pillar.UI (WPF application)
         ↓
-CadApp.Rendering (interaction + visualization)
+Pillar.Rendering (interaction + visualization)
         ↓
-CadApp.Core (CAD model + entities)
+Pillar.Core (CAD model + entities)
 
 Each layer has a specific responsibility.
 
 1. UI Layer
 
-Project: CadApp.UI
+Project: Pillar.UI
 Framework: WPF
 
 Responsibilities:
@@ -43,7 +43,7 @@ Rendering uses Helix Toolkit SharpDX via Viewport3DX.
 
 2. Rendering / Interaction Layer
 
-Project: CadApp.Rendering
+Project: Pillar.Rendering
 
 Responsibilities:
 
@@ -98,7 +98,7 @@ Interaction Tools
 
 Folder:
 
-CadApp.Rendering.Tools
+Pillar.Rendering.Tools
 
 Example tool:
 
@@ -126,7 +126,7 @@ create LineEntity
 document updated
 3. Core CAD Layer
 
-Project: CadApp.Core
+Project: Pillar.Core
 
 Responsibilities:
 

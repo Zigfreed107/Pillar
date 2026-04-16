@@ -22,14 +22,14 @@ Create a scalable CAD architecture with proper separation between:
 
 Solution Structure:
 
-CadApp.Core
+Pillar.Core
 
 * Entities (LineEntity, etc.)
 * CadDocument (ObservableCollection of entities)
 * Snapping (SnapPoint, SnapType)
 * Future: Commands (Undo/Redo)
 
-CadApp.Rendering
+Pillar.Rendering
 
 * SceneManager (renders entities into Viewport3DX)
 * EntityRenderers (LineRenderer, etc.)
@@ -42,7 +42,7 @@ CadApp.Rendering
 
   * SnapManager (cached snap points)
 
-CadApp.UI
+Pillar.UI
 
 * WPF MainWindow
 * Viewport3DX (Helix SharpDX)

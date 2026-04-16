@@ -1,0 +1,62 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11527.330
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Commands", "src\Pillar.Commands\Pillar.Commands.csproj", "{C157AC08-C027-20B4-F7FF-EA8CA77E95ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Core", "src\Pillar.Core\Pillar.Core.csproj", "{CAF5B87F-251D-C17D-0D4A-E80378C1D364}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Geometry", "src\Pillar.Geometry\Pillar.Geometry.csproj", "{5DE73A31-8122-CEA4-A4CC-FB958196EE5E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Rendering", "src\Pillar.Rendering\Pillar.Rendering.csproj", "{10A3AACD-92A5-5C3C-1006-55C01926389E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.UI", "src\Pillar.UI\Pillar.UI.csproj", "{7A916F17-BCEE-FFE8-8CF2-8B7D9F221F86}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.ViewModels", "src\Pillar.ViewModels\Pillar.ViewModels.csproj", "{37CF276D-3AF8-2C6F-B22F-360DC299B549}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Documentation", "{2CA95D3F-9516-44EB-9F6F-B4C52E48612E}"
+	ProjectSection(SolutionItems) = preProject
+		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
+		2026_04_07 AI_Chat_Summary.txt = 2026_04_07 AI_Chat_Summary.txt
+		Agents.md = Agents.md
+		TODO.txt = TODO.txt
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C157AC08-C027-20B4-F7FF-EA8CA77E95ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C157AC08-C027-20B4-F7FF-EA8CA77E95ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C157AC08-C027-20B4-F7FF-EA8CA77E95ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C157AC08-C027-20B4-F7FF-EA8CA77E95ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CAF5B87F-251D-C17D-0D4A-E80378C1D364}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CAF5B87F-251D-C17D-0D4A-E80378C1D364}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CAF5B87F-251D-C17D-0D4A-E80378C1D364}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CAF5B87F-251D-C17D-0D4A-E80378C1D364}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5DE73A31-8122-CEA4-A4CC-FB958196EE5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5DE73A31-8122-CEA4-A4CC-FB958196EE5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5DE73A31-8122-CEA4-A4CC-FB958196EE5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5DE73A31-8122-CEA4-A4CC-FB958196EE5E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10A3AACD-92A5-5C3C-1006-55C01926389E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10A3AACD-92A5-5C3C-1006-55C01926389E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10A3AACD-92A5-5C3C-1006-55C01926389E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10A3AACD-92A5-5C3C-1006-55C01926389E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7A916F17-BCEE-FFE8-8CF2-8B7D9F221F86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7A916F17-BCEE-FFE8-8CF2-8B7D9F221F86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7A916F17-BCEE-FFE8-8CF2-8B7D9F221F86}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7A916F17-BCEE-FFE8-8CF2-8B7D9F221F86}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37CF276D-3AF8-2C6F-B22F-360DC299B549}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37CF276D-3AF8-2C6F-B22F-360DC299B549}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37CF276D-3AF8-2C6F-B22F-360DC299B549}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37CF276D-3AF8-2C6F-B22F-360DC299B549}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7E64CCF2-ED87-450F-B577-DE4EFDA32C5A}
+	EndGlobalSection
+EndGlobal

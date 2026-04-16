@@ -20,7 +20,7 @@ You are helping me build a CAD application in C# using WPF and Helix Toolkit Sha
 
 # CONTEXT:
 - My repo can be found at https://github.com/Zigfreed107/Graphite.
-- My Local files are at C:\Coding\CAD\CadApp_VisualStudio_Scaffold\src
+- My Local files are at C:\Coding\CAD\Pillar_VisualStudio_Scaffold\src
 
 # Periodically review this code:
 - What is wrong?
