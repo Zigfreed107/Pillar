@@ -18,7 +18,7 @@ namespace Pillar.Rendering.BackgroundGrid
             var builder = new LineBuilder();
 
             int size = 50;
-            int step = 10;
+            int step = 1;
 
             for (int i = -size; i <= size; i += step)
             {

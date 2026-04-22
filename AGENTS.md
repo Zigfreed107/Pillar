@@ -1,5 +1,22 @@
 # BACKGROUND:
-You are helping me build a CAD application in C# using WPF and Helix Toolkit Sharp Dx.
+You are helping me build an application using WPF, HelixToolkit and SharpDX. The application is going to be a tool for adding resin printing supports to 3D models the user imports.The general workflow a user is expected to use is as follows:
+
+## User Workflow:
+1. User imports a 3D model (STL, OBJ, etc.)
+2. The application will display the model in a 3D viewport using HelixToolkit and SharpDX for rendering.
+3. The user will transform the model (translate, rotate, scale) to position it correctly for adding supports and eventual printing. For example, they might rotate the model to minimise overhangs.
+4. The user will add support using a variety of tools - for example the might add individual supports at points they click, add lines of supports between two points, add supports by drawing a circle, or more complex tools. At this stage automatic support generation is not a priority, but could be added in the future.
+5. The user will export the supported model to a format suitable for importing into existing resin printing slicer software (STL, OBJ, etc.)
+
+Appart from importing models, opening or saving projects, the applciation operates in "modes" designed for different parts of the workflow.
+For example, there is a "Transform Mode" for transforming the model, and a "Support Mode" for adding supports. Each mode has its own set of tools and UI elements. For example, in Transform Mode the user might have tools for translating, rotating and scaling the model, while in Support Mode they might have tools for adding different types of supports.
+
+## Application UI:
+The application has a main window with a 3D viewport (HelixToolkit Sharp DX) that takes up the majority of the screen. 
+The "Main Toolbar" at the top of the application provides the ability to switch between the operating modes as well as a File menu
+A "Mode Panel" overlays the viewport on the top right hand side of the screen. What is displayed in this Mode Panel depends on the current mode, and its size will lengthen down the screen depending on how many tools are in the current mode.
+A "Layer Panel" overlays the viewport on the top left. It is a simple Layer system, where each imported model is its own layer, and groups of supports can be organised into sub-layers. This will allow the user to easily manage complex models with many supports, and toggle visibility of different layers.
+A "Supports Settings Panel" overlays the viewport on the bottom left. This is where the user can adjust settings for the supports they are adding - for example, thickness, angle, etc. This will allow the user to easily customise the supports to their specific model and printing needs.
 
 # GOALS:
 - Help me implement features step by step.

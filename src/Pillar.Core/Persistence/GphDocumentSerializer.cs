@@ -2,6 +2,8 @@
 // Saves and loads Graphite CAD documents using a self-contained JSON-based .gph file format.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
+using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,9 +18,12 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 3;
+    private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
+    private const string SupportTypeName = "support";
+    private const string DefaultSupportGroupName = "Supports Group 1";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -53,6 +58,14 @@ public sealed class GphDocumentSerializer
     /// </summary>
     public IReadOnlyList<CadEntity> Load(string filePath)
     {
+        return LoadDocument(filePath).Entities;
+    }
+
+    /// <summary>
+    /// Loads supported entities and layer metadata from a .gph file without mutating the current document.
+    /// </summary>
+    public GphDocumentData LoadDocument(string filePath)
+    {
         if (string.IsNullOrWhiteSpace(filePath))
         {
             throw new ArgumentException("An open file path is required.", nameof(filePath));
@@ -85,6 +98,8 @@ public sealed class GphDocumentSerializer
         List<CadEntity> entities = new List<CadEntity>();
         HashSet<Guid> entityIds = new HashSet<Guid>();
 
+        List<GphEntityDto> deferredSupportEntities = new List<GphEntityDto>();
+
         foreach (GphEntityDto entityDto in documentDto.Entities)
         {
             if (entityDto == null)
@@ -99,10 +114,21 @@ public sealed class GphDocumentSerializer
                 throw new InvalidDataException($"The Graphite project file contains duplicate entity id '{entityDto.Id}'.");
             }
 
-            entities.Add(CreateEntity(entityDto));
+            if (string.Equals(entityDto.Type, SupportTypeName, StringComparison.OrdinalIgnoreCase))
+            {
+                deferredSupportEntities.Add(entityDto);
+            }
+            else
+            {
+                entities.Add(CreateEntity(entityDto));
+            }
         }
 
-        return entities;
+        List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
+        AddDefaultSupportGroupsForMeshesWithoutGroups(entities, supportLayerGroups);
+        AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
+
+        return new GphDocumentData(entities, supportLayerGroups);
     }
 
     /// <summary>
@@ -119,6 +145,11 @@ public sealed class GphDocumentSerializer
         foreach (CadEntity entity in document.Entities)
         {
             dto.Entities.Add(CreateEntityDto(entity));
+        }
+
+        foreach (SupportLayerGroup supportLayerGroup in document.SupportLayerGroups)
+        {
+            dto.SupportLayerGroups.Add(CreateSupportLayerGroupDto(supportLayerGroup));
         }
 
         return dto;
@@ -165,7 +196,34 @@ public sealed class GphDocumentSerializer
             return dto;
         }
 
+        if (entity is SupportEntity support)
+        {
+            return new GphEntityDto
+            {
+                Type = SupportTypeName,
+                Id = support.Id,
+                Name = support.Name,
+                SupportLayerGroupId = support.SupportLayerGroupId,
+                TipPosition = CreateVectorDto(support.TipPosition),
+                BasePosition = CreateVectorDto(support.BasePosition),
+                SupportProfile = CreateSupportProfileDto(support.Profile)
+            };
+        }
+
         throw new NotSupportedException($"Saving entity type '{entity.GetType().Name}' is not supported by the .gph format.");
+    }
+
+    /// <summary>
+    /// Converts one support group into its persisted representation.
+    /// </summary>
+    private static GphSupportLayerGroupDto CreateSupportLayerGroupDto(SupportLayerGroup supportLayerGroup)
+    {
+        return new GphSupportLayerGroupDto
+        {
+            Id = supportLayerGroup.Id,
+            ModelEntityId = supportLayerGroup.ModelEntityId,
+            Name = supportLayerGroup.Name
+        };
     }
 
     /// <summary>
@@ -178,7 +236,7 @@ public sealed class GphDocumentSerializer
             throw new InvalidDataException("The selected file is not a Graphite project file.");
         }
 
-        if (documentDto.Version != CurrentVersion)
+        if (documentDto.Version < MinimumSupportedVersion || documentDto.Version > CurrentVersion)
         {
             throw new NotSupportedException($"Graphite project file version {documentDto.Version} is not supported.");
         }
@@ -186,6 +244,126 @@ public sealed class GphDocumentSerializer
         if (documentDto.Entities == null)
         {
             throw new InvalidDataException("The Graphite project file is missing its entity list.");
+        }
+    }
+
+    /// <summary>
+    /// Recreates support groups from saved layer metadata.
+    /// </summary>
+    private static List<SupportLayerGroup> CreateSupportLayerGroups(GphDocumentDto documentDto, IReadOnlyList<CadEntity> entities)
+    {
+        List<SupportLayerGroup> supportLayerGroups = new List<SupportLayerGroup>();
+
+        if (documentDto.SupportLayerGroups == null)
+        {
+            return supportLayerGroups;
+        }
+
+        HashSet<Guid> groupIds = new HashSet<Guid>();
+        HashSet<Guid> meshEntityIds = CreateMeshEntityIdSet(entities);
+
+        foreach (GphSupportLayerGroupDto supportLayerGroupDto in documentDto.SupportLayerGroups)
+        {
+            ValidateSupportLayerGroup(supportLayerGroupDto, groupIds, meshEntityIds);
+
+            supportLayerGroups.Add(SupportLayerGroup.CreateLoaded(
+                supportLayerGroupDto.Id,
+                supportLayerGroupDto.ModelEntityId,
+                supportLayerGroupDto.Name));
+        }
+
+        return supportLayerGroups;
+    }
+
+    /// <summary>
+    /// Validates saved support group metadata before it reaches the document.
+    /// </summary>
+    private static void ValidateSupportLayerGroup(
+        GphSupportLayerGroupDto supportLayerGroupDto,
+        HashSet<Guid> groupIds,
+        HashSet<Guid> meshEntityIds)
+    {
+        if (supportLayerGroupDto == null)
+        {
+            throw new InvalidDataException("The Graphite project file contains an empty support group entry.");
+        }
+
+        if (supportLayerGroupDto.Id == Guid.Empty)
+        {
+            throw new InvalidDataException("A saved support group is missing a valid identifier.");
+        }
+
+        if (!groupIds.Add(supportLayerGroupDto.Id))
+        {
+            throw new InvalidDataException($"The Graphite project file contains duplicate support group id '{supportLayerGroupDto.Id}'.");
+        }
+
+        if (!meshEntityIds.Contains(supportLayerGroupDto.ModelEntityId))
+        {
+            throw new InvalidDataException("A saved support group references an imported model that is not in the project.");
+        }
+    }
+
+    /// <summary>
+    /// Creates the mesh id lookup used to validate support group ownership.
+    /// </summary>
+    private static HashSet<Guid> CreateMeshEntityIdSet(IReadOnlyList<CadEntity> entities)
+    {
+        HashSet<Guid> meshEntityIds = new HashSet<Guid>();
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is MeshEntity)
+            {
+                meshEntityIds.Add(entity.Id);
+            }
+        }
+
+        return meshEntityIds;
+    }
+
+    /// <summary>
+    /// Gives legacy projects and partially populated files a default support group under each imported model.
+    /// </summary>
+    private static void AddDefaultSupportGroupsForMeshesWithoutGroups(
+        IReadOnlyList<CadEntity> entities,
+        List<SupportLayerGroup> supportLayerGroups)
+    {
+        HashSet<Guid> modelIdsWithGroups = new HashSet<Guid>();
+
+        foreach (SupportLayerGroup supportLayerGroup in supportLayerGroups)
+        {
+            modelIdsWithGroups.Add(supportLayerGroup.ModelEntityId);
+        }
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is MeshEntity && !modelIdsWithGroups.Contains(entity.Id))
+            {
+                supportLayerGroups.Add(new SupportLayerGroup(entity.Id, DefaultSupportGroupName));
+                modelIdsWithGroups.Add(entity.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recreates saved support entities after support group ownership has been validated and restored.
+    /// </summary>
+    private static void AddSupportEntities(
+        IReadOnlyList<GphEntityDto> deferredSupportEntities,
+        IReadOnlyList<SupportLayerGroup> supportLayerGroups,
+        List<CadEntity> entities)
+    {
+        HashSet<Guid> supportLayerGroupIds = new HashSet<Guid>();
+
+        foreach (SupportLayerGroup supportLayerGroup in supportLayerGroups)
+        {
+            supportLayerGroupIds.Add(supportLayerGroup.Id);
+        }
+
+        foreach (GphEntityDto supportEntityDto in deferredSupportEntities)
+        {
+            entities.Add(CreateSupportEntity(supportEntityDto, supportLayerGroupIds));
         }
     }
 
@@ -204,6 +382,11 @@ public sealed class GphDocumentSerializer
         if (string.Equals(entityDto.Type, MeshTypeName, StringComparison.OrdinalIgnoreCase))
         {
             return CreateMeshEntity(entityDto);
+        }
+
+        if (string.Equals(entityDto.Type, SupportTypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("Support entities must be created after support groups are loaded.");
         }
 
         throw new NotSupportedException($"Graphite project entity type '{entityDto.Type}' is not supported.");
@@ -267,6 +450,40 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Recreates a support entity after validating its owning support group and profile payload.
+    /// </summary>
+    private static SupportEntity CreateSupportEntity(GphEntityDto entityDto, HashSet<Guid> supportLayerGroupIds)
+    {
+        if (!entityDto.SupportLayerGroupId.HasValue || entityDto.SupportLayerGroupId.Value == Guid.Empty)
+        {
+            throw new InvalidDataException("A saved support entity is missing its owning support layer group id.");
+        }
+
+        if (!supportLayerGroupIds.Contains(entityDto.SupportLayerGroupId.Value))
+        {
+            throw new InvalidDataException("A saved support entity references a support layer group that is not in the project.");
+        }
+
+        if (entityDto.TipPosition == null || entityDto.BasePosition == null)
+        {
+            throw new InvalidDataException("A saved support entity is missing its tip or base position.");
+        }
+
+        if (entityDto.SupportProfile == null)
+        {
+            throw new InvalidDataException("A saved support entity is missing its support profile.");
+        }
+
+        return SupportEntity.CreateLoaded(
+            entityDto.Id,
+            entityDto.Name,
+            entityDto.SupportLayerGroupId.Value,
+            CreateVector(entityDto.TipPosition),
+            CreateVector(entityDto.BasePosition),
+            CreateSupportProfile(entityDto.SupportProfile));
+    }
+
+    /// <summary>
     /// Converts one runtime vector into serializable numeric components.
     /// </summary>
     private static GphVector3Dto CreateVectorDto(Vector3 vector)
@@ -280,11 +497,39 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts one runtime support profile into serializable numeric components.
+    /// </summary>
+    private static GphSupportProfileDto CreateSupportProfileDto(SupportProfile profile)
+    {
+        return new GphSupportProfileDto
+        {
+            TipDiameter = profile.TipDiameter,
+            TipLength = profile.TipLength,
+            BodyDiameter = profile.BodyDiameter,
+            BaseDiameter = profile.BaseDiameter,
+            BaseHeight = profile.BaseHeight
+        };
+    }
+
+    /// <summary>
     /// Converts one serialized vector into the runtime vector type.
     /// </summary>
     private static Vector3 CreateVector(GphVector3Dto vector)
     {
         return new Vector3(vector.X, vector.Y, vector.Z);
+    }
+
+    /// <summary>
+    /// Converts one serialized profile into the runtime support profile type.
+    /// </summary>
+    private static SupportProfile CreateSupportProfile(GphSupportProfileDto supportProfileDto)
+    {
+        return new SupportProfile(
+            supportProfileDto.TipDiameter,
+            supportProfileDto.TipLength,
+            supportProfileDto.BodyDiameter,
+            supportProfileDto.BaseDiameter,
+            supportProfileDto.BaseHeight);
     }
 
     /// <summary>
@@ -322,6 +567,7 @@ public sealed class GphDocumentSerializer
         public string Format { get; set; } = string.Empty;
         public int Version { get; set; }
         public List<GphEntityDto> Entities { get; set; } = new List<GphEntityDto>();
+        public List<GphSupportLayerGroupDto> SupportLayerGroups { get; set; } = new List<GphSupportLayerGroupDto>();
     }
 
     /// <summary>
@@ -338,6 +584,10 @@ public sealed class GphDocumentSerializer
         public List<GphVector3Dto> Vertices { get; set; } = new List<GphVector3Dto>();
         public List<int>? TriangleIndices { get; set; }
         public List<GphVector3Dto> Normals { get; set; } = new List<GphVector3Dto>();
+        public Guid? SupportLayerGroupId { get; set; }
+        public GphVector3Dto? TipPosition { get; set; }
+        public GphVector3Dto? BasePosition { get; set; }
+        public GphSupportProfileDto? SupportProfile { get; set; }
     }
 
     /// <summary>
@@ -348,5 +598,27 @@ public sealed class GphDocumentSerializer
         public float X { get; set; }
         public float Y { get; set; }
         public float Z { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted support profile values.
+    /// </summary>
+    private sealed class GphSupportProfileDto
+    {
+        public float TipDiameter { get; set; }
+        public float TipLength { get; set; }
+        public float BodyDiameter { get; set; }
+        public float BaseDiameter { get; set; }
+        public float BaseHeight { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for document-level support group metadata.
+    /// </summary>
+    private sealed class GphSupportLayerGroupDto
+    {
+        public Guid Id { get; set; }
+        public Guid ModelEntityId { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }

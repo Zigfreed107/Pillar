@@ -19,6 +19,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Docu
 		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
 		2026_04_07 AI_Chat_Summary.txt = 2026_04_07 AI_Chat_Summary.txt
 		Agents.md = Agents.md
+		Mode, Tools, Operations, Commands.txt = Mode, Tools, Operations, Commands.txt
 		TODO.txt = TODO.txt
 	EndProjectSection
 EndProject

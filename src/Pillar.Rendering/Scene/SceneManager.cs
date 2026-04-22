@@ -214,6 +214,9 @@ public class SceneManager
         if (entity is MeshEntity mesh)
             return MeshRenderer.Create(mesh);
 
+        if (entity is SupportEntity support)
+            return SupportRenderer.Create(support);
+
         return null;
     }
 

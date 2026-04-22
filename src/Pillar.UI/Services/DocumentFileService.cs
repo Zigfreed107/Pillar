@@ -2,6 +2,7 @@
 // Coordinates New, Open, and Save project commands for the WPF shell without putting file workflow in MainWindow.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
+using Pillar.Core.Layers;
 using Pillar.Core.Persistence;
 using Microsoft.Win32;
 using System;
@@ -58,7 +59,7 @@ public sealed class DocumentFileService
             return cancelledOrSaveResult;
         }
 
-        ReplaceCurrentDocument(Array.Empty<CadEntity>());
+        ReplaceCurrentDocument(Array.Empty<CadEntity>(), Array.Empty<SupportLayerGroup>());
         return new DocumentFileOperationResult("New document", "New document");
     }
 
@@ -89,8 +90,8 @@ public sealed class DocumentFileService
 
         try
         {
-            IReadOnlyList<CadEntity> loadedEntities = _serializer.Load(dialog.FileName);
-            ReplaceCurrentDocument(loadedEntities);
+            GphDocumentData documentData = _serializer.LoadDocument(dialog.FileName);
+            ReplaceCurrentDocument(documentData.Entities, documentData.SupportLayerGroups);
 
             string fileName = Path.GetFileName(dialog.FileName);
             return new DocumentFileOperationResult($"Opened {fileName}", $"Opened {fileName}");
@@ -215,11 +216,11 @@ public sealed class DocumentFileService
     /// <summary>
     /// Replaces the document contents after resetting transient interaction and selection state.
     /// </summary>
-    private void ReplaceCurrentDocument(IEnumerable<CadEntity> loadedEntities)
+    private void ReplaceCurrentDocument(IEnumerable<CadEntity> loadedEntities, IEnumerable<SupportLayerGroup> supportLayerGroups)
     {
         _cancelTransientToolState();
         _selectionManager.ClearSelection();
-        _document.ReplaceEntities(loadedEntities);
+        _document.ReplaceDocumentData(loadedEntities, supportLayerGroups);
         _clearCommandHistory();
         _activateSelectionTool();
     }

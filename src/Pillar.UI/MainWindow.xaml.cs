@@ -4,12 +4,15 @@ using Pillar.Core.Document;
 using Pillar.Commands;
 using Pillar.Core.Entities;
 using Pillar.Core.Import;
+using Pillar.Core.Layers;
 using Pillar.Core.Persistence;
 using Pillar.Core.Snapping;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
 using Pillar.Rendering.Scene;
 using Pillar.Rendering.Tools;
+using Pillar.UI.Layers;
+using Pillar.UI.Modes;
 using Pillar.UI.Services;
 using Pillar.ViewModels;
 using HelixToolkit.SharpDX;
@@ -38,11 +41,15 @@ public partial class MainWindow : Window
     private readonly ToolManager _toolManager;
     private readonly SelectTool _selectTool;
     private readonly LineTool _lineTool;
+    private readonly ManualSupportTool _manualSupportTool;
     private readonly IModelImporter _stlImporter;
     private readonly SnapManager _snapManager;
     private readonly SelectionWindowOverlayController _selectionWindowOverlay;
     private readonly DocumentFileService _documentFileService;
     private readonly CadCommandRunner _commandRunner;
+    private readonly LayerPanelViewModel _layerPanelViewModel;
+    private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
+    private WorkspaceModeId _activeModeId = WorkspaceModeId.Select;
     private string _activeToolStatusText = "Select tool active";
 
     public DefaultEffectsManager EffectsManager { get; }
@@ -69,7 +76,15 @@ public partial class MainWindow : Window
         _commandRunner = new CadCommandRunner(Properties.Settings.Default.UndoHistoryLimit);
         _selectTool = new SelectTool(Viewport, _document, _scene, _scene.SelectionManager);
         _lineTool = new LineTool(_document, _projection, _scene, _snapManager, _commandRunner);
+        _layerPanelViewModel = new LayerPanelViewModel(_document);
+        _manualSupportTool = new ManualSupportTool(
+            _document,
+            _projection,
+            _scene,
+            _commandRunner,
+            _layerPanelViewModel.GetSelectedSupportLayerGroupId);
         _stlImporter = new StlImporter();
+        WireLayerPanel();
         _documentFileService = new DocumentFileService(
             this,
             _document,
@@ -80,8 +95,10 @@ public partial class MainWindow : Window
             ActivateSelectToolForDocumentCommand);
 
         WireWorkspaceState();
+        RegisterWorkspaceModes();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
-        SetActiveTool(_selectTool, "Select tool active");
+        _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
+        SetActiveMode(WorkspaceModeId.Select);
     }
 
     /// <summary>
@@ -94,6 +111,19 @@ public partial class MainWindow : Window
         _viewModel.SetStatusText("Ready");
         _viewModel.SetSelectedEntity(null);
         UpdateUndoRedoButtonState();
+    }
+
+    /// <summary>
+    /// Connects Layer Panel UI requests to undoable document commands.
+    /// </summary>
+    private void WireLayerPanel()
+    {
+        LayerPanelOverlay.DataContext = _layerPanelViewModel;
+        LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
+        LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
+        LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
+        LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
+        LayerPanelOverlay.RenameSupportGroupRequested += LayerPanel_RenameSupportGroupRequested;
     }
 
     /// <summary>
@@ -169,25 +199,49 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Activates the selection tool from the tool panel.
+    /// Activates selection mode from the mode toolbar.
     /// </summary>
-    private void SelectToolButton_Click(object sender, RoutedEventArgs e)
+    private void SelectMode_Click(object sender, RoutedEventArgs e)
     {
-        SetActiveTool(_selectTool, "Select tool active");
+        SetActiveMode(WorkspaceModeId.Select);
     }
 
     /// <summary>
-    /// Activates the line creation tool from the tool panel.
+    /// Activates line drawing mode from the mode toolbar.
     /// </summary>
-    private void LineToolButton_Click(object sender, RoutedEventArgs e)
+    private void LineMode_Click(object sender, RoutedEventArgs e)
     {
-        SetActiveTool(_lineTool, "Line tool active: click two points");
+        SetActiveMode(WorkspaceModeId.Line);
+    }
+
+    /// <summary>
+    /// Rechecks the toolbar when the planned transform mode is clicked programmatically.
+    /// </summary>
+    private void TransformMode_Click(object sender, RoutedEventArgs e)
+    {
+        SetActiveMode(WorkspaceModeId.Transform);
+    }
+
+    /// <summary>
+    /// Rechecks the toolbar when the planned support mode is clicked programmatically.
+    /// </summary>
+    private void SupportMode_Click(object sender, RoutedEventArgs e)
+    {
+        SetActiveMode(WorkspaceModeId.ManualSupport);
     }
 
     /// <summary>
     /// Imports one STL mesh into the document and lets the scene manager render it incrementally.
     /// </summary>
     private void ImportStlButton_Click(object sender, RoutedEventArgs e)
+    {
+        ImportModelFromDialog();
+    }
+
+    /// <summary>
+    /// Imports a model from the shared file dialog used by both the File menu and Layer Panel empty state.
+    /// </summary>
+    private void ImportModelFromDialog()
     {
         OpenFileDialog dialog = new OpenFileDialog
         {
@@ -206,7 +260,14 @@ public partial class MainWindow : Window
         try
         {
             CadEntity importedEntity = _stlImporter.Import(dialog.FileName);
-            _commandRunner.Execute(new AddEntityCommand(_document, importedEntity, "Import Mesh"));
+
+            if (importedEntity is not MeshEntity importedMesh)
+            {
+                throw new InvalidDataException("Only mesh model imports can be added to the Layer Panel.");
+            }
+
+            SupportLayerGroup initialSupportLayerGroup = new SupportLayerGroup(importedMesh.Id, "Supports Group 1");
+            _commandRunner.Execute(new ImportMeshWithSupportGroupCommand(_document, importedMesh, initialSupportLayerGroup));
 
             string fileName = Path.GetFileName(dialog.FileName);
             _viewModel.SetStatusText($"Imported {fileName}");
@@ -217,6 +278,124 @@ public partial class MainWindow : Window
             _viewModel.SetStatusText("STL import failed");
             MessageBox.Show(this, ex.Message, "STL Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>
+    /// Runs the shared import workflow from the Layer Panel empty state.
+    /// </summary>
+    private void LayerPanel_ImportModelRequested(object? sender, EventArgs e)
+    {
+        ImportModelFromDialog();
+    }
+
+    /// <summary>
+    /// Removes the selected imported model and all support groups owned by it after user confirmation.
+    /// </summary>
+    private void LayerPanel_RemoveModelRequested(object? sender, EventArgs e)
+    {
+        Guid? selectedModelEntityId = _layerPanelViewModel.GetSelectedModelEntityId();
+
+        if (!selectedModelEntityId.HasValue)
+        {
+            return;
+        }
+
+        MeshEntity? selectedModel = FindEntityById(selectedModelEntityId.Value) as MeshEntity;
+
+        if (selectedModel == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            $"The model '{selectedModel.Name}' and all of its supports will be permanently deleted from the project.",
+            "Remove Model",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.OK)
+        {
+            _viewModel.SetStatusText("Remove model cancelled");
+            return;
+        }
+
+        List<SupportLayerGroup> supportLayerGroups = GetSupportLayerGroupsForModel(selectedModel.Id);
+        _commandRunner.Execute(new RemoveModelWithSupportGroupsCommand(_document, selectedModel, supportLayerGroups));
+        _layerPanelViewModel.RefreshFromDocument();
+        RefreshPropertiesPanelFromSelection();
+        _viewModel.SetStatusText($"Removed {selectedModel.Name}");
+    }
+
+    /// <summary>
+    /// Adds a support group under the selected imported model layer.
+    /// </summary>
+    private void LayerPanel_AddSupportGroupRequested(object? sender, EventArgs e)
+    {
+        Guid? selectedModelEntityId = _layerPanelViewModel.GetSelectedModelEntityId();
+
+        if (!selectedModelEntityId.HasValue)
+        {
+            return;
+        }
+
+        string supportGroupName = _layerPanelViewModel.CreateNextSupportGroupName(selectedModelEntityId.Value);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(selectedModelEntityId.Value, supportGroupName);
+
+        _commandRunner.Execute(new AddSupportLayerGroupCommand(_document, supportLayerGroup));
+        _viewModel.SetStatusText($"Added {supportGroupName}");
+    }
+
+    /// <summary>
+    /// Removes the selected support group layer without deleting the imported model.
+    /// </summary>
+    private void LayerPanel_RemoveSupportGroupRequested(object? sender, EventArgs e)
+    {
+        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+
+        if (!selectedSupportLayerGroupId.HasValue)
+        {
+            return;
+        }
+
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(selectedSupportLayerGroupId.Value);
+
+        if (supportLayerGroup == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _commandRunner.Execute(new RemoveSupportLayerGroupCommand(_document, supportLayerGroup));
+        _viewModel.SetStatusText($"Removed {supportLayerGroup.Name}");
+    }
+
+    /// <summary>
+    /// Applies a completed support group rename as one undoable command.
+    /// </summary>
+    private void LayerPanel_RenameSupportGroupRequested(object? sender, LayerRenameRequestedEventArgs e)
+    {
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(e.SupportLayerGroupId);
+
+        if (supportLayerGroup == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        string oldName = NormalizeSupportGroupName(supportLayerGroup.Name);
+        string newName = NormalizeSupportGroupName(e.NewName);
+
+        if (string.Equals(oldName, newName, StringComparison.Ordinal))
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _commandRunner.Execute(new RenameSupportLayerGroupCommand(_document, supportLayerGroup, oldName, newName));
+        _layerPanelViewModel.RefreshFromDocument();
+        _viewModel.SetStatusText("Renamed support group");
     }
 
     /// <summary>
@@ -253,9 +432,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _lineTool.Cancel();
-        _selectTool.Cancel();
-        SetActiveTool(_selectTool, "Select tool active");
+        _toolManager.CancelActiveTool();
+        SetActiveMode(WorkspaceModeId.Select);
         e.Handled = true;
     }
 
@@ -299,24 +477,173 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Switches the active interaction tool and updates shell guidance text.
+    /// Registers the available and planned workspace modes used by the toolbar and overlay host.
     /// </summary>
-    private void SetActiveTool(ITool tool, string statusText)
+    private void RegisterWorkspaceModes()
     {
-        if (!ReferenceEquals(tool, _lineTool))
+        _modeDefinitions.Add(
+            WorkspaceModeId.Select,
+            new WorkspaceModeDefinition(
+                WorkspaceModeId.Select,
+                "Select",
+                "Select tool active",
+                true,
+                _selectTool,
+                () => new SelectModeOverlay()));
+
+        _modeDefinitions.Add(
+            WorkspaceModeId.Line,
+            new WorkspaceModeDefinition(
+                WorkspaceModeId.Line,
+                "Line",
+                "Line tool active: click two points",
+                true,
+                _lineTool,
+                () => new LineModeOverlay()));
+
+        _modeDefinitions.Add(
+            WorkspaceModeId.Transform,
+            new WorkspaceModeDefinition(
+                WorkspaceModeId.Transform,
+                "Transform",
+                "Transform mode is planned",
+                false,
+                null,
+                () => new PlaceholderModeOverlay
+                {
+                    ModeName = "Transform",
+                    Message = "Transform tools are planned but not available yet."
+                }));
+
+        _modeDefinitions.Add(
+            WorkspaceModeId.ManualSupport,
+            new WorkspaceModeDefinition(
+                WorkspaceModeId.ManualSupport,
+                "Manual Support",
+                "Manual support mode: choose an operation",
+                true,
+                _manualSupportTool,
+                CreateManualSupportModeOverlay));
+    }
+
+    /// <summary>
+    /// Creates and wires the Manual Support overlay to the Manual Support tool operation state.
+    /// </summary>
+    private ManualSupportModeOverlay CreateManualSupportModeOverlay()
+    {
+        ManualSupportModeOverlay overlay = new ManualSupportModeOverlay();
+        overlay.OperationChanged += ManualSupportModeOverlay_OperationChanged;
+
+        return overlay;
+    }
+
+    /// <summary>
+    /// Applies Manual Support overlay selections to the active Manual Support tool.
+    /// </summary>
+    private void ManualSupportModeOverlay_OperationChanged(object? sender, ManualSupportOperationChangedEventArgs e)
+    {
+        _ = sender;
+
+        _manualSupportTool.SetActiveOperation(e.OperationKind);
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport)
         {
-            _lineTool.Cancel();
+            return;
         }
 
-        if (!ReferenceEquals(tool, _selectTool))
-        {
-            _selectTool.Cancel();
-        }
-
+        string statusText = GetManualSupportStatusText(e.OperationKind);
         _activeToolStatusText = statusText;
-        _toolManager.SetTool(tool);
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Applies support-operation status requests to the shell while Manual Support mode is active.
+    /// </summary>
+    private void ManualSupportTool_StatusMessageRequested(string statusMessage)
+    {
+        if (_activeModeId != WorkspaceModeId.ManualSupport)
+        {
+            return;
+        }
+
+        _viewModel.SetStatusText(statusMessage);
+        _viewModel.SetToolPanelText(statusMessage);
+    }
+
+    /// <summary>
+    /// Gets the status text that should be shown for a workspace mode activation.
+    /// </summary>
+    private string GetWorkspaceModeStatusText(WorkspaceModeDefinition mode)
+    {
+        if (mode.Id == WorkspaceModeId.ManualSupport)
+        {
+            return GetManualSupportStatusText(_manualSupportTool.ActiveOperationKind);
+        }
+
+        return mode.StatusText;
+    }
+
+    /// <summary>
+    /// Converts a Manual Support operation selection into user-facing shell guidance.
+    /// </summary>
+    private static string GetManualSupportStatusText(ManualSupportOperationKind operationKind)
+    {
+        switch (operationKind)
+        {
+            case ManualSupportOperationKind.Point:
+                return "Manual support mode: point support operation active";
+
+            case ManualSupportOperationKind.Line:
+                return "Manual support mode: line support operation active";
+
+            case ManualSupportOperationKind.Circle:
+                return "Manual support mode: circle support operation active";
+
+            case ManualSupportOperationKind.None:
+            default:
+                return "Manual support mode: choose an operation";
+        }
+    }
+
+    /// <summary>
+    /// Switches the active workspace mode and updates tool, overlay, toolbar, and shell guidance state.
+    /// </summary>
+    private void SetActiveMode(WorkspaceModeId modeId)
+    {
+        WorkspaceModeDefinition mode = _modeDefinitions[modeId];
+
+        if (!mode.IsAvailable || mode.Tool == null)
+        {
+            UpdateModeToolbarState(_activeModeId);
+            _viewModel.SetStatusText($"{mode.DisplayName} mode is not available yet");
+            return;
+        }
+
+        _activeModeId = modeId;
+        string statusText = GetWorkspaceModeStatusText(mode);
+        _activeToolStatusText = statusText;
+        _toolManager.SetTool(mode.Tool);
+        ModePanelHost.Content = mode.GetOverlay();
+        UpdateModeToolbarState(modeId);
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Keeps the mode toolbar as a visual reflection of the active workspace mode.
+    /// </summary>
+    private void UpdateModeToolbarState(WorkspaceModeId activeModeId)
+    {
+        SelectMode.IsEnabled = _modeDefinitions[WorkspaceModeId.Select].IsAvailable;
+        LineMode.IsEnabled = _modeDefinitions[WorkspaceModeId.Line].IsAvailable;
+        TransformMode.IsEnabled = _modeDefinitions[WorkspaceModeId.Transform].IsAvailable;
+        SupportMode.IsEnabled = _modeDefinitions[WorkspaceModeId.ManualSupport].IsAvailable;
+
+        SelectMode.IsChecked = activeModeId == WorkspaceModeId.Select;
+        LineMode.IsChecked = activeModeId == WorkspaceModeId.Line;
+        TransformMode.IsChecked = activeModeId == WorkspaceModeId.Transform;
+        SupportMode.IsChecked = activeModeId == WorkspaceModeId.ManualSupport;
     }
 
     /// <summary>
@@ -377,6 +704,24 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Captures the support groups owned by one imported model before the model is removed.
+    /// </summary>
+    private List<SupportLayerGroup> GetSupportLayerGroupsForModel(Guid modelEntityId)
+    {
+        List<SupportLayerGroup> supportLayerGroups = new List<SupportLayerGroup>();
+
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            if (supportLayerGroup.ModelEntityId == modelEntityId)
+            {
+                supportLayerGroups.Add(supportLayerGroup);
+            }
+        }
+
+        return supportLayerGroups;
+    }
+
+    /// <summary>
     /// Gets the only selected id when selection contains exactly one entity.
     /// </summary>
     private Guid? GetSingleSelectedEntityId()
@@ -402,6 +747,7 @@ public partial class MainWindow : Window
         }
 
         RefreshPropertiesPanelFromSelection();
+        _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText($"Undid {command.DisplayName}");
     }
 
@@ -418,6 +764,7 @@ public partial class MainWindow : Window
         }
 
         RefreshPropertiesPanelFromSelection();
+        _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText($"Redid {command.DisplayName}");
     }
 
@@ -466,6 +813,7 @@ public partial class MainWindow : Window
 
         _commandRunner.Execute(new RenameEntityCommand(selectedEntity, oldName, newName));
         _viewModel.SetSelectedEntity(selectedEntity);
+        _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText("Renamed entity");
     }
 
@@ -502,6 +850,19 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name))
         {
             return "Entity";
+        }
+
+        return name.Trim();
+    }
+
+    /// <summary>
+    /// Normalizes user-entered support group names before comparing or applying rename commands.
+    /// </summary>
+    private static string NormalizeSupportGroupName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Supports Group";
         }
 
         return name.Trim();
@@ -566,8 +927,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void CancelTransientToolState()
     {
-        _lineTool.Cancel();
-        _selectTool.Cancel();
+        _toolManager.CancelActiveTool();
     }
 
     /// <summary>
@@ -576,7 +936,7 @@ public partial class MainWindow : Window
     private void ActivateSelectToolForDocumentCommand()
     {
         _viewModel.SetSelectedEntity(null);
-        SetActiveTool(_selectTool, "Select tool active");
+        SetActiveMode(WorkspaceModeId.Select);
     }
 
     /// <summary>
