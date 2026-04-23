@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 
 namespace Pillar.ViewModels;
 
@@ -26,7 +27,8 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _document.EntitiesChanged += OnDocumentStructureChanged;
-        _document.SupportLayerGroupsChanged += OnDocumentStructureChanged;
+        _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
+        SubscribeToExistingSupportLayerGroups();
 
         RefreshFromDocument();
     }
@@ -109,7 +111,13 @@ public partial class LayerPanelViewModel : ObservableObject
         {
             if (entity is MeshEntity)
             {
-                LayerTreeItemViewModel modelRow = new LayerTreeItemViewModel(entity.Id, entity.Id, LayerTreeItemKind.Model, entity.Name);
+                LayerTreeItemViewModel modelRow = new LayerTreeItemViewModel(
+                    entity.Id,
+                    entity.Id,
+                    LayerTreeItemKind.Model,
+                    entity.Name,
+                    default);
+
                 modelRowsById.Add(entity.Id, modelRow);
                 ModelLayers.Add(modelRow);
             }
@@ -123,7 +131,8 @@ public partial class LayerPanelViewModel : ObservableObject
                     supportLayerGroup.Id,
                     supportLayerGroup.ModelEntityId,
                     LayerTreeItemKind.SupportGroup,
-                    supportLayerGroup.Name);
+                    supportLayerGroup.Name,
+                    supportLayerGroup.Color);
 
                 modelRow.Children.Add(supportGroupRow);
             }
@@ -227,10 +236,59 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Refreshes the tree when document entities or support groups are added or removed.
+    /// Refreshes the tree when document entities are added or removed.
     /// </summary>
     private void OnDocumentStructureChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         RefreshFromDocument();
+    }
+
+    /// <summary>
+    /// Subscribes to support group property changes when groups are added or removed.
+    /// </summary>
+    private void OnSupportLayerGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        _ = sender;
+
+        if (e.NewItems != null)
+        {
+            foreach (SupportLayerGroup supportLayerGroup in e.NewItems)
+            {
+                supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
+            }
+        }
+
+        if (e.OldItems != null)
+        {
+            foreach (SupportLayerGroup supportLayerGroup in e.OldItems)
+            {
+                supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
+            }
+        }
+
+        RefreshFromDocument();
+    }
+
+    /// <summary>
+    /// Refreshes the tree when support group name or color changes.
+    /// </summary>
+    private void SupportLayerGroup_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RefreshFromDocument();
+    }
+
+    /// <summary>
+    /// Subscribes to support groups that already exist when the view model is created.
+    /// </summary>
+    private void SubscribeToExistingSupportLayerGroups()
+    {
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
+        }
     }
 }

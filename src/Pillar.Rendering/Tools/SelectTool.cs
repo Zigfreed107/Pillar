@@ -16,6 +16,7 @@ namespace Pillar.Rendering.Tools;
 
 /// <summary>
 /// Describes the screen-space selection rectangle that the WPF shell should draw over the viewport.
+/// This state is only for preview styling and does not decide the committed selection rule.
 /// </summary>
 public readonly struct SelectionWindowOverlayState
 {
@@ -28,14 +29,14 @@ public readonly struct SelectionWindowOverlayState
         double top,
         double width,
         double height,
-        bool selectsCrossingEntities)
+        bool useSolidOutline)
     {
         IsVisible = isVisible;
         Left = left;
         Top = top;
         Width = width;
         Height = height;
-        SelectsCrossingEntities = selectsCrossingEntities;
+        UseSolidOutline = useSolidOutline;
     }
 
     public bool IsVisible { get; }
@@ -43,7 +44,10 @@ public readonly struct SelectionWindowOverlayState
     public double Top { get; }
     public double Width { get; }
     public double Height { get; }
-    public bool SelectsCrossingEntities { get; }
+    /// <summary>
+    /// Gets whether the preview rectangle should use the solid outline style.
+    /// </summary>
+    public bool UseSolidOutline { get; }
 }
 
 /// <summary>
@@ -385,12 +389,13 @@ public class SelectTool : Pillar.Core.Tools.ITool
     }
 
     /// <summary>
-    /// Publishes overlay geometry for the shell to draw.
+    /// Publishes overlay geometry and the preview outline style for the shell to draw.
+    /// This preview state intentionally mirrors the current drag direction without changing commit behavior.
     /// </summary>
     private void PublishSelectionWindow(Vector2 screenPosition)
     {
         Rect selectionRect = CreateScreenRect(_mouseDownPosition, screenPosition);
-        bool selectsCrossingEntities = !IsRightToLeftDrag(_mouseDownPosition, screenPosition);
+        bool useSolidOutline = !IsRightToLeftDrag(_mouseDownPosition, screenPosition);
 
         SelectionWindowChanged?.Invoke(new SelectionWindowOverlayState(
             true,
@@ -398,7 +403,7 @@ public class SelectTool : Pillar.Core.Tools.ITool
             selectionRect.Top,
             selectionRect.Width,
             selectionRect.Height,
-            selectsCrossingEntities));
+            useSolidOutline));
     }
 
     /// <summary>

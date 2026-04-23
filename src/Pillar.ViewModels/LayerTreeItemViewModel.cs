@@ -1,6 +1,7 @@
 // LayerTreeItemViewModel.cs
 // Represents one row in the Layer Panel tree while keeping WPF-specific tree state out of the document model.
 using CommunityToolkit.Mvvm.ComponentModel;
+using Pillar.Core.Layers;
 using System;
 using System.Collections.ObjectModel;
 
@@ -14,16 +15,18 @@ public partial class LayerTreeItemViewModel : ObservableObject
     private bool _isExpanded;
     private bool _isEditing;
     private string _editingName;
+    private SupportLayerColor _supportColor;
 
     /// <summary>
     /// Creates one layer tree row.
     /// </summary>
-    public LayerTreeItemViewModel(Guid id, Guid modelEntityId, LayerTreeItemKind kind, string name)
+    public LayerTreeItemViewModel(Guid id, Guid modelEntityId, LayerTreeItemKind kind, string name, SupportLayerColor supportColor)
     {
         Id = id;
         ModelEntityId = modelEntityId;
         Kind = kind;
         Name = name;
+        _supportColor = supportColor;
         _editingName = name;
         _isExpanded = kind == LayerTreeItemKind.Model;
     }
@@ -62,6 +65,14 @@ public partial class LayerTreeItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether this row should show the support-group color button.
+    /// </summary>
+    public bool CanPickColor
+    {
+        get { return Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
     /// Gets or sets whether WPF should keep this tree row expanded.
     /// </summary>
     public bool IsExpanded
@@ -86,6 +97,15 @@ public partial class LayerTreeItemViewModel : ObservableObject
     {
         get { return _editingName; }
         set { SetProperty(ref _editingName, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the support-group display color shown by the Layer Panel.
+    /// </summary>
+    public SupportLayerColor SupportColor
+    {
+        get { return _supportColor; }
+        set { SetProperty(ref _supportColor, value); }
     }
 
     /// <summary>

@@ -31,7 +31,7 @@ public sealed class SelectionWindowOverlay
     }
 
     /// <summary>
-    /// Draws or hides the screen-space selection rectangle.
+    /// Draws or hides the screen-space selection rectangle using the requested preview outline style.
     /// </summary>
     public void Update(SelectionWindowOverlayState state)
     {
@@ -45,7 +45,7 @@ public sealed class SelectionWindowOverlay
         Canvas.SetTop(_rectangle, state.Top);
         _rectangle.Width = state.Width;
         _rectangle.Height = state.Height;
-        _rectangle.StrokeDashArray = state.SelectsCrossingEntities
+        _rectangle.StrokeDashArray = state.UseSolidOutline
             ? _solidDashArray
             : _dottedDashArray;
         _rectangle.Visibility = Visibility.Visible;

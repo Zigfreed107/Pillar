@@ -1,10 +1,12 @@
 // LayerPanel.xaml.cs
 // Converts Layer Panel WPF gestures into shell-level requests while keeping document edits in MainWindow commands.
+using Pillar.Core.Layers;
 using Pillar.ViewModels;
 using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Forms = System.Windows.Forms;
 
 namespace Pillar.UI.Layers;
 
@@ -47,10 +49,17 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerRenameRequestedEventArgs>? RenameSupportGroupRequested;
 
     /// <summary>
+    /// Raised when a support group color should be changed.
+    /// </summary>
+    public event EventHandler<LayerColorChangeRequestedEventArgs>? ChangeSupportGroupColorRequested;
+
+    /// <summary>
     /// Requests the shared import workflow from the owning window.
     /// </summary>
     private void ImportModelButton_Click(object sender, RoutedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         ImportModelRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -59,6 +68,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void AddModelButton_Click(object sender, RoutedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         ImportModelRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -67,6 +78,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void RemoveModelButton_Click(object sender, RoutedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         RemoveModelRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -75,6 +88,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void AddSupportGroupButton_Click(object sender, RoutedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         AddSupportGroupRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -83,6 +98,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void RemoveSupportGroupButton_Click(object sender, RoutedEventArgs e)
     {
+        _ = sender;
+        _ = e;
         RemoveSupportGroupRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -91,6 +108,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void LayerTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        _ = sender;
+
         if (DataContext is LayerPanelViewModel layerPanelViewModel)
         {
             layerPanelViewModel.SetSelectedLayer(e.NewValue as LayerTreeItemViewModel);
@@ -102,6 +121,8 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void RenameSupportGroupMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        _ = e;
+
         if (sender is MenuItem menuItem && menuItem.DataContext is LayerTreeItemViewModel layer)
         {
             layer.BeginRename();
@@ -109,10 +130,47 @@ public partial class LayerPanel : UserControl
     }
 
     /// <summary>
+    /// Opens the support-group color picker and publishes the requested color change.
+    /// </summary>
+    private void SupportGroupColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = e;
+
+        if (sender is not Button button || button.DataContext is not LayerTreeItemViewModel layer || !layer.CanPickColor)
+        {
+            return;
+        }
+
+        using Forms.ColorDialog colorDialog = new Forms.ColorDialog
+        {
+            AllowFullOpen = true,
+            FullOpen = true,
+            SolidColorOnly = false,
+            Color = System.Drawing.Color.FromArgb(layer.SupportColor.Red, layer.SupportColor.Green, layer.SupportColor.Blue)
+        };
+
+        if (colorDialog.ShowDialog() != Forms.DialogResult.OK)
+        {
+            return;
+        }
+
+        SupportLayerColor requestedColor = new SupportLayerColor(
+            colorDialog.Color.R,
+            colorDialog.Color.G,
+            colorDialog.Color.B);
+
+        ChangeSupportGroupColorRequested?.Invoke(
+            this,
+            new LayerColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
+    }
+
+    /// <summary>
     /// Focuses and selects the rename text when inline editing appears.
     /// </summary>
     private void RenameTextBox_Loaded(object sender, RoutedEventArgs e)
     {
+        _ = e;
+
         if (sender is TextBox textBox && textBox.DataContext is LayerTreeItemViewModel layer && layer.IsEditing)
         {
             textBox.Focus();
@@ -125,13 +183,14 @@ public partial class LayerPanel : UserControl
     /// </summary>
     private void RenameTextBox_LostFocus(object sender, RoutedEventArgs e)
     {
+        _ = e;
         CommitRename(sender as TextBox);
     }
 
     /// <summary>
     /// Commits inline rename editing on Enter and cancels it on Escape.
     /// </summary>
-    private void RenameTextBox_KeyDown(object sender, KeyEventArgs e)
+    private void RenameTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (sender is not TextBox textBox || textBox.DataContext is not LayerTreeItemViewModel layer)
         {
@@ -206,4 +265,35 @@ public sealed class LayerRenameRequestedEventArgs : EventArgs
     /// Gets the requested name from inline editing.
     /// </summary>
     public string NewName { get; }
+}
+
+/// <summary>
+/// Carries one completed support group color change request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerColorChangeRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates support group color change request data.
+    /// </summary>
+    public LayerColorChangeRequestedEventArgs(Guid supportLayerGroupId, SupportLayerColor oldColor, SupportLayerColor newColor)
+    {
+        SupportLayerGroupId = supportLayerGroupId;
+        OldColor = oldColor;
+        NewColor = newColor;
+    }
+
+    /// <summary>
+    /// Gets the support group id whose color should change.
+    /// </summary>
+    public Guid SupportLayerGroupId { get; }
+
+    /// <summary>
+    /// Gets the color displayed before the edit.
+    /// </summary>
+    public SupportLayerColor OldColor { get; }
+
+    /// <summary>
+    /// Gets the color requested by the color picker.
+    /// </summary>
+    public SupportLayerColor NewColor { get; }
 }

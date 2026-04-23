@@ -39,11 +39,6 @@ A "Supports Settings Panel" overlays the viewport on the bottom left. This is wh
 - My repo can be found at https://github.com/Zigfreed107/Graphite.
 - My Local files are at C:\Coding\CAD\Pillar_VisualStudio_Scaffold\src
 
-# Periodically review this code:
-- What is wrong?
-- What will break at scale?
-- What would you refactor?
-
 # Do:
 - Optimise for real-time performance
 - Avoid common CAD pitfalls (like recomputing everything every frame)
@@ -55,6 +50,7 @@ A "Supports Settings Panel" overlays the viewport on the bottom left. This is wh
 
 # Don't:
 - Hard code colours or other constants that might need to be changed later
+- Dont let MainWindow.xaml.cs become a dumping ground for all code. Either split into partial classes or create new classes and files as needed to keep the code organised and maintainable.
 
 # CONSTRAINTS:
 - Do not couple rendering and domain logic

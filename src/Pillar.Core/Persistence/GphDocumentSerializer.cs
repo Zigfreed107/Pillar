@@ -18,7 +18,7 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 3;
+    private const int CurrentVersion = 4;
     private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
@@ -222,7 +222,8 @@ public sealed class GphDocumentSerializer
         {
             Id = supportLayerGroup.Id,
             ModelEntityId = supportLayerGroup.ModelEntityId,
-            Name = supportLayerGroup.Name
+            Name = supportLayerGroup.Name,
+            Color = CreateSupportLayerColorDto(supportLayerGroup.Color)
         };
     }
 
@@ -269,7 +270,8 @@ public sealed class GphDocumentSerializer
             supportLayerGroups.Add(SupportLayerGroup.CreateLoaded(
                 supportLayerGroupDto.Id,
                 supportLayerGroupDto.ModelEntityId,
-                supportLayerGroupDto.Name));
+                supportLayerGroupDto.Name,
+                CreateSupportLayerColorOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -340,7 +342,11 @@ public sealed class GphDocumentSerializer
         {
             if (entity is MeshEntity && !modelIdsWithGroups.Contains(entity.Id))
             {
-                supportLayerGroups.Add(new SupportLayerGroup(entity.Id, DefaultSupportGroupName));
+                supportLayerGroups.Add(new SupportLayerGroup(
+                    entity.Id,
+                    DefaultSupportGroupName,
+                    SupportLayerColorGenerator.CreateFromStableSeed(entity.Id)));
+
                 modelIdsWithGroups.Add(entity.Id);
             }
         }
@@ -512,6 +518,19 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts one runtime support layer color into serializable channel values.
+    /// </summary>
+    private static GphSupportLayerColorDto CreateSupportLayerColorDto(SupportLayerColor color)
+    {
+        return new GphSupportLayerColorDto
+        {
+            Red = color.Red,
+            Green = color.Green,
+            Blue = color.Blue
+        };
+    }
+
+    /// <summary>
     /// Converts one serialized vector into the runtime vector type.
     /// </summary>
     private static Vector3 CreateVector(GphVector3Dto vector)
@@ -530,6 +549,22 @@ public sealed class GphDocumentSerializer
             supportProfileDto.BodyDiameter,
             supportProfileDto.BaseDiameter,
             supportProfileDto.BaseHeight);
+    }
+
+    /// <summary>
+    /// Converts one serialized support group color into the runtime color type or a stable fallback.
+    /// </summary>
+    private static SupportLayerColor CreateSupportLayerColorOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (supportLayerGroupDto.Color == null)
+        {
+            return SupportLayerColorGenerator.CreateFromStableSeed(supportLayerGroupDto.Id);
+        }
+
+        return new SupportLayerColor(
+            supportLayerGroupDto.Color.Red,
+            supportLayerGroupDto.Color.Green,
+            supportLayerGroupDto.Color.Blue);
     }
 
     /// <summary>
@@ -620,5 +655,16 @@ public sealed class GphDocumentSerializer
         public Guid Id { get; set; }
         public Guid ModelEntityId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public GphSupportLayerColorDto? Color { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted support group display colors.
+    /// </summary>
+    private sealed class GphSupportLayerColorDto
+    {
+        public byte Red { get; set; }
+        public byte Green { get; set; }
+        public byte Blue { get; set; }
     }
 }

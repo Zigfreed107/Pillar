@@ -12,19 +12,28 @@ namespace Pillar.Core.Layers;
 public sealed class SupportLayerGroup : INotifyPropertyChanged
 {
     private string _name;
+    private SupportLayerColor _color;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
     /// </summary>
     public SupportLayerGroup(Guid modelEntityId, string name)
-        : this(Guid.NewGuid(), modelEntityId, name)
+        : this(Guid.NewGuid(), modelEntityId, name, SupportLayerColorGenerator.CreateRandom())
+    {
+    }
+
+    /// <summary>
+    /// Creates a new support group under the supplied imported model entity using the supplied color.
+    /// </summary>
+    public SupportLayerGroup(Guid modelEntityId, string name, SupportLayerColor color)
+        : this(Guid.NewGuid(), modelEntityId, name, color)
     {
     }
 
     /// <summary>
     /// Creates a support group with a stable identity, usually when loading a saved project.
     /// </summary>
-    private SupportLayerGroup(Guid id, Guid modelEntityId, string name)
+    private SupportLayerGroup(Guid id, Guid modelEntityId, string name, SupportLayerColor color)
     {
         if (id == Guid.Empty)
         {
@@ -39,6 +48,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         Id = id;
         ModelEntityId = modelEntityId;
         _name = NormalizeName(name);
+        _color = color;
     }
 
     /// <summary>
@@ -77,11 +87,30 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the display color for supports that belong to this group.
+    /// </summary>
+    public SupportLayerColor Color
+    {
+        get { return _color; }
+        private set
+        {
+            if (_color == value)
+            {
+                return;
+            }
+
+            _color = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
-    public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name)
+    public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
     {
-        return new SupportLayerGroup(id, modelEntityId, name);
+        SupportLayerColor loadedColor = color ?? SupportLayerColorGenerator.CreateFromStableSeed(id);
+        return new SupportLayerGroup(id, modelEntityId, name, loadedColor);
     }
 
     /// <summary>
@@ -90,6 +119,14 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     public void Rename(string name)
     {
         Name = name;
+    }
+
+    /// <summary>
+    /// Applies a completed color edit to this group.
+    /// </summary>
+    public void SetColor(SupportLayerColor color)
+    {
+        Color = color;
     }
 
     /// <summary>

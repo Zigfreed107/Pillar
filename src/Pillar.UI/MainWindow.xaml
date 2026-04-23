@@ -120,6 +120,7 @@
                                     MouseUp="Viewport_MouseUp"
                                     Orthographic="True"
                                     RotateAroundMouseDownPoint="True"
+                                    ShowCameraTarget="True"
                                     ShowCoordinateSystem="True"
                                     ShowFrameDetails="True"
                                     ShowFrameRate="True"
@@ -134,7 +135,7 @@
                                                    LookDirection="-10,-10,-10"
                                                    UpDirection="0,0,1"
                                                    FarPlaneDistance="10000"
-                                                   NearPlaneDistance="0.1"/>
+                                                   NearPlaneDistance="0.01"/>
                         </hx:Viewport3DX.Camera>
 
                         <hx:DirectionalLight3D Direction="-1,-1,-1" />

@@ -216,6 +216,24 @@ public class CadDocument
     }
 
     /// <summary>
+    /// Updates one support group's display color while preserving its identity and child support membership.
+    /// </summary>
+    public void SetSupportLayerGroupColor(SupportLayerGroup supportLayerGroup, SupportLayerColor color)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        if (!_supportLayerGroups.Contains(supportLayerGroup))
+        {
+            throw new InvalidOperationException("The support group is not part of this document.");
+        }
+
+        supportLayerGroup.SetColor(color);
+    }
+
+    /// <summary>
     /// Finds a support group by its stable identifier.
     /// </summary>
     public SupportLayerGroup? FindSupportLayerGroupById(Guid id)

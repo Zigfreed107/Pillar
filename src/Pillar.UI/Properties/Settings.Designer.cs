@@ -31,5 +31,14 @@ namespace Pillar.UI.Properties {
                 return ((int)(this["UndoHistoryLimit"]));
             }
         }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public double DefaultModelZStandoffFromOrigin {
+            get {
+                return ((double)(this["DefaultModelZStandoffFromOrigin"]));
+            }
+        }
     }
 }

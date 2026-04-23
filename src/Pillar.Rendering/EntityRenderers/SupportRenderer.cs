@@ -5,6 +5,7 @@ using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Entities;
+using Pillar.Core.Layers;
 using Pillar.Geometry.Supports;
 
 namespace Pillar.Rendering.EntityRenderers;
@@ -17,7 +18,7 @@ public static class SupportRenderer
     /// <summary>
     /// Creates one renderable support visual from a support entity.
     /// </summary>
-    public static GroupModel3D Create(SupportEntity support)
+    public static GroupModel3D Create(SupportEntity support, SupportLayerColor color)
     {
         SupportMeshData meshData = SupportMeshBuilder.Build(support);
         MeshGeometry3D geometry = new MeshGeometry3D
@@ -30,13 +31,38 @@ public static class SupportRenderer
         MeshGeometryModel3D model = new MeshGeometryModel3D
         {
             Geometry = geometry,
-            Material = MeshRenderer.CreateDefaultMaterial(),
+            Material = CreateMaterial(color),
             CullMode = SharpDX.Direct3D11.CullMode.Back
         };
 
         return new GroupModel3D
         {
             Children = { model }
+        };
+    }
+
+    /// <summary>
+    /// Gets the mesh model that renders the support body.
+    /// </summary>
+    public static MeshGeometryModel3D? GetMeshModel(GroupModel3D visual)
+    {
+        return MeshRenderer.GetMeshModel(visual);
+    }
+
+    /// <summary>
+    /// Creates the base material used by supports in one layer group.
+    /// </summary>
+    public static PhongMaterial CreateMaterial(SupportLayerColor color)
+    {
+        float red = color.Red / 255.0f;
+        float green = color.Green / 255.0f;
+        float blue = color.Blue / 255.0f;
+
+        return new PhongMaterial
+        {
+            DiffuseColor = new Color4(red, green, blue, 1.0f),
+            SpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f),
+            SpecularShininess = 24.0f
         };
     }
 }

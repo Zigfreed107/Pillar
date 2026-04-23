@@ -1,73 +1,70 @@
 // SceneManager.cs
 // Orchestrates document-to-visual mapping and incremental rendering state updates for the viewport.
-using Pillar.Core.Document;
-using Pillar.Core.Entities;
-using Pillar.Rendering.BackgroundGrid;
-using Pillar.Rendering.EntityRenderers;
-using Pillar.Rendering.Preview;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
+using Pillar.Core.Document;
+using Pillar.Core.Entities;
+using Pillar.Core.Layers;
+using Pillar.Rendering.BackgroundGrid;
+using Pillar.Rendering.EntityRenderers;
+using Pillar.Rendering.Preview;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Linq;
+using System.ComponentModel;
 using System.Numerics;
+using System.Windows.Media.Media3D;
 
 namespace Pillar.Rendering.Scene;
 
+/// <summary>
+/// Manages the 3D scene for the CAD application.
+/// </summary>
 public class SceneManager
 {
     private const string MeshHighlightPostEffect = "highlight";
 
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
-
-    // Mapping Dictionaries.
-    // visual to entity dicts maintain the relationship between CAD entities and their visual representation in the viewer.
-    // visuals are stored as GroupModel3D to allow for composite visuals made of multiple entities (e.g. line + selection overlay).
     private readonly Dictionary<GroupModel3D, CadEntity> _visualToEntity = new Dictionary<GroupModel3D, CadEntity>();
     private readonly Dictionary<CadEntity, GroupModel3D> _entityToVisual = new Dictionary<CadEntity, GroupModel3D>();
-    // element to visual dict allows us to find the parent visual for any given element in the scene. E.g. a line on the screen is an element,
-    // but might be part of a larger visual that includes selection overlays, etc. This allows us to find the correct visual to update when an element is interacted with.
     private readonly Dictionary<Element3D, GroupModel3D> _elementToVisual = new Dictionary<Element3D, GroupModel3D>();
-
-    private readonly GroupModel3D _entityRoot = new GroupModel3D();  //Permanent CAD geometry
+    private readonly GroupModel3D _entityRoot = new GroupModel3D();
     private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
-    private readonly GroupModel3D _previewRoot = new GroupModel3D(); //Preview Geometry
-    private readonly BackgroundGridRenderer _BackgroundGridRenderer;
+    private readonly GroupModel3D _previewRoot = new GroupModel3D();
+    private readonly BackgroundGridRenderer _backgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
-    private PreviewLineRenderer _previewLineRenderer;
+    private readonly PreviewLineRenderer _previewLineRenderer;
     private readonly SelectionManager _selectionManager;
-
-    // Materials used for highlighting, selection, etc.
     private readonly PhongMaterial _defaultMaterial = new PhongMaterial
     {
         DiffuseColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f)
     };
-
     private readonly PhongMaterial _highlightMaterial = new PhongMaterial
     {
         DiffuseColor = new Color4(1.0f, 1.0f, 0.0f, 1.0f)
     };
 
     /// <summary>
-    /// Manages the 3D scene for the CAD application.
-    /// 
-    /// Responsibilities:
-    /// - Maintains separation between permanent geometry and preview visuals
-    /// - Converts domain entities into renderable visuals
-    /// - Coordinates preview and snapping renderers
-    /// 
-    /// Important:
-    /// - Avoids recreating scene objects during interaction
-    /// - Uses incremental updates for performance
+    /// Gets the domain selection manager used by selection tools.
     /// </summary>
-    /// 
     public SelectionManager SelectionManager
     {
         get { return _selectionManager; }
     }
+
+    /// <summary>
+    /// Gets the rendered background-grid bounds used for startup camera framing.
+    /// </summary>
+    public Rect3D BackgroundGridBounds
+    {
+        get { return _backgroundGridRenderer.RenderBounds; }
+    }
+
+    /// <summary>
+    /// Creates the scene manager and subscribes to document changes.
+    /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document)
     {
         _viewport = viewport;
@@ -79,28 +76,25 @@ public class SceneManager
             EffectName = MeshHighlightPostEffect
         });
 
-        // Add background grid
-        _BackgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot);
+        _backgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot, BackgroundGridDefinition.Default);
         _viewport.Items.Add(_backgroundGridRoot);
-
-        //Add CAD Geometry Root - add before preview so previews render over CAD Geometry.
         _viewport.Items.Add(_entityRoot);
 
-        // Add Preview Objects
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
-        //Selection
         _selectionManager.SelectionChanged += OnSelectionChanged;
-
-
-
         _document.EntitiesChanged += OnEntitiesChanged;
+        _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
 
+        SubscribeToExistingSupportLayerGroups();
         RenderAll();
     }
 
+    /// <summary>
+    /// Updates scene visuals when entities are added or removed from the document.
+    /// </summary>
     private void OnEntitiesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
@@ -120,36 +114,78 @@ public class SceneManager
         }
     }
 
-    // Updated to match SelectionManager.SelectionChanged: Action<IEnumerable<Guid>, IEnumerable<Guid>>
+    /// <summary>
+    /// Subscribes and unsubscribes when support groups are added or removed.
+    /// </summary>
+    private void OnSupportLayerGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems != null)
+        {
+            foreach (SupportLayerGroup supportLayerGroup in e.NewItems)
+            {
+                supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
+            }
+        }
+
+        if (e.OldItems != null)
+        {
+            foreach (SupportLayerGroup supportLayerGroup in e.OldItems)
+            {
+                supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies live support recoloring when one support layer group's properties change.
+    /// </summary>
+    private void SupportLayerGroup_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not SupportLayerGroup supportLayerGroup)
+        {
+            return;
+        }
+
+        if (!string.Equals(e.PropertyName, nameof(SupportLayerGroup.Color), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        ApplySupportLayerGroupColorToEntities(supportLayerGroup);
+    }
+
+    /// <summary>
+    /// Updates selection highlight state for entities whose selection changed.
+    /// </summary>
     private void OnSelectionChanged(IEnumerable<Guid> addedIds, IEnumerable<Guid> removedIds)
     {
-        // Reset visuals for removed entity ids
         foreach (Guid id in removedIds)
         {
             CadEntity? entity = FindEntityById(id);
-            GroupModel3D? visual;
-            if (entity != null && _entityToVisual.TryGetValue(entity, out visual))
+
+            if (entity != null && _entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
             {
                 ApplyDefaultMaterial(visual);
             }
         }
 
-        // Apply highlight for newly added entity ids
         foreach (Guid id in addedIds)
         {
             CadEntity? entity = FindEntityById(id);
-            GroupModel3D? visual;
-            if (entity != null && _entityToVisual.TryGetValue(entity, out visual))
+
+            if (entity != null && _entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
             {
                 ApplyHighlightMaterial(visual);
             }
         }
     }
 
+    /// <summary>
+    /// Rebuilds the scene from the current document contents.
+    /// </summary>
     private void RenderAll()
     {
         _entityRoot.Children.Clear();
-
         _entityToVisual.Clear();
         _visualToEntity.Clear();
         _elementToVisual.Clear();
@@ -158,71 +194,40 @@ public class SceneManager
         {
             GroupModel3D? visual = CreateVisual(entity);
 
-            if (visual != null)
+            if (visual == null)
             {
-                _entityToVisual[entity] = visual;
-                _visualToEntity[visual] = entity;
-                _entityRoot.Children.Add(visual);
-
-                foreach (Element3D element in visual.Children)
-                {
-                    _elementToVisual[element] = visual;
-                }
+                continue;
             }
+
+            _entityToVisual[entity] = visual;
+            _visualToEntity[visual] = entity;
+            _entityRoot.Children.Add(visual);
+
+            foreach (Element3D element in visual.Children)
+            {
+                _elementToVisual[element] = visual;
+            }
+
+            ApplyDefaultMaterial(visual);
         }
     }
 
     /// <summary>
-    /// Finds the visual from a particular element in the scene.
+    /// Finds the domain entity that owns one viewport element.
     /// </summary>
-    /// <param name="element"></param>
-    /// <returns></returns>
     public CadEntity? GetEntityFromVisual(Element3D element)
     {
-        GroupModel3D? visual = null;
-        CadEntity? entity = null;
-
-        if (_elementToVisual.TryGetValue(element, out visual))
+        if (_elementToVisual.TryGetValue(element, out GroupModel3D? visual))
         {
-            _visualToEntity.TryGetValue(visual, out entity);
-        }
-
-        return entity;
-
-    }
-
-    /// <summary>
-    /// Finds entity by Id.
-    /// TODO: This is O(n) now — will optimize later.
-    /// </summary>
-    private CadEntity? FindEntityById(Guid id)
-    {
-        foreach (CadEntity entity in _document.Entities)
-        {
-            if (entity.Id == id)
-                return entity;
+            _visualToEntity.TryGetValue(visual, out CadEntity? entity);
+            return entity;
         }
 
         return null;
     }
 
-    private GroupModel3D? CreateVisual(CadEntity entity)
-    {
-        if (entity is LineEntity line)
-            return LineRenderer.Create(line);
-
-        if (entity is MeshEntity mesh)
-            return MeshRenderer.Create(mesh);
-
-        if (entity is SupportEntity support)
-            return SupportRenderer.Create(support);
-
-        return null;
-    }
-
     /// <summary>
-    /// Updates the preview line positions without recreating the visual.
-    /// This is called frequently during mouse move.
+    /// Shows the transient preview line while an interaction is in progress.
     /// </summary>
     public void ShowPreviewLine(Vector3 start, Vector3 end)
     {
@@ -230,7 +235,7 @@ public class SceneManager
     }
 
     /// <summary>
-    /// Hides the preview line when not in use.
+    /// Hides the transient preview line.
     /// </summary>
     public void HidePreviewLine()
     {
@@ -238,16 +243,15 @@ public class SceneManager
     }
 
     /// <summary>
-    /// Shows Snapping Marker at given position.
+    /// Shows the snapping marker at the supplied world position.
     /// </summary>
-    /// <param name="position"></param>
     public void ShowSnappingPoint(Vector3 position)
     {
         _snapMarkerRenderer.Show(position);
     }
 
     /// <summary>
-    /// Hides Snapping Marker.
+    /// Hides the snapping marker.
     /// </summary>
     public void HideSnappingPoint()
     {
@@ -255,117 +259,219 @@ public class SceneManager
     }
 
     /// <summary>
-    /// Adds a new entity into the scene
+    /// Creates one renderable visual for one supported entity type.
     /// </summary>
-    /// <param name="entity"></param>
+    private GroupModel3D? CreateVisual(CadEntity entity)
+    {
+        if (entity is LineEntity line)
+        {
+            return LineRenderer.Create(line);
+        }
+
+        if (entity is MeshEntity mesh)
+        {
+            return MeshRenderer.Create(mesh);
+        }
+
+        if (entity is SupportEntity support)
+        {
+            return SupportRenderer.Create(support, GetSupportLayerGroupColor(support.SupportLayerGroupId));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Inserts one new entity visual into the scene incrementally.
+    /// </summary>
     private void InsertEntity(CadEntity entity)
     {
-
-        // Update visual to entity mapping
         GroupModel3D? visual = CreateVisual(entity);
 
-
-        if (visual != null)
+        if (visual == null)
         {
-
-            foreach (Element3D element in visual.Children)
-            {
-                _elementToVisual.Add(element, visual);
-            }
-
-            _entityRoot.Children.Add(visual);
-            _entityToVisual[entity] = visual;
-            _visualToEntity[visual] = entity;
-            ApplyDefaultMaterial(visual);
-
+            return;
         }
+
+        foreach (Element3D element in visual.Children)
+        {
+            _elementToVisual.Add(element, visual);
+        }
+
+        _entityRoot.Children.Add(visual);
+        _entityToVisual[entity] = visual;
+        _visualToEntity[visual] = entity;
+        ApplyDefaultMaterial(visual);
     }
 
     /// <summary>
-    /// Removes and entity from the scene.
+    /// Removes one entity visual from the scene incrementally.
     /// </summary>
-    /// <param name="entity"></param>
     private void RemoveEntity(CadEntity entity)
     {
-        // Update visual to entity mapping
-        GroupModel3D? visualToRemove = null;
-
-        if (_entityToVisual.TryGetValue(entity, out visualToRemove))
+        if (!_entityToVisual.TryGetValue(entity, out GroupModel3D? visualToRemove))
         {
-            foreach (Element3D element in visualToRemove.Children)
-            {
-                _elementToVisual.Remove(element);
-            }
-
-            _entityRoot.Children.Remove(visualToRemove);
-            _entityToVisual.Remove(entity);
-            _visualToEntity.Remove(visualToRemove);
+            return;
         }
+
+        foreach (Element3D element in visualToRemove.Children)
+        {
+            _elementToVisual.Remove(element);
+        }
+
+        _entityRoot.Children.Remove(visualToRemove);
+        _entityToVisual.Remove(entity);
+        _visualToEntity.Remove(visualToRemove);
     }
 
     /// <summary>
-    /// Applies default material to a visual.
+    /// Applies the entity's non-highlighted appearance.
     /// </summary>
     private void ApplyDefaultMaterial(Element3D visual)
     {
-        if (visual == null) return;
-
-        if (visual is GroupModel3D group)
+        if (visual is not GroupModel3D group)
         {
-            Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
-
-            if (lineOverlay != null)
+            if (visual is MeshGeometryModel3D mesh)
             {
-                lineOverlay.Visibility = System.Windows.Visibility.Hidden;
-                return;
-            }
-
-            MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
-
-            if (meshModel != null)
-            {
-                meshModel.PostEffects = string.Empty;
+                mesh.Material = _defaultMaterial;
             }
 
             return;
         }
 
-        if (visual is MeshGeometryModel3D mesh)
+        CadEntity? entity = GetEntityFromGroup(group);
+        Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
+
+        if (lineOverlay != null)
         {
-            mesh.Material = _defaultMaterial;
+            lineOverlay.Visibility = System.Windows.Visibility.Hidden;
+            return;
+        }
+
+        MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+
+        if (meshModel == null)
+        {
+            return;
+        }
+
+        meshModel.PostEffects = string.Empty;
+
+        if (entity is SupportEntity supportEntity)
+        {
+            meshModel.Material = SupportRenderer.CreateMaterial(GetSupportLayerGroupColor(supportEntity.SupportLayerGroupId));
+            return;
+        }
+
+        meshModel.Material = _defaultMaterial;
+    }
+
+    /// <summary>
+    /// Applies the highlighted appearance for a selected entity.
+    /// </summary>
+    private void ApplyHighlightMaterial(Element3D visual)
+    {
+        if (visual is not GroupModel3D group)
+        {
+            if (visual is MeshGeometryModel3D mesh)
+            {
+                mesh.Material = _highlightMaterial;
+            }
+
+            return;
+        }
+
+        Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
+
+        if (lineOverlay != null)
+        {
+            lineOverlay.Visibility = System.Windows.Visibility.Visible;
+            return;
+        }
+
+        MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+
+        if (meshModel != null)
+        {
+            meshModel.PostEffects = MeshHighlightPostEffect;
         }
     }
 
     /// <summary>
-    /// Applies highlight material to a visual.
+    /// Applies one support layer group's color to all supports that belong to it.
     /// </summary>
-    private void ApplyHighlightMaterial(Element3D visual)
+    private void ApplySupportLayerGroupColorToEntities(SupportLayerGroup supportLayerGroup)
     {
-        if (visual == null) return;
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
 
-        if (visual is GroupModel3D group)
+        foreach (SupportEntity supportEntity in supportEntities)
         {
-            Element3D? lineOverlay = LineRenderer.GetSelectionOverlay(group);
-
-            if (lineOverlay != null)
+            if (!_entityToVisual.TryGetValue(supportEntity, out GroupModel3D? visual))
             {
-                lineOverlay.Visibility = System.Windows.Visibility.Visible;
-                return;
+                continue;
             }
 
-            MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+            MeshGeometryModel3D? meshModel = SupportRenderer.GetMeshModel(visual);
 
             if (meshModel != null)
             {
-                meshModel.PostEffects = MeshHighlightPostEffect;
+                meshModel.Material = SupportRenderer.CreateMaterial(supportLayerGroup.Color);
             }
+        }
+    }
 
-            return;
+    /// <summary>
+    /// Gets the color currently assigned to one support layer group.
+    /// </summary>
+    private SupportLayerColor GetSupportLayerGroupColor(Guid supportLayerGroupId)
+    {
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(supportLayerGroupId);
+
+        if (supportLayerGroup != null)
+        {
+            return supportLayerGroup.Color;
         }
 
-        if (visual is MeshGeometryModel3D mesh)
+        return SupportLayerColorGenerator.CreateFromStableSeed(supportLayerGroupId);
+    }
+
+    /// <summary>
+    /// Finds one document entity by its stable identifier.
+    /// </summary>
+    private CadEntity? FindEntityById(Guid id)
+    {
+        foreach (CadEntity entity in _document.Entities)
         {
-            mesh.Material = _highlightMaterial;
+            if (entity.Id == id)
+            {
+                return entity;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds one entity from its root visual.
+    /// </summary>
+    private CadEntity? GetEntityFromGroup(GroupModel3D group)
+    {
+        if (_visualToEntity.TryGetValue(group, out CadEntity? entity))
+        {
+            return entity;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Subscribes to any support groups that already exist when the scene manager starts.
+    /// </summary>
+    private void SubscribeToExistingSupportLayerGroups()
+    {
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
         }
     }
 }
