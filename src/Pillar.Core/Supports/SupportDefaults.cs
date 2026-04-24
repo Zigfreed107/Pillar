@@ -14,9 +14,9 @@ public static class SupportDefaults
     {
         return new SupportProfile(
             tipDiameter: 0.35f,
-            tipLength: 1.20f,
-            bodyDiameter: 0.80f,
-            baseDiameter: 2.40f,
+            tipLength: 5.20f,
+            bodyDiameter: 1.00f,
+            baseDiameter: 2.50f,
             baseHeight: 1.50f);
     }
 }

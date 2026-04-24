@@ -138,7 +138,15 @@
                                                    NearPlaneDistance="0.01"/>
                         </hx:Viewport3DX.Camera>
 
-                        <hx:DirectionalLight3D Direction="-1,-1,-1" />
+                        <!--
+                            Use a small ambient term plus a key and fill directional light.
+                            This keeps the model readable from most view angles without flattening the shading.
+                        -->
+                        <hx:AmbientLight3D Color="{StaticResource ViewportAmbientLightColor}" />
+                        <hx:DirectionalLight3D Color="{StaticResource ViewportKeyLightColor}"
+                                               Direction="-1,-1,-1" />
+                        <hx:DirectionalLight3D Color="{StaticResource ViewportFillLightColor}"
+                                               Direction="1,0.35,-0.75" />
                     </hx:Viewport3DX>
 
                     <Canvas x:Name="ViewportOverlayCanvas"
