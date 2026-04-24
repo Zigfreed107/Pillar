@@ -3,17 +3,40 @@
 using Pillar.Core.Snapping;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Pillar.Core.Entities;
 
 /// <summary>
 /// Provides the shared identity, naming, bounds, and snap-point contract for all CAD entities.
 /// </summary>
-public abstract class CadEntity: ISelectable
+public abstract class CadEntity : ISelectable, INotifyPropertyChanged
 {
+    private string _name;
+
     public Guid Id { get; protected set; }
-    public string Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the user-visible entity name and raises change notifications for shell observers.
+    /// </summary>
+    public string Name
+    {
+        get { return _name; }
+        set
+        {
+            string normalizedName = string.IsNullOrWhiteSpace(value) ? "Entity" : value;
+
+            if (string.Equals(_name, normalizedName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _name = normalizedName;
+            OnPropertyChanged();
+        }
+    }
 
     public abstract (Vector3 Min, Vector3 Max) GetBounds();
 
@@ -23,7 +46,7 @@ public abstract class CadEntity: ISelectable
     protected CadEntity(string name)
     {
         Id = Guid.NewGuid();
-        Name = string.IsNullOrWhiteSpace(name) ? "Entity" : name;
+        _name = string.IsNullOrWhiteSpace(name) ? "Entity" : name;
     }
 
     /// <summary>
@@ -32,5 +55,18 @@ public abstract class CadEntity: ISelectable
     public virtual IEnumerable<SnapPoint> GetSnapPoints()
     {
         yield break;
+    }
+
+    /// <summary>
+    /// Raised when entity state changes and dependent UI or rendering layers need to refresh.
+    /// </summary>
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// Publishes one property change notification for derived entities.
+    /// </summary>
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

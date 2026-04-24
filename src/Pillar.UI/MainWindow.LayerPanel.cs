@@ -52,6 +52,13 @@ public partial class MainWindow
                 throw new InvalidDataException("Only mesh model imports can be added to the Layer Panel.");
             }
 
+            (Vector3 Min, Vector3 Max) localBounds = importedMesh.GetLocalBounds();
+            importedMesh.ImportPlacementTransform = Transform3DData.CreateTranslation(new Vector3(0.0f, 0.0f, -localBounds.Min.Z));
+            importedMesh.UserTransform = Transform3DData.CreateTranslation(new Vector3(
+                0.0f,
+                0.0f,
+                (float)Properties.Settings.Default.DefaultModelZStandoffFromOrigin));
+
             SupportLayerGroup initialSupportLayerGroup = new SupportLayerGroup(importedMesh.Id, "Supports Group 1");
             _commandRunner.Execute(new ImportMeshWithSupportGroupCommand(_document, importedMesh, initialSupportLayerGroup));
             FrameEntityInViewport(importedMesh);

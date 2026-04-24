@@ -12,10 +12,59 @@ namespace Pillar.Core.Entities;
 /// </summary>
 public class MeshEntity : CadEntity
 {
+    private Transform3DData _importPlacementTransform;
+    private Transform3DData _userTransform;
+
     public string? SourcePath { get; }
     public IReadOnlyList<Vector3> Vertices { get; }
     public IReadOnlyList<int> TriangleIndices { get; }
     public IReadOnlyList<Vector3> Normals { get; }
+
+    /// <summary>
+    /// Gets or sets the import-time placement transform that grounds raw geometry without editing vertices.
+    /// </summary>
+    public Transform3DData ImportPlacementTransform
+    {
+        get { return _importPlacementTransform; }
+        set
+        {
+            if (_importPlacementTransform == value)
+            {
+                return;
+            }
+
+            _importPlacementTransform = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WorldTransform));
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the editable user transform applied after import placement.
+    /// </summary>
+    public Transform3DData UserTransform
+    {
+        get { return _userTransform; }
+        set
+        {
+            if (_userTransform == value)
+            {
+                return;
+            }
+
+            _userTransform = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WorldTransform));
+        }
+    }
+
+    /// <summary>
+    /// Gets the composed world transform used consistently by rendering, framing, and selection logic.
+    /// </summary>
+    public Matrix4x4 WorldTransform
+    {
+        get { return ImportPlacementTransform.ToMatrix4x4() * UserTransform.ToMatrix4x4(); }
+    }
 
     /// <summary>
     /// Creates an immutable mesh entity from imported vertex, index, and normal buffers.
@@ -25,7 +74,9 @@ public class MeshEntity : CadEntity
         IReadOnlyList<Vector3> vertices,
         IReadOnlyList<int> triangleIndices,
         IReadOnlyList<Vector3> normals,
-        string? sourcePath = null)
+        string? sourcePath = null,
+        Transform3DData? importPlacementTransform = null,
+        Transform3DData? userTransform = null)
         : base(string.IsNullOrWhiteSpace(name) ? "Imported mesh" : name)
     {
         if (vertices == null)
@@ -74,6 +125,8 @@ public class MeshEntity : CadEntity
         Vertices = new ReadOnlyCollection<Vector3>(new List<Vector3>(vertices));
         TriangleIndices = new ReadOnlyCollection<int>(new List<int>(triangleIndices));
         Normals = new ReadOnlyCollection<Vector3>(new List<Vector3>(normals));
+        _importPlacementTransform = importPlacementTransform ?? Transform3DData.Identity;
+        _userTransform = userTransform ?? Transform3DData.Identity;
     }
 
     /// <summary>
@@ -85,17 +138,19 @@ public class MeshEntity : CadEntity
         IReadOnlyList<Vector3> vertices,
         IReadOnlyList<int> triangleIndices,
         IReadOnlyList<Vector3> normals,
-        string? sourcePath)
+        string? sourcePath,
+        Transform3DData? importPlacementTransform = null,
+        Transform3DData? userTransform = null)
     {
-        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, normals, sourcePath);
+        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, normals, sourcePath, importPlacementTransform, userTransform);
         mesh.Id = id;
         return mesh;
     }
 
     /// <summary>
-    /// Calculates the axis-aligned bounds for the imported mesh vertices.
+    /// Calculates the axis-aligned bounds for the raw imported mesh vertices in local mesh space.
     /// </summary>
-    public override (Vector3 Min, Vector3 Max) GetBounds()
+    public (Vector3 Min, Vector3 Max) GetLocalBounds()
     {
         Vector3 min = Vertices[0];
         Vector3 max = Vertices[0];
@@ -107,5 +162,36 @@ public class MeshEntity : CadEntity
         }
 
         return (min, max);
+    }
+
+    /// <summary>
+    /// Calculates the axis-aligned world bounds by transforming the local mesh bounds corners.
+    /// </summary>
+    public override (Vector3 Min, Vector3 Max) GetBounds()
+    {
+        (Vector3 Min, Vector3 Max) localBounds = GetLocalBounds();
+        Matrix4x4 worldTransform = WorldTransform;
+        Vector3 min = Vector3.Transform(new Vector3(localBounds.Min.X, localBounds.Min.Y, localBounds.Min.Z), worldTransform);
+        Vector3 max = min;
+
+        ExpandWorldBounds(new Vector3(localBounds.Max.X, localBounds.Min.Y, localBounds.Min.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Min.X, localBounds.Max.Y, localBounds.Min.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Max.X, localBounds.Max.Y, localBounds.Min.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Min.X, localBounds.Min.Y, localBounds.Max.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Max.X, localBounds.Min.Y, localBounds.Max.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Min.X, localBounds.Max.Y, localBounds.Max.Z), worldTransform, ref min, ref max);
+        ExpandWorldBounds(new Vector3(localBounds.Max.X, localBounds.Max.Y, localBounds.Max.Z), worldTransform, ref min, ref max);
+
+        return (min, max);
+    }
+
+    /// <summary>
+    /// Incorporates one transformed local-bounds corner into the world-space bounds accumulator.
+    /// </summary>
+    private static void ExpandWorldBounds(Vector3 localCorner, Matrix4x4 worldTransform, ref Vector3 min, ref Vector3 max)
+    {
+        Vector3 transformedCorner = Vector3.Transform(localCorner, worldTransform);
+        min = Vector3.Min(min, transformedCorner);
+        max = Vector3.Max(max, transformedCorner);
     }
 }

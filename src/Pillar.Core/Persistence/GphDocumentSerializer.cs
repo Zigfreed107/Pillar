@@ -18,7 +18,7 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 4;
+    private const int CurrentVersion = 5;
     private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
@@ -180,7 +180,9 @@ public sealed class GphDocumentSerializer
                 Id = mesh.Id,
                 Name = mesh.Name,
                 SourcePath = mesh.SourcePath,
-                TriangleIndices = new List<int>(mesh.TriangleIndices)
+                TriangleIndices = new List<int>(mesh.TriangleIndices),
+                ImportPlacementTransform = CreateTransformDto(mesh.ImportPlacementTransform),
+                UserTransform = CreateTransformDto(mesh.UserTransform)
             };
 
             foreach (Vector3 vertex in mesh.Vertices)
@@ -452,7 +454,9 @@ public sealed class GphDocumentSerializer
             vertices,
             triangleIndices,
             normals,
-            entityDto.SourcePath);
+            entityDto.SourcePath,
+            CreateTransformOrIdentity(entityDto.ImportPlacementTransform),
+            CreateTransformOrIdentity(entityDto.UserTransform));
     }
 
     /// <summary>
@@ -531,11 +535,32 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts one runtime transform into a serializable DTO payload.
+    /// </summary>
+    private static GphTransform3DDto CreateTransformDto(Transform3DData transform)
+    {
+        return new GphTransform3DDto
+        {
+            Translation = CreateVectorDto(transform.Translation),
+            Rotation = CreateQuaternionDto(transform.Rotation),
+            Scale = CreateVectorDto(transform.Scale)
+        };
+    }
+
+    /// <summary>
     /// Converts one serialized vector into the runtime vector type.
     /// </summary>
     private static Vector3 CreateVector(GphVector3Dto vector)
     {
         return new Vector3(vector.X, vector.Y, vector.Z);
+    }
+
+    /// <summary>
+    /// Converts one serialized quaternion into the runtime quaternion type.
+    /// </summary>
+    private static Quaternion CreateQuaternion(GphQuaternionDto quaternion)
+    {
+        return new Quaternion(quaternion.X, quaternion.Y, quaternion.Z, quaternion.W);
     }
 
     /// <summary>
@@ -565,6 +590,37 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.Color.Red,
             supportLayerGroupDto.Color.Green,
             supportLayerGroupDto.Color.Blue);
+    }
+
+    /// <summary>
+    /// Converts one serialized transform into the runtime transform type, or returns identity for legacy files.
+    /// </summary>
+    private static Transform3DData CreateTransformOrIdentity(GphTransform3DDto? transformDto)
+    {
+        if (transformDto == null)
+        {
+            return Transform3DData.Identity;
+        }
+
+        if (transformDto.Translation == null)
+        {
+            throw new InvalidDataException("A saved mesh transform is missing its translation.");
+        }
+
+        if (transformDto.Rotation == null)
+        {
+            throw new InvalidDataException("A saved mesh transform is missing its rotation.");
+        }
+
+        if (transformDto.Scale == null)
+        {
+            throw new InvalidDataException("A saved mesh transform is missing its scale.");
+        }
+
+        return new Transform3DData(
+            CreateVector(transformDto.Translation),
+            CreateQuaternion(transformDto.Rotation),
+            CreateVector(transformDto.Scale));
     }
 
     /// <summary>
@@ -619,6 +675,8 @@ public sealed class GphDocumentSerializer
         public List<GphVector3Dto> Vertices { get; set; } = new List<GphVector3Dto>();
         public List<int>? TriangleIndices { get; set; }
         public List<GphVector3Dto> Normals { get; set; } = new List<GphVector3Dto>();
+        public GphTransform3DDto? ImportPlacementTransform { get; set; }
+        public GphTransform3DDto? UserTransform { get; set; }
         public Guid? SupportLayerGroupId { get; set; }
         public GphVector3Dto? TipPosition { get; set; }
         public GphVector3Dto? BasePosition { get; set; }
@@ -633,6 +691,27 @@ public sealed class GphDocumentSerializer
         public float X { get; set; }
         public float Y { get; set; }
         public float Z { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for stable Quaternion serialization without relying on System.Numerics internals.
+    /// </summary>
+    private sealed class GphQuaternionDto
+    {
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Z { get; set; }
+        public float W { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted mesh transform data.
+    /// </summary>
+    private sealed class GphTransform3DDto
+    {
+        public GphVector3Dto? Translation { get; set; }
+        public GphQuaternionDto? Rotation { get; set; }
+        public GphVector3Dto? Scale { get; set; }
     }
 
     /// <summary>
@@ -666,5 +745,19 @@ public sealed class GphDocumentSerializer
         public byte Red { get; set; }
         public byte Green { get; set; }
         public byte Blue { get; set; }
+    }
+
+    /// <summary>
+    /// Converts one runtime quaternion into serializable numeric components.
+    /// </summary>
+    private static GphQuaternionDto CreateQuaternionDto(Quaternion quaternion)
+    {
+        return new GphQuaternionDto
+        {
+            X = quaternion.X,
+            Y = quaternion.Y,
+            Z = quaternion.Z,
+            W = quaternion.W
+        };
     }
 }

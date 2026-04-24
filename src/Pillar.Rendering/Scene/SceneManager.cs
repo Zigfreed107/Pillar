@@ -88,6 +88,7 @@ public class SceneManager
         _document.EntitiesChanged += OnEntitiesChanged;
         _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
 
+        SubscribeToExistingEntities();
         SubscribeToExistingSupportLayerGroups();
         RenderAll();
     }
@@ -101,6 +102,7 @@ public class SceneManager
         {
             foreach (CadEntity entity in e.NewItems)
             {
+                entity.PropertyChanged += Entity_PropertyChanged;
                 InsertEntity(entity);
             }
         }
@@ -109,6 +111,7 @@ public class SceneManager
         {
             foreach (CadEntity entity in e.OldItems)
             {
+                entity.PropertyChanged -= Entity_PropertyChanged;
                 RemoveEntity(entity);
             }
         }
@@ -177,6 +180,28 @@ public class SceneManager
             {
                 ApplyHighlightMaterial(visual);
             }
+        }
+    }
+
+    /// <summary>
+    /// Applies incremental visual updates when an entity changes without leaving the document.
+    /// </summary>
+    private void Entity_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not MeshEntity meshEntity)
+        {
+            return;
+        }
+
+        if (!_entityToVisual.TryGetValue(meshEntity, out GroupModel3D? visual))
+        {
+            return;
+        }
+
+        if (string.Equals(e.PropertyName, nameof(MeshEntity.ImportPlacementTransform), StringComparison.Ordinal)
+            || string.Equals(e.PropertyName, nameof(MeshEntity.UserTransform), StringComparison.Ordinal))
+        {
+            MeshRenderer.ApplyTransform(visual, meshEntity);
         }
     }
 
@@ -472,6 +497,17 @@ public class SceneManager
         foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
         {
             supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
+        }
+    }
+
+    /// <summary>
+    /// Subscribes to entities that already exist when the scene manager starts.
+    /// </summary>
+    private void SubscribeToExistingEntities()
+    {
+        foreach (CadEntity entity in _document.Entities)
+        {
+            entity.PropertyChanged += Entity_PropertyChanged;
         }
     }
 }
