@@ -8,6 +8,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
         xmlns:layers="clr-namespace:Pillar.UI.Layers"
+        xmlns:modes="clr-namespace:Pillar.UI.Modes"
         Title="{Binding WindowTitle}"
         Height="1080"
         Width="1920"
@@ -58,34 +59,6 @@
                             Click="RedoButton_Click" />
                     <Separator/>
                 </ToolBar>
-                <ToolBar x:Name="ModeToolbar">
-                    <ToggleButton x:Name="SelectMode"
-                                  MinWidth="72"
-                                  Padding="10,4"
-                                  Click="SelectMode_Click"
-                                  Content="Select"
-                                  ToolTip="Selection mode" />
-                    <ToggleButton x:Name="LineMode"
-                                  MinWidth="72"
-                                  Padding="10,4"
-                                  Click="LineMode_Click"
-                                  Content="Line"
-                                  ToolTip="Line drawing mode" />
-                    <ToggleButton x:Name="TransformMode"
-                                  MinWidth="88"
-                                  Padding="10,4"
-                                  Click="TransformMode_Click"
-                                  Content="Transform"
-                                  ToolTip="Transform mode is planned"
-                                  IsEnabled="False" />
-                    <ToggleButton x:Name="SupportMode"
-                                  MinWidth="88"
-                                  Padding="10,4"
-                                  Click="SupportMode_Click"
-                                  Content="Support"
-                                  ToolTip="Support mode is planned"
-                                  IsEnabled="False" />
-                </ToolBar>
             </ToolBarTray>
         </DockPanel>
         
@@ -125,7 +98,7 @@
                                     ShowFrameDetails="True"
                                     ShowFrameRate="True"
                                     ShowViewCube="True"
-                                    ZoomAroundMouseDownPoint="True"
+                                    ZoomAroundMouseDownPoint="False"
                                     MSAA="Maximum"
                                     ShowTriangleCountInfo="True"
                                     ShowCameraInfo="True">
@@ -134,8 +107,7 @@
                             <hx:OrthographicCamera Position="10,10,10"
                                                    LookDirection="-10,-10,-10"
                                                    UpDirection="0,0,1"
-                                                   FarPlaneDistance="10000"
-                                                   NearPlaneDistance="0.01"/>
+                                                   />
                         </hx:Viewport3DX.Camera>
 
                         <!--
@@ -156,19 +128,46 @@
                                    Style="{StaticResource SelectionWindowOverlayStyle}" />
                     </Canvas>
 
-                    <layers:LayerPanel x:Name="LayerPanelOverlay"
-                                       Margin="12"
-                                       HorizontalAlignment="Left"
-                                       VerticalAlignment="Top"
-                                       IsHitTestVisible="True"
-                                       Panel.ZIndex="20" />
+                    <!--
+                        Keep permanent shell panels grouped in one horizontal strip so layout stays predictable
+                        as the workflow ribbon grows without entangling it with viewport-specific overlays.
+                    -->
+                    <Grid Margin="12"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          IsHitTestVisible="True"
+                          Panel.ZIndex="20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <ContentControl x:Name="ModePanelHost"
-                                    Margin="12"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Top"
-                                    IsHitTestVisible="True"
-                                    Panel.ZIndex="20" />
+                        <layers:LayerPanel x:Name="LayerPanelOverlay"
+                                           Grid.Column="0"
+                                           Width="280"
+                                           Height="280"
+                                           VerticalAlignment="Top"
+                                           IsHitTestVisible="True" />
+
+                        <modes:ModePanel x:Name="WorkflowModePanelOverlay"
+                                         Grid.Column="2"
+                                         Width="420"
+                                         Height="Auto"
+                                         VerticalAlignment="Top"
+                                         IsHitTestVisible="True" />
+
+                        <modes:ToolOptionsPanel x:Name="ToolOptionsPanelOverlay"
+                                                Grid.Column="4"
+                                                Width="280"
+                                                Height="Auto"
+                                                VerticalAlignment="Top"
+                                                Visibility="Collapsed"
+                                                IsHitTestVisible="True" />
+                    </Grid>
+
                 </Grid>
             </Border>
 

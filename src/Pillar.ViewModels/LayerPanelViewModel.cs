@@ -19,6 +19,7 @@ public partial class LayerPanelViewModel : ObservableObject
 {
     private readonly CadDocument _document;
     private LayerTreeItemViewModel? _selectedLayer;
+    private int _selectedModelCount;
 
     /// <summary>
     /// Creates a Layer Panel model that mirrors the supplied document.
@@ -44,6 +45,30 @@ public partial class LayerPanelViewModel : ObservableObject
     public bool HasImportedModels
     {
         get { return ModelLayers.Count > 0; }
+    }
+
+    /// <summary>
+    /// Gets whether a top-level model row is currently selected.
+    /// </summary>
+    public bool HasSelectedModelLayer
+    {
+        get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.Model; }
+    }
+
+    /// <summary>
+    /// Gets whether multiple mesh models are currently selected in the scene.
+    /// </summary>
+    public bool HasMultipleSelectedModels
+    {
+        get { return _selectedModelCount > 1; }
+    }
+
+    /// <summary>
+    /// Gets whether the workflow tabs should be visible for the current selection context.
+    /// </summary>
+    public bool CanShowWorkflowTabs
+    {
+        get { return HasSelectedModelLayer || HasMultipleSelectedModels; }
     }
 
     /// <summary>
@@ -91,8 +116,31 @@ public partial class LayerPanelViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanAddSupportGroup));
                 OnPropertyChanged(nameof(CanRemoveSupportGroup));
                 OnPropertyChanged(nameof(CanRemoveModel));
+                OnPropertyChanged(nameof(HasSelectedModelLayer));
+                OnPropertyChanged(nameof(CanShowWorkflowTabs));
+                UpdateLayerSelectionFlags();
             }
         }
+    }
+
+    /// <summary>
+    /// Updates the count of mesh models selected in the scene so shell panels can respond to multi-model workflows.
+    /// </summary>
+    public void SetSelectedModelCount(int selectedModelCount)
+    {
+        if (selectedModelCount < 0)
+        {
+            selectedModelCount = 0;
+        }
+
+        if (_selectedModelCount == selectedModelCount)
+        {
+            return;
+        }
+
+        _selectedModelCount = selectedModelCount;
+        OnPropertyChanged(nameof(HasMultipleSelectedModels));
+        OnPropertyChanged(nameof(CanShowWorkflowTabs));
     }
 
     /// <summary>
@@ -138,7 +186,8 @@ public partial class LayerPanelViewModel : ObservableObject
             }
         }
 
-        SelectedLayer = FindLayer(selectedId, selectedKind);
+        LayerTreeItemViewModel? restoredSelection = FindLayer(selectedId, selectedKind);
+        SelectedLayer = restoredSelection ?? GetDefaultSelectedLayer();
         OnPropertyChanged(nameof(HasImportedModels));
     }
 
@@ -148,6 +197,48 @@ public partial class LayerPanelViewModel : ObservableObject
     public void SetSelectedLayer(LayerTreeItemViewModel? selectedLayer)
     {
         SelectedLayer = selectedLayer;
+    }
+
+    /// <summary>
+    /// Selects one imported model row by entity id when the shell wants a deterministic active model.
+    /// </summary>
+    public void SelectModelLayer(Guid modelEntityId)
+    {
+        foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
+        {
+            if (modelLayer.Kind == LayerTreeItemKind.Model && modelLayer.ModelEntityId == modelEntityId)
+            {
+                SelectedLayer = modelLayer;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Selects one support group row by support-layer-group id.
+    /// </summary>
+    public void SelectSupportGroupLayer(Guid supportLayerGroupId)
+    {
+        foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
+        {
+            foreach (LayerTreeItemViewModel childLayer in modelLayer.Children)
+            {
+                if (childLayer.Kind == LayerTreeItemKind.SupportGroup && childLayer.Id == supportLayerGroupId)
+                {
+                    SelectedLayer = childLayer;
+                    modelLayer.IsExpanded = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clears any current layer-tree selection.
+    /// </summary>
+    public void ClearSelectedLayer()
+    {
+        SelectedLayer = null;
     }
 
     /// <summary>
@@ -233,6 +324,35 @@ public partial class LayerPanelViewModel : ObservableObject
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Chooses the default tree selection when the previous selection no longer exists.
+    /// </summary>
+    private LayerTreeItemViewModel? GetDefaultSelectedLayer()
+    {
+        if (ModelLayers.Count == 0)
+        {
+            return null;
+        }
+
+        return ModelLayers[0];
+    }
+
+    /// <summary>
+    /// Mirrors the selected layer into the tree row selection flags used by WPF.
+    /// </summary>
+    private void UpdateLayerSelectionFlags()
+    {
+        foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
+        {
+            modelLayer.IsSelected = ReferenceEquals(modelLayer, SelectedLayer);
+
+            foreach (LayerTreeItemViewModel childLayer in modelLayer.Children)
+            {
+                childLayer.IsSelected = ReferenceEquals(childLayer, SelectedLayer);
+            }
+        }
     }
 
     /// <summary>

@@ -13,6 +13,7 @@ namespace Pillar.ViewModels;
 public partial class LayerTreeItemViewModel : ObservableObject
 {
     private bool _isExpanded;
+    private bool _isSelected;
     private bool _isEditing;
     private string _editingName;
     private SupportLayerColor _supportColor;
@@ -79,6 +80,15 @@ public partial class LayerTreeItemViewModel : ObservableObject
     {
         get { return _isExpanded; }
         set { SetProperty(ref _isExpanded, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets whether WPF should keep this tree row selected.
+    /// </summary>
+    public bool IsSelected
+    {
+        get { return _isSelected; }
+        set { SetProperty(ref _isSelected, value); }
     }
 
     /// <summary>

@@ -19,8 +19,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Docu
 		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
 		2026_04_07 AI_Chat_Summary.txt = 2026_04_07 AI_Chat_Summary.txt
 		Agents.md = Agents.md
-		Mode, Tools, Operations, Commands.txt = Mode, Tools, Operations, Commands.txt
+		Mode, Tools, Operations, Commands.md = Mode, Tools, Operations, Commands.md
 		TODO.txt = TODO.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaions", "Documentaions", "{B64C065D-C640-4395-862F-EFCC3FDF3090}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Gui-And-Workflow-Map.md = Documentation\Gui-And-Workflow-Map.md
 	EndProjectSection
 EndProject
 Global

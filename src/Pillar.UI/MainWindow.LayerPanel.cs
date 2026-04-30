@@ -59,8 +59,8 @@ public partial class MainWindow
                 0.0f,
                 (float)Properties.Settings.Default.DefaultModelZStandoffFromOrigin));
 
-            SupportLayerGroup initialSupportLayerGroup = new SupportLayerGroup(importedMesh.Id, "Supports Group 1");
-            _commandRunner.Execute(new ImportMeshWithSupportGroupCommand(_document, importedMesh, initialSupportLayerGroup));
+            _commandRunner.Execute(new AddEntityCommand(_document, importedMesh, "Import Mesh"));
+            _layerPanelViewModel.SelectModelLayer(importedMesh.Id);
             FrameEntityInViewport(importedMesh);
 
             string fileName = Path.GetFileName(dialog.FileName);

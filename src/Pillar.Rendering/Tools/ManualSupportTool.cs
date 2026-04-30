@@ -19,7 +19,8 @@ public class ManualSupportTool : ITool
     private readonly ProjectionService _projectionService;
     private readonly SceneManager _scene;
     private readonly CadCommandRunner _commandRunner;
-    private readonly Func<Guid?> _getSelectedSupportLayerGroupId;
+    private readonly Func<Guid?> _getSelectedModelEntityId;
+    private readonly Func<float> _getCircleSupportSpacing;
     private IToolOperation? _activeOperation;
 
     /// <summary>
@@ -30,13 +31,15 @@ public class ManualSupportTool : ITool
         ProjectionService projectionService,
         SceneManager scene,
         CadCommandRunner commandRunner,
-        Func<Guid?> getSelectedSupportLayerGroupId)
+        Func<Guid?> getSelectedModelEntityId,
+        Func<float> getCircleSupportSpacing)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _projectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
-        _getSelectedSupportLayerGroupId = getSelectedSupportLayerGroupId ?? throw new ArgumentNullException(nameof(getSelectedSupportLayerGroupId));
+        _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
+        _getCircleSupportSpacing = getCircleSupportSpacing ?? throw new ArgumentNullException(nameof(getCircleSupportSpacing));
     }
 
     /// <summary>
@@ -69,9 +72,24 @@ public class ManualSupportTool : ITool
                 _projectionService,
                 _scene,
                 _commandRunner,
-                _getSelectedSupportLayerGroupId,
+                _getSelectedModelEntityId,
                 RaiseStatusMessageRequested);
 
+            return;
+        }
+
+        if (operationKind == ManualSupportOperationKind.Circle)
+        {
+            _activeOperation = new CircleSupportOperation(
+                _document,
+                _projectionService,
+                _scene,
+                _commandRunner,
+                _getSelectedModelEntityId,
+                _getCircleSupportSpacing,
+                RaiseStatusMessageRequested);
+
+            RaiseStatusMessageRequested("Click the first point on the selected model for circle supports.");
             return;
         }
 

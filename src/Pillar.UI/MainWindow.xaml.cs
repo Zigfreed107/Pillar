@@ -17,22 +17,15 @@ using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Media.Media3D;
 using SelectionWindowOverlayController = Pillar.UI.Overlays.SelectionWindowOverlay;
 
 namespace Pillar.UI;
 
 public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Tracks the shell-owned middle-mouse pan interaction while Helix owns rotation behavior.
-    /// </summary>
-    private enum ViewportNavigationMode
-    {
-        None,
-        Pan
-    }
-
     private readonly CadDocument _document;
     private readonly SceneManager _scene;
     private readonly MainViewModel _viewModel;
@@ -47,12 +40,12 @@ public partial class MainWindow : Window
     private readonly DocumentFileService _documentFileService;
     private readonly CadCommandRunner _commandRunner;
     private readonly LayerPanelViewModel _layerPanelViewModel;
+    private readonly ViewportCameraService _viewportCameraService;
     private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
     private WorkspaceModeId _activeModeId = WorkspaceModeId.Select;
     private string _activeToolStatusText = "Select tool active";
     private bool _hasFramedStartupView;
-    private ViewportNavigationMode _activeViewportNavigationMode = ViewportNavigationMode.None;
-    private Point _lastViewportNavigationPoint;
+    private bool _isSynchronizingLayerAndViewportSelection;
 
     public DefaultEffectsManager EffectsManager { get; }
 
@@ -69,11 +62,10 @@ public partial class MainWindow : Window
 
         EffectsManager = new DefaultEffectsManager();
         Viewport.EffectsManager = EffectsManager; // Needed since EffectsManager is initialised AFTER Main window is initialised. Data binding needs to be updated.
-        ConfigureViewportNavigation();
-        Viewport.MouseWheel += Viewport_MouseWheel;
 
         _document = new CadDocument();
         _scene = new SceneManager(Viewport, _document);
+        _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
         _toolManager = new ToolManager();
@@ -86,7 +78,8 @@ public partial class MainWindow : Window
             _projection,
             _scene,
             _commandRunner,
-            _layerPanelViewModel.GetSelectedSupportLayerGroupId);
+            _layerPanelViewModel.GetSelectedModelEntityId,
+            GetCircleSupportSpacingOrDefault);
         _stlImporter = new StlImporter();
         WireLayerPanel();
         _documentFileService = new DocumentFileService(
@@ -103,19 +96,26 @@ public partial class MainWindow : Window
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
         ContentRendered += MainWindow_ContentRendered;
+        Closed += MainWindow_Closed;
         SetActiveMode(WorkspaceModeId.Select);
     }
 
     /// <summary>
-    /// Centralizes viewport navigation setup so Helix owns rotation and the shell keeps middle-mouse pan.
+    /// Gets the fallback bounds used for camera framing and clip-plane management when no entities are present.
     /// </summary>
-    private void ConfigureViewportNavigation()
+    private Rect3D GetViewportFallbackBounds()
     {
-        Viewport.UseDefaultGestures = true;
-        Viewport.IsPanEnabled = true;
-        Viewport.IsRotationEnabled = true;
-        Viewport.IsZoomEnabled = true;
-        Viewport.IsInertiaEnabled = false;
+        return _scene.BackgroundGridBounds;
+    }
+
+    /// <summary>
+    /// Disposes shell-owned camera helpers when the window closes.
+    /// </summary>
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _viewportCameraService.Dispose();
     }
 
     /// <summary>
@@ -158,6 +158,10 @@ public partial class MainWindow : Window
     private void WireLayerPanel()
     {
         LayerPanelOverlay.DataContext = _layerPanelViewModel;
+        WorkflowModePanelOverlay.DataContext = _layerPanelViewModel;
+        _layerPanelViewModel.PropertyChanged += LayerPanelViewModel_PropertyChanged;
+        WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
+        WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
@@ -197,5 +201,19 @@ public partial class MainWindow : Window
         {
             _viewModel.SetToolPanelText(result.ToolPanelText);
         }
+    }
+
+    /// <summary>
+    /// Reads Circle Support spacing from the Tool Options Panel while keeping WPF controls out of rendering tools.
+    /// </summary>
+    private float GetCircleSupportSpacingOrDefault()
+    {
+        if (ToolOptionsPanelOverlay.TryGetCircleSupportSpacing(out float spacing))
+        {
+            return spacing;
+        }
+
+        _viewModel.SetStatusText("Circle support spacing is invalid; using 5.00 mm.");
+        return ToolOptionsPanel.DefaultCircleSupportSpacing;
     }
 }

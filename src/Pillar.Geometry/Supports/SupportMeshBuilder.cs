@@ -114,8 +114,10 @@ public static class SupportMeshBuilder
             Vector3 endA = endCenter + (startOffsetA * endRadius);
             Vector3 endB = endCenter + (startOffsetB * endRadius);
 
-            AddTriangle(positions, triangleIndices, normals, startA, endA, endB);
-            AddTriangle(positions, triangleIndices, normals, startA, endB, startB);
+            // Wind the wall quads so the generated triangle normals point away from the support axis.
+            // Helix uses back-face culling for support meshes, so reversed winding makes the body render inside out.
+            AddTriangle(positions, triangleIndices, normals, startA, endB, endA);
+            AddTriangle(positions, triangleIndices, normals, startA, startB, endB);
         }
     }
 

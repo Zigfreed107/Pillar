@@ -14,8 +14,8 @@
         <SolidColorBrush x:Key="ModeOverlayBodyBrush" Color="#FF3E4C59" />
         <SolidColorBrush x:Key="ModeOverlayLabelBrush" Color="#FF007ACC" />
         <Color x:Key="ViewportAmbientLightColor">#FF303030</Color>
-        <Color x:Key="ViewportKeyLightColor">#FFF2F4F7</Color>
-        <Color x:Key="ViewportFillLightColor">#FFB8C4D0</Color>
+        <Color x:Key="ViewportKeyLightColor">#BABABA</Color>
+        <Color x:Key="ViewportFillLightColor">#707070</Color>
 
         <Style x:Key="ModeOverlayPanelStyle" TargetType="Border">
             <Setter Property="MinWidth" Value="260" />

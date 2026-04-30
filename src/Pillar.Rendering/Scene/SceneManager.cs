@@ -36,11 +36,9 @@ public class SceneManager
     private readonly BackgroundGridRenderer _backgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private readonly PreviewLineRenderer _previewLineRenderer;
+    private readonly CircleSupportPreviewRenderer _circleSupportPreviewRenderer;
     private readonly SelectionManager _selectionManager;
-    private readonly PhongMaterial _defaultMaterial = new PhongMaterial
-    {
-        DiffuseColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f)
-    };
+    private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly PhongMaterial _highlightMaterial = new PhongMaterial
     {
         DiffuseColor = new Color4(1.0f, 1.0f, 0.0f, 1.0f)
@@ -81,6 +79,7 @@ public class SceneManager
         _viewport.Items.Add(_entityRoot);
 
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
+        _circleSupportPreviewRenderer = new CircleSupportPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
@@ -268,6 +267,30 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Shows the transient Circle Support guide circle.
+    /// </summary>
+    public void ShowCircleSupportPreview(Pillar.Geometry.Primitives.Circle3D circle)
+    {
+        _circleSupportPreviewRenderer.ShowCircle(circle);
+    }
+
+    /// <summary>
+    /// Shows transient projected support marker positions for the Circle Support tool.
+    /// </summary>
+    public void ShowCircleSupportMarkers(IReadOnlyList<Vector3> markerPositions)
+    {
+        _circleSupportPreviewRenderer.ShowMarkers(markerPositions);
+    }
+
+    /// <summary>
+    /// Hides all transient Circle Support preview geometry.
+    /// </summary>
+    public void HideCircleSupportPreview()
+    {
+        _circleSupportPreviewRenderer.Hide();
+    }
+
+    /// <summary>
     /// Shows the snapping marker at the supplied world position.
     /// </summary>
     public void ShowSnappingPoint(Vector3 position)
@@ -358,7 +381,7 @@ public class SceneManager
         {
             if (visual is MeshGeometryModel3D mesh)
             {
-                mesh.Material = _defaultMaterial;
+                mesh.Material = _defaultMeshMaterial;
             }
 
             return;
@@ -388,7 +411,7 @@ public class SceneManager
             return;
         }
 
-        meshModel.Material = _defaultMaterial;
+        meshModel.Material = _defaultMeshMaterial;
     }
 
     /// <summary>

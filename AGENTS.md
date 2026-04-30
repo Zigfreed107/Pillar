@@ -1,7 +1,20 @@
+# CURRENT TASK:
+Creating the functionality of the "Circle Support Tool" in "Support Mode". This tool allows the user to add a ring of supports (with a set spacing between each around the circumference of a circle) by clicking two points on a model that define the diameter of the circle.
+The modes workflow would work as follows:
+1. User would click the "Circle Support Tool" in the Mode Panel while in Support Mode. Another overlay panel would appear with settings specific to the Circle Support Tool to the right of the mode overlay. Settings for the circle tool for now will need to include the spacing between supports around the circumference of the circle, and the thickness of the supports. These settings will be used to determine how many supports are added around the circumference of the circle. More settings will be added later.
+2. The user is prompted to click a first point on a model's surface. This would define the first point of the diameter of the circle.
+3. As the user drags the mouse, a preview of the circle is shown, with the second point of the diameter following the mouse cursor. The position of the supports around the circumference of the circle is updated in real time as the mouse moves, with the spacing between supports determined by the settings in the Settings Panel. 
+4. When the user clicks a second point on the model's surface, the circle of supports is finalised and added to the model as a new layer of supports. Each support needs to stay an individual entity, similar to how multiple point supports can be added to one layer.
+
+
 # BACKGROUND:
-You are helping me build an application using WPF, HelixToolkit and SharpDX. The application is going to be a tool for adding resin printing supports to 3D models the user imports.The general workflow a user is expected to use is as follows:
+You are helping me build an application for adding resin printing supports to 3D models the user imports. The app uses WPF, HelixToolkit and SharpDX. 
+
+
 
 ## User Workflow:
+The general workflow a user is expected to use is as follows:
+
 1. User imports a 3D model (STL, OBJ, etc.)
 2. The application will display the model in a 3D viewport using HelixToolkit and SharpDX for rendering.
 3. The user will transform the model (translate, rotate, scale) to position it correctly for adding supports and eventual printing. For example, they might rotate the model to minimise overhangs.
@@ -41,6 +54,7 @@ A "Supports Settings Panel" overlays the viewport on the bottom left. This is wh
 
 # Do:
 - Optimise for real-time performance
+- Approach the task with a mindset of building a CAD system, even if the initial implementation is simple. This means thinking about extensibility, maintainability, and performance from the start.
 - Avoid common CAD pitfalls (like recomputing everything every frame)
 - Prefer patterns used in professional CAD systems
 - Please use explicit types instead of 'var' for clarity

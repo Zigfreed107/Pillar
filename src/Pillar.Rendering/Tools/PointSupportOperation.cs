@@ -18,12 +18,15 @@ namespace Pillar.Rendering.Tools;
 /// </summary>
 public sealed class PointSupportOperation : IToolOperation
 {
+    private const string PointSupportLayerGroupBaseName = "Point Supports";
+
     private readonly CadDocument _document;
     private readonly ProjectionService _projectionService;
     private readonly SceneManager _scene;
     private readonly CadCommandRunner _commandRunner;
-    private readonly Func<Guid?> _getSelectedSupportLayerGroupId;
+    private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Action<string> _statusReporter;
+    private Guid? _activeSupportLayerGroupId;
 
     /// <summary>
     /// Creates the point support operation.
@@ -33,43 +36,35 @@ public sealed class PointSupportOperation : IToolOperation
         ProjectionService projectionService,
         SceneManager scene,
         CadCommandRunner commandRunner,
-        Func<Guid?> getSelectedSupportLayerGroupId,
+        Func<Guid?> getSelectedModelEntityId,
         Action<string> statusReporter)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _projectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
-        _getSelectedSupportLayerGroupId = getSelectedSupportLayerGroupId ?? throw new ArgumentNullException(nameof(getSelectedSupportLayerGroupId));
+        _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
     }
 
     /// <summary>
-    /// Creates one support when the click lands on the selected support group's owning mesh.
+    /// Creates one support when the click lands on the active model surface.
     /// </summary>
     public void OnMouseDown(Vector2 screenPosition)
     {
-        Guid? selectedSupportLayerGroupId = _getSelectedSupportLayerGroupId();
+        ResolveActivePlacementTarget(out Guid? targetModelEntityId, out SupportLayerGroup? supportLayerGroup);
 
-        if (!selectedSupportLayerGroupId.HasValue)
+        if (!targetModelEntityId.HasValue)
         {
-            _statusReporter("Select a support group before placing supports.");
+            _statusReporter("Select a model before placing point supports.");
             return;
         }
 
-        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(selectedSupportLayerGroupId.Value);
-
-        if (supportLayerGroup == null)
-        {
-            _statusReporter("The selected support group is no longer available.");
-            return;
-        }
-
-        MeshEntity? targetMesh = FindMeshEntity(supportLayerGroup.ModelEntityId);
+        MeshEntity? targetMesh = FindMeshEntity(targetModelEntityId.Value);
 
         if (targetMesh == null)
         {
-            _statusReporter("The support group's owning model could not be found.");
+            _statusReporter("The selected model could not be found.");
             return;
         }
 
@@ -77,7 +72,7 @@ public sealed class PointSupportOperation : IToolOperation
 
         if (!_projectionService.TryGetMeshSurfaceHit(screenPosition, out meshSurfaceHit))
         {
-            _statusReporter("Click on the selected model to place a support.");
+            _statusReporter("Click on the active model to place a point support.");
             return;
         }
 
@@ -85,19 +80,38 @@ public sealed class PointSupportOperation : IToolOperation
 
         if (!ReferenceEquals(hitEntity, targetMesh))
         {
-            _statusReporter("Supports can only be placed on the model owned by the selected support group.");
+            _statusReporter("Point supports can only be placed on the active model.");
             return;
         }
 
+        SupportLayerGroup resolvedSupportLayerGroup;
         Vector3 tipPosition = meshSurfaceHit.HitPosition;
         Vector3 basePosition = new Vector3(tipPosition.X, tipPosition.Y, 0.0f);
-        SupportEntity supportEntity = new SupportEntity(
-            supportLayerGroup.Id,
-            tipPosition,
-            basePosition,
-            SupportDefaults.CreateProfile());
 
-        _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));
+        if (supportLayerGroup == null)
+        {
+            resolvedSupportLayerGroup = new SupportLayerGroup(targetModelEntityId.Value, CreatePointSupportLayerGroupName(targetModelEntityId.Value));
+            SupportEntity firstSupportEntity = new SupportEntity(
+                resolvedSupportLayerGroup.Id,
+                tipPosition,
+                basePosition,
+                SupportDefaults.CreateProfile());
+
+            _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
+            _activeSupportLayerGroupId = resolvedSupportLayerGroup.Id;
+        }
+        else
+        {
+            resolvedSupportLayerGroup = supportLayerGroup;
+            SupportEntity supportEntity = new SupportEntity(
+                resolvedSupportLayerGroup.Id,
+                tipPosition,
+                basePosition,
+                SupportDefaults.CreateProfile());
+
+            _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));
+        }
+
         _statusReporter("Added support");
     }
 
@@ -125,6 +139,37 @@ public sealed class PointSupportOperation : IToolOperation
     }
 
     /// <summary>
+    /// Resolves the model and support group that the current point-support operation should use.
+    /// </summary>
+    private void ResolveActivePlacementTarget(out Guid? modelEntityId, out SupportLayerGroup? supportLayerGroup)
+    {
+        supportLayerGroup = null;
+        modelEntityId = null;
+
+        if (_activeSupportLayerGroupId.HasValue)
+        {
+            SupportLayerGroup? activeSupportLayerGroup = _document.FindSupportLayerGroupById(_activeSupportLayerGroupId.Value);
+
+            if (activeSupportLayerGroup != null)
+            {
+                supportLayerGroup = activeSupportLayerGroup;
+                modelEntityId = activeSupportLayerGroup.ModelEntityId;
+                return;
+            }
+
+            _activeSupportLayerGroupId = null;
+        }
+
+        Guid? selectedModelEntityId = _getSelectedModelEntityId();
+
+        if (selectedModelEntityId.HasValue)
+        {
+            modelEntityId = selectedModelEntityId.Value;
+            return;
+        }
+    }
+
+    /// <summary>
     /// Finds one mesh entity by id from the current document.
     /// </summary>
     private MeshEntity? FindMeshEntity(Guid modelEntityId)
@@ -138,5 +183,34 @@ public sealed class PointSupportOperation : IToolOperation
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Creates a stable user-facing name for a newly created point-support group under one model.
+    /// </summary>
+    private string CreatePointSupportLayerGroupName(Guid modelEntityId)
+    {
+        int duplicateCount = 0;
+
+        foreach (SupportLayerGroup existingSupportLayerGroup in _document.SupportLayerGroups)
+        {
+            if (existingSupportLayerGroup.ModelEntityId != modelEntityId)
+            {
+                continue;
+            }
+
+            if (string.Equals(existingSupportLayerGroup.Name, PointSupportLayerGroupBaseName, StringComparison.OrdinalIgnoreCase)
+                || existingSupportLayerGroup.Name.StartsWith($"{PointSupportLayerGroupBaseName} ", StringComparison.OrdinalIgnoreCase))
+            {
+                duplicateCount++;
+            }
+        }
+
+        if (duplicateCount == 0)
+        {
+            return PointSupportLayerGroupBaseName;
+        }
+
+        return $"{PointSupportLayerGroupBaseName} {duplicateCount + 1}";
     }
 }

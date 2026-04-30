@@ -1,3 +1,5 @@
+// MeshRenderer.cs
+// Creates and updates render-layer visuals for imported mesh entities, including the shared default mesh material definition.
 using Pillar.Core.Entities;
 using HelixToolkit;
 using HelixToolkit.Maths;
@@ -12,6 +14,10 @@ namespace Pillar.Rendering.EntityRenderers;
 /// </summary>
 public static class MeshRenderer
 {
+    private static readonly Color4 DefaultDiffuseColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f);
+    private static readonly Color4 DefaultSpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f);
+    private const float DefaultSpecularShininess = 24f;
+
     /// <summary>
     /// Creates one mesh visual that keeps geometry in local space and applies placement through a visual transform.
     /// </summary>
@@ -75,9 +81,9 @@ public static class MeshRenderer
     {
         return new PhongMaterial
         {
-            DiffuseColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f),
-            SpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f),
-            SpecularShininess = 24f
+            DiffuseColor = DefaultDiffuseColor,
+            SpecularColor = DefaultSpecularColor,
+            SpecularShininess = DefaultSpecularShininess
         };
     }
 
