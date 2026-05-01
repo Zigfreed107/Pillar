@@ -145,4 +145,31 @@ public readonly struct Circle3D
         circle = new Circle3D(center, radius, normal, axisU, axisV);
         return true;
     }
+
+    /// <summary>
+    /// Builds a horizontal XY-plane circle from two picked diameter endpoints, preserving the first pick's height.
+    /// </summary>
+    public static bool TryCreateHorizontalFromDiameter(Vector3 firstPoint, Vector3 secondPoint, out Circle3D circle)
+    {
+        const float MinimumDistanceSquared = 0.000001f;
+
+        Vector2 firstPointXY = new Vector2(firstPoint.X, firstPoint.Y);
+        Vector2 secondPointXY = new Vector2(secondPoint.X, secondPoint.Y);
+        Vector2 diameterXY = secondPointXY - firstPointXY;
+
+        if (diameterXY.LengthSquared() <= MinimumDistanceSquared)
+        {
+            circle = default;
+            return false;
+        }
+
+        Vector2 centerXY = (firstPointXY + secondPointXY) * 0.5f;
+        float radius = diameterXY.Length() * 0.5f;
+        Vector3 center = new Vector3(centerXY.X, centerXY.Y, firstPoint.Z);
+        Vector3 axisU = Vector3.Normalize(new Vector3(firstPoint.X - center.X, firstPoint.Y - center.Y, 0.0f));
+        Vector3 axisV = new Vector3(-axisU.Y, axisU.X, 0.0f);
+
+        circle = new Circle3D(center, radius, Vector3.UnitZ, axisU, axisV);
+        return true;
+    }
 }

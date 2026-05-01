@@ -137,7 +137,6 @@ public partial class MainWindow
         List<SupportLayerGroup> supportLayerGroups = GetSupportLayerGroupsForModel(selectedModel.Id);
         _commandRunner.Execute(new RemoveModelWithSupportGroupsCommand(_document, selectedModel, supportLayerGroups));
         _layerPanelViewModel.RefreshFromDocument();
-        RefreshPropertiesPanelFromSelection();
         _viewModel.SetStatusText($"Removed {selectedModel.Name}");
     }
 

@@ -102,7 +102,7 @@
         </HierarchicalDataTemplate>
     </UserControl.Resources>
 
-    <Border Style="{StaticResource LayerOverlayPanelStyle}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <StackPanel Orientation="Horizontal">
                 <TextBlock Margin="10,0,0,0"

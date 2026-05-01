@@ -122,10 +122,51 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Refreshes the Circle Support preview when its spacing option changes.
+    /// </summary>
+    private void ToolOptionsPanelOverlay_CircleSupportOptionsChanged(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Circle)
+        {
+            return;
+        }
+
+        _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
+    /// Applies the current Circle Support preview as a new support group.
+    /// </summary>
+    private void ToolOptionsPanelOverlay_CircleSupportApplyRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Circle)
+        {
+            _viewModel.SetStatusText("Choose the Circle Support tool before applying circle supports.");
+            return;
+        }
+
+        _manualSupportTool.ApplyActiveOperation();
+    }
+
+    /// <summary>
     /// Updates and reveals the Tool Options Panel for the selected tool.
     /// </summary>
     private void ShowToolOptionsPanel(string selectedToolName)
     {
+        if (IsModePanelSelectionPromptVisible())
+        {
+            HideToolOptionsPanel();
+            return;
+        }
+
         ToolOptionsPanelOverlay.SetSelectedTool(selectedToolName);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
     }
@@ -136,6 +177,27 @@ public partial class MainWindow
     private void HideToolOptionsPanel()
     {
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Gets whether the Mode Panel is currently asking the user to select one imported model.
+    /// </summary>
+    private bool IsModePanelSelectionPromptVisible()
+    {
+        return _layerPanelViewModel.HasImportedModels
+            && !_layerPanelViewModel.CanShowWorkflowTabs
+            && !_layerPanelViewModel.HasSelectedModelLayer;
+    }
+
+    /// <summary>
+    /// Collapses tool options when the current workflow context cannot show mode tabs.
+    /// </summary>
+    private void UpdateToolOptionsPanelVisibilityForWorkflowContext()
+    {
+        if (IsModePanelSelectionPromptVisible())
+        {
+            HideToolOptionsPanel();
+        }
     }
 
     /// <summary>
@@ -158,13 +220,12 @@ public partial class MainWindow
             HideToolOptionsPanel();
         }
 
-        _manualSupportTool.SetActiveOperation(operationKind);
-        SynchronizeWorkflowModePanelSupportOperation(operationKind);
-
         string statusText = GetManualSupportStatusText(operationKind);
         _activeToolStatusText = statusText;
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(statusText);
+        _manualSupportTool.SetActiveOperation(operationKind);
+        SynchronizeWorkflowModePanelSupportOperation(operationKind);
     }
 
     /// <summary>

@@ -13,7 +13,18 @@ namespace Pillar.UI.Modes;
 public partial class ToolOptionsPanel : UserControl
 {
     private const string CircleSupportToolName = "Circle Support";
+    private const float CircleSupportSpacingStep = 0.25f;
     public const float DefaultCircleSupportSpacing = 5.0f;
+
+    /// <summary>
+    /// Raised when a Circle Support option changes and the active preview should be rebuilt.
+    /// </summary>
+    public event EventHandler? CircleSupportOptionsChanged;
+
+    /// <summary>
+    /// Raised when the user accepts the current Circle Support preview.
+    /// </summary>
+    public event EventHandler? CircleSupportApplyRequested;
 
     /// <summary>
     /// Creates the Tool Options Panel overlay.
@@ -58,5 +69,61 @@ public partial class ToolOptionsPanel : UserControl
 
         spacing = DefaultCircleSupportSpacing;
         return false;
+    }
+
+    /// <summary>
+    /// Decreases the Circle Support spacing spinner by one step.
+    /// </summary>
+    private void DecreaseCircleSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        StepCircleSupportSpacing(-CircleSupportSpacingStep);
+    }
+
+    /// <summary>
+    /// Increases the Circle Support spacing spinner by one step.
+    /// </summary>
+    private void IncreaseCircleSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        StepCircleSupportSpacing(CircleSupportSpacingStep);
+    }
+
+    /// <summary>
+    /// Notifies the owner that option-driven previews should be refreshed.
+    /// </summary>
+    private void CircleSupportSpacingTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        CircleSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Requests that the owning shell apply the current Circle Support preview.
+    /// </summary>
+    private void ApplyCircleSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        CircleSupportApplyRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Applies a spinner delta while keeping the spacing finite and positive.
+    /// </summary>
+    private void StepCircleSupportSpacing(float delta)
+    {
+        float currentSpacing;
+
+        if (!TryGetCircleSupportSpacing(out currentSpacing))
+        {
+            currentSpacing = DefaultCircleSupportSpacing;
+        }
+
+        float nextSpacing = MathF.Max(CircleSupportSpacingStep, currentSpacing + delta);
+        CircleSupportSpacingTextBox.Text = nextSpacing.ToString("0.00", CultureInfo.InvariantCulture);
     }
 }

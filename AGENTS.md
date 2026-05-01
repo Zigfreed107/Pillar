@@ -1,10 +1,18 @@
 # CURRENT TASK:
 Creating the functionality of the "Circle Support Tool" in "Support Mode". This tool allows the user to add a ring of supports (with a set spacing between each around the circumference of a circle) by clicking two points on a model that define the diameter of the circle.
+
 The modes workflow would work as follows:
-1. User would click the "Circle Support Tool" in the Mode Panel while in Support Mode. Another overlay panel would appear with settings specific to the Circle Support Tool to the right of the mode overlay. Settings for the circle tool for now will need to include the spacing between supports around the circumference of the circle, and the thickness of the supports. These settings will be used to determine how many supports are added around the circumference of the circle. More settings will be added later.
+1. User would click the "Circle Support Tool" in the Mode Panel while in Support Mode. The tool options panel shows:
+	a. A numeric spinner that sets the distance between supports around the circumference of the circle.
 2. The user is prompted to click a first point on a model's surface. This would define the first point of the diameter of the circle.
-3. As the user drags the mouse, a preview of the circle is shown, with the second point of the diameter following the mouse cursor. The position of the supports around the circumference of the circle is updated in real time as the mouse moves, with the spacing between supports determined by the settings in the Settings Panel. 
-4. When the user clicks a second point on the model's surface, the circle of supports is finalised and added to the model as a new layer of supports. Each support needs to stay an individual entity, similar to how multiple point supports can be added to one layer.
+3. As the user drags the mouse, a preview of the circle is shown. The cricle is drawn parallel to the horizontal XY plane with the second point of the diameter following the mouse cursor. 
+4. When the user clicks a second point on the model's surface, supports are added around the circle defined.
+5. The user is free to edit the distance between supports using the tool options panel setting with the supports updating in real time as the setting is changed.
+6. At the bottom of the Tool Options panel there is an "Apply" button. When this button is clicked, the supports are added to the model as a new support group in the layer panel.
+
+When formulating your code, consider that in the future, we will add:
+- the ability to select the support group added in the layer panel. The circle support tool settings would be displaye dint the Tool Options panel, and the user could edit the settings and see the supports update in real time.
+- the original points clicked on the model to define the circle diameter would be stored as part of the support group data, and the user could edit these points to change the position and size of the circle by clicking and dragging them in the viewport.
 
 
 # BACKGROUND:

@@ -2,6 +2,7 @@
 // Provides viewport projection and hit-testing helpers for rendering-layer interaction tools without leaking WPF shell logic.
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Windows;
@@ -79,6 +80,14 @@ public class ProjectionService
     /// </summary>
     public bool TryGetMeshSurfaceHit(Vector2 screenPosition, out MeshSurfaceHit hit)
     {
+        return TryGetMeshSurfaceHit(screenPosition, null, out hit);
+    }
+
+    /// <summary>
+    /// Attempts to hit-test the viewport and return the first world-space hit accepted by the supplied model filter.
+    /// </summary>
+    public bool TryGetMeshSurfaceHit(Vector2 screenPosition, Predicate<Element3D>? acceptModel, out MeshSurfaceHit hit)
+    {
         Point hitPoint = new Point(screenPosition.X, screenPosition.Y);
         IList<HitTestResult> hits = _viewport.FindHits(hitPoint);
 
@@ -86,6 +95,11 @@ public class ProjectionService
         {
             if (hits[i].ModelHit is Element3D hitModel)
             {
+                if (acceptModel != null && !acceptModel(hitModel))
+                {
+                    continue;
+                }
+
                 hit = new MeshSurfaceHit(
                     hitModel,
                     new Vector3(hits[i].PointHit.X, hits[i].PointHit.Y, hits[i].PointHit.Z));

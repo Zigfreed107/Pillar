@@ -129,6 +129,31 @@ public class ManualSupportTool : ITool
     }
 
     /// <summary>
+    /// Refreshes live option-driven previews for operations that expose editable preview state.
+    /// </summary>
+    public void RefreshActiveOperationPreview()
+    {
+        if (_activeOperation is CircleSupportOperation circleSupportOperation)
+        {
+            circleSupportOperation.RefreshPreview();
+        }
+    }
+
+    /// <summary>
+    /// Applies an operation preview when the active operation supports an explicit apply step.
+    /// </summary>
+    public void ApplyActiveOperation()
+    {
+        if (_activeOperation is CircleSupportOperation circleSupportOperation)
+        {
+            circleSupportOperation.Apply();
+            return;
+        }
+
+        RaiseStatusMessageRequested("Choose the Circle Support tool before applying circle supports.");
+    }
+
+    /// <summary>
     /// Raises one shell status message request from the current operation.
     /// </summary>
     private void RaiseStatusMessageRequested(string statusMessage)

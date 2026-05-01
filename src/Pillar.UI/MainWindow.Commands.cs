@@ -93,29 +93,6 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Commits a completed entity-name edit when the properties textbox loses focus.
-    /// </summary>
-    private void SelectedEntityNameTextBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        CommitSelectedEntityNameEdit();
-    }
-
-    /// <summary>
-    /// Commits a completed entity-name edit when the user presses Enter.
-    /// </summary>
-    private void SelectedEntityNameTextBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-        {
-            return;
-        }
-
-        CommitSelectedEntityNameEdit();
-        Keyboard.ClearFocus();
-        e.Handled = true;
-    }
-
-    /// <summary>
     /// Executes undo and writes the applied command name to the status bar.
     /// </summary>
     private void UndoLastCommand()
@@ -127,7 +104,6 @@ public partial class MainWindow
             return;
         }
 
-        RefreshPropertiesPanelFromSelection();
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText($"Undid {command.DisplayName}");
     }
@@ -144,7 +120,6 @@ public partial class MainWindow
             return;
         }
 
-        RefreshPropertiesPanelFromSelection();
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText($"Redid {command.DisplayName}");
     }

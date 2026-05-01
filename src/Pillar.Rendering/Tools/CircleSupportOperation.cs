@@ -1,5 +1,5 @@
 // CircleSupportOperation.cs
-// Creates a ring of individual support entities from three model-surface picks while keeping preview state transient.
+// Creates a ring of individual support entities from two model-surface diameter picks while keeping preview state transient.
 using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
@@ -17,13 +17,11 @@ using System.Numerics;
 namespace Pillar.Rendering.Tools;
 
 /// <summary>
-/// Places a new support layer group by distributing supports around a three-point circle and projecting them vertically onto the active mesh.
+/// Places a new support layer group by distributing supports around a diameter-defined circle and projecting them vertically onto the active mesh.
 /// </summary>
 public sealed class CircleSupportOperation : IToolOperation
 {
     private const string CircleSupportLayerGroupBaseName = "Circle Supports";
-    private const int MinimumSupportCount = 3;
-    private const int MaximumSupportCount = 512;
 
     private readonly CadDocument _document;
     private readonly ProjectionService _projectionService;
@@ -32,10 +30,13 @@ public sealed class CircleSupportOperation : IToolOperation
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
     private readonly Action<string> _statusReporter;
-    private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(MaximumSupportCount);
+    private readonly List<Vector3> _guidePreviewPoints = new List<Vector3>(CircleSupportPattern.MaximumSupportCount);
+    private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(CircleSupportPattern.MaximumSupportCount);
 
+    private Guid? _targetModelEntityId;
     private Vector3? _firstPoint;
     private Vector3? _secondPoint;
+    private Vector3? _currentPreviewSecondPoint;
 
     /// <summary>
     /// Creates the circle support operation.
@@ -59,11 +60,11 @@ public sealed class CircleSupportOperation : IToolOperation
     }
 
     /// <summary>
-    /// Captures the next circle point or commits the completed three-point circle.
+    /// Captures the first diameter endpoint or accepts the second endpoint for the editable preview.
     /// </summary>
     public void OnMouseDown(Vector2 screenPosition)
     {
-        MeshEntity? selectedMesh = ResolveSelectedMesh();
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
 
         if (selectedMesh == null)
         {
@@ -81,33 +82,45 @@ public sealed class CircleSupportOperation : IToolOperation
 
         if (!_firstPoint.HasValue)
         {
+            _targetModelEntityId = selectedMesh.Id;
             _firstPoint = hitPosition;
+            _secondPoint = null;
+            _currentPreviewSecondPoint = null;
             _scene.HideCircleSupportPreview();
-            _statusReporter("Click the second point on the circle circumference.");
+            _statusReporter("Move the cursor to preview the support ring, then click the second diameter point.");
             return;
         }
 
-        if (!_secondPoint.HasValue)
+        if (_secondPoint.HasValue)
         {
-            _secondPoint = hitPosition;
-            _statusReporter("Click the third point to finish the circle supports.");
+            _statusReporter("Circle support preview is ready. Adjust spacing or click Apply.");
             return;
         }
 
-        CommitCircle(selectedMesh, _firstPoint.Value, _secondPoint.Value, hitPosition);
+        _secondPoint = hitPosition;
+        _currentPreviewSecondPoint = hitPosition;
+
+        if (UpdateCirclePreview(selectedMesh, _firstPoint.Value, hitPosition))
+        {
+            _statusReporter("Circle support preview is ready. Adjust spacing or click Apply.");
+            return;
+        }
+
+        _secondPoint = null;
+        _statusReporter("Circle support diameter points must not overlap in the XY plane.");
     }
 
     /// <summary>
-    /// Updates provisional or full circle preview while the user is choosing points.
+    /// Updates the live diameter circle preview while the user chooses the second point.
     /// </summary>
     public void OnMouseMove(Vector2 screenPosition)
     {
-        if (!_firstPoint.HasValue)
+        if (!_firstPoint.HasValue || _secondPoint.HasValue)
         {
             return;
         }
 
-        MeshEntity? selectedMesh = ResolveSelectedMesh();
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
 
         if (selectedMesh == null)
         {
@@ -121,32 +134,12 @@ public sealed class CircleSupportOperation : IToolOperation
             return;
         }
 
-        if (!_secondPoint.HasValue)
-        {
-            Circle3D provisionalCircle;
-
-            if (Circle3D.TryCreateFromDiameter(_firstPoint.Value, hoverPoint, out provisionalCircle))
-            {
-                _scene.ShowCircleSupportPreview(provisionalCircle);
-            }
-
-            return;
-        }
-
-        Circle3D circle;
-
-        if (!Circle3D.TryCreateFromThreePoints(_firstPoint.Value, _secondPoint.Value, hoverPoint, out circle))
-        {
-            _scene.HideCircleSupportPreview();
-            return;
-        }
-
-        _scene.ShowCircleSupportPreview(circle);
-        UpdateProjectedMarkerPreview(selectedMesh, circle);
+        _currentPreviewSecondPoint = hoverPoint;
+        UpdateCirclePreview(selectedMesh, _firstPoint.Value, hoverPoint);
     }
 
     /// <summary>
-    /// Ignores mouse-up because circle creation is committed by three deliberate clicks.
+    /// Ignores mouse-up because the editable preview is accepted by click and committed by Apply.
     /// </summary>
     public void OnMouseUp(Vector2 screenPosition)
     {
@@ -158,36 +151,84 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     public void Cancel()
     {
+        _targetModelEntityId = null;
         _firstPoint = null;
         _secondPoint = null;
+        _currentPreviewSecondPoint = null;
+        _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
         _scene.HideCircleSupportPreview();
     }
 
     /// <summary>
-    /// Creates all circle supports and records them as one undoable command.
+    /// Rebuilds the transient circle preview from the current tool state and spacing settings.
     /// </summary>
-    private void CommitCircle(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint, Vector3 thirdPoint)
+    public void RefreshPreview()
+    {
+        if (!_firstPoint.HasValue || !_currentPreviewSecondPoint.HasValue)
+        {
+            return;
+        }
+
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
+
+        if (selectedMesh == null)
+        {
+            _scene.HideCircleSupportPreview();
+            return;
+        }
+
+        UpdateCirclePreview(selectedMesh, _firstPoint.Value, _currentPreviewSecondPoint.Value);
+    }
+
+    /// <summary>
+    /// Applies the previewed circle supports to the document as one new support layer group.
+    /// </summary>
+    public void Apply()
+    {
+        if (!_firstPoint.HasValue || !_secondPoint.HasValue)
+        {
+            _statusReporter("Pick two diameter points before applying circle supports.");
+            return;
+        }
+
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
+
+        if (selectedMesh == null)
+        {
+            _statusReporter("The selected model could not be found.");
+            return;
+        }
+
+        CommitCircleFromDiameter(selectedMesh, _firstPoint.Value, _secondPoint.Value);
+    }
+
+    /// <summary>
+    /// Creates all circle supports from the accepted preview and records them as one undoable command.
+    /// </summary>
+    private void CommitCircleFromDiameter(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint)
     {
         Circle3D circle;
 
-        if (!Circle3D.TryCreateFromThreePoints(firstPoint, secondPoint, thirdPoint, out circle))
+        if (!Circle3D.TryCreateHorizontalFromDiameter(firstPoint, secondPoint, out circle))
         {
-            _statusReporter("Circle support points must not be duplicate or collinear.");
+            _statusReporter("Circle support diameter points must not overlap in the XY plane.");
             return;
         }
 
         float spacing = _getSpacing();
-        int requestedSupportCount = CalculateSupportCount(circle, spacing);
+        SupportProfile supportProfile = SupportDefaults.CreateProfile();
+        int requestedSupportCount = CircleSupportPattern.CalculateSupportCount(circle, spacing);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(selectedMesh.Id, CreateCircleSupportLayerGroupName(selectedMesh.Id));
         List<SupportEntity> supportEntities = new List<SupportEntity>(requestedSupportCount);
         int missedProjectionCount = 0;
         int invalidSupportCount = 0;
 
-        for (int i = 0; i < requestedSupportCount; i++)
+        CircleSupportPattern.FillGuidePoints(circle, spacing, _guidePreviewPoints);
+
+        for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
-            float angle = (float)(i * System.Math.PI * 2.0 / requestedSupportCount);
-            Vector3 guidePoint = circle.GetPoint(angle);
+            Vector3 guidePoint = _guidePreviewPoints[i];
             Vector3 projectedPoint;
 
             if (!MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectedPoint))
@@ -204,7 +245,7 @@ public sealed class CircleSupportOperation : IToolOperation
                     supportLayerGroup.Id,
                     projectedPoint,
                     basePosition,
-                    SupportDefaults.CreateProfile()));
+                    supportProfile));
             }
             catch (ArgumentException)
             {
@@ -228,13 +269,13 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     private void UpdateProjectedMarkerPreview(MeshEntity selectedMesh, Circle3D circle)
     {
+        _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
-        int supportCount = CalculateSupportCount(circle, _getSpacing());
+        CircleSupportPattern.FillGuidePoints(circle, _getSpacing(), _guidePreviewPoints);
 
-        for (int i = 0; i < supportCount; i++)
+        for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
-            float angle = (float)(i * System.Math.PI * 2.0 / supportCount);
-            Vector3 guidePoint = circle.GetPoint(angle);
+            Vector3 guidePoint = _guidePreviewPoints[i];
             Vector3 projectedPoint;
 
             if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectedPoint))
@@ -247,45 +288,46 @@ public sealed class CircleSupportOperation : IToolOperation
     }
 
     /// <summary>
-    /// Converts requested spacing into an even support count around the circle.
+    /// Updates the horizontal circle and support marker preview for the current diameter endpoints.
     /// </summary>
-    private static int CalculateSupportCount(Circle3D circle, float spacing)
+    private bool UpdateCirclePreview(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint)
     {
-        if (float.IsNaN(spacing) || float.IsInfinity(spacing) || spacing <= 0.0f)
+        Circle3D circle;
+
+        if (!Circle3D.TryCreateHorizontalFromDiameter(firstPoint, secondPoint, out circle))
         {
-            spacing = 5.0f;
+            _scene.HideCircleSupportPreview();
+            return false;
         }
 
-        int count = (int)MathF.Ceiling(circle.Circumference / spacing);
-
-        if (count < MinimumSupportCount)
-        {
-            count = MinimumSupportCount;
-        }
-
-        if (count > MaximumSupportCount)
-        {
-            count = MaximumSupportCount;
-        }
-
-        return count;
+        _scene.ShowCircleSupportPreview(circle);
+        UpdateProjectedMarkerPreview(selectedMesh, circle);
+        return true;
     }
 
     /// <summary>
-    /// Finds the selected mesh entity that owns the circle support placement.
+    /// Finds the mesh entity that owns the current circle support placement.
     /// </summary>
-    private MeshEntity? ResolveSelectedMesh()
+    private MeshEntity? ResolvePlacementMesh()
     {
-        Guid? selectedModelEntityId = _getSelectedModelEntityId();
+        Guid? selectedModelEntityId = _targetModelEntityId ?? _getSelectedModelEntityId();
 
         if (!selectedModelEntityId.HasValue)
         {
             return null;
         }
 
+        return FindMeshEntity(selectedModelEntityId.Value);
+    }
+
+    /// <summary>
+    /// Finds one mesh entity by id from the current document.
+    /// </summary>
+    private MeshEntity? FindMeshEntity(Guid modelEntityId)
+    {
         foreach (CadEntity entity in _document.Entities)
         {
-            if (entity is MeshEntity meshEntity && meshEntity.Id == selectedModelEntityId.Value)
+            if (entity is MeshEntity meshEntity && meshEntity.Id == modelEntityId)
             {
                 return meshEntity;
             }
@@ -301,15 +343,10 @@ public sealed class CircleSupportOperation : IToolOperation
     {
         MeshSurfaceHit meshSurfaceHit;
 
-        if (!_projectionService.TryGetMeshSurfaceHit(screenPosition, out meshSurfaceHit))
-        {
-            hitPosition = Vector3.Zero;
-            return false;
-        }
-
-        CadEntity? hitEntity = _scene.GetEntityFromVisual(meshSurfaceHit.HitModel);
-
-        if (!ReferenceEquals(hitEntity, selectedMesh))
+        if (!_projectionService.TryGetMeshSurfaceHit(
+            screenPosition,
+            hitModel => ReferenceEquals(_scene.GetEntityFromVisual(hitModel), selectedMesh),
+            out meshSurfaceHit))
         {
             hitPosition = Vector3.Zero;
             return false;

@@ -1,6 +1,6 @@
 <!--
     MainWindow.xaml
-    Defines the CAD workspace shell with docked regions for tools, viewer, properties, menu, and status.
+    Defines the CAD workspace shell with viewport overlays, menu, toolbar, and status regions.
 -->
 <Window x:Class="Pillar.UI.MainWindow"
         x:Name="RootWindow"
@@ -22,6 +22,7 @@
         <DoubleCollection x:Key="SelectionWindowSolidDashArray" />
         <DoubleCollection x:Key="SelectionWindowDottedDashArray">8,4</DoubleCollection>
 
+
         <Style x:Key="SelectionWindowOverlayStyle" TargetType="Rectangle">
             <Setter Property="Fill" Value="{StaticResource SelectionWindowFillBrush}" />
             <Setter Property="Stroke" Value="{StaticResource SelectionWindowStrokeBrush}" />
@@ -32,55 +33,60 @@
     </Window.Resources>
 
     <DockPanel LastChildFill="True" >
-        <DockPanel DockPanel.Dock="Top">
-            <Menu DockPanel.Dock="Top" >
-                <MenuItem Header="_File">
-                    <MenuItem Header="_New"
-                              Click="NewProjectMenuItem_Click" />
-                    <MenuItem Header="_Open..."
-                              Click="OpenProjectMenuItem_Click" />
-                    <MenuItem Header="_Save..."
-                              Click="SaveProjectMenuItem_Click" />
-                    <Separator/>
-                    <MenuItem Header="Import Model"
-                              Click="ImportStlButton_Click" />
-                </MenuItem>
+        <!--Top Menu-->
+        <Border DockPanel.Dock="Top"
+                MinHeight="48"
+                Padding="2,1"
+                SnapsToDevicePixels="True">
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
+                <Menu Grid.Column="0"
+                      Height="48"
+                      Margin="0"
+                      Padding="0"
+                      VerticalAlignment="Top">
+                    <MenuItem Header="_File"
+                              Height="48"
+                              Padding="8,0"
+                              VerticalContentAlignment="Center">
+                        <MenuItem Header="_New"
+                                  Click="NewProjectMenuItem_Click" />
+                        <MenuItem Header="_Open..."
+                                  Click="OpenProjectMenuItem_Click" />
+                        <MenuItem Header="_Save..."
+                                  Click="SaveProjectMenuItem_Click" />
+                        <Separator />
+                        <MenuItem Header="Import Model"
+                                  Click="ImportStlButton_Click" />
+                    </MenuItem>
+                    <MenuItem x:Name="UndoButton"
+                              Header="&#xE7A7;" 
+                              FontFamily="Segoe Fluent Icons" 
+                              Click="UndoButton_Click"
+                              ToolTip="Undo"/>
+                    <MenuItem x:Name="RedoButton"
+                              Header="&#xE7A6;" 
+                              FontFamily="Segoe Fluent Icons" 
+                              Click="RedoButton_Click"
+                              ToolTip="Redo"/>
 
-            </Menu>
-
-            <ToolBarTray>
-                <ToolBar x:Name="MainToolbar" FontFamily="{StaticResource SymbolThemeFontFamily}">
-                    <Button x:Name="UndoButton"
-                            Content="&#xE7A7;"
-                            Click="UndoButton_Click" />
-                    <Button x:Name="RedoButton"
-                            Content="&#xE7A6;"
-                            Click="RedoButton_Click" />
-                    <Separator/>
-                </ToolBar>
-            </ToolBarTray>
-        </DockPanel>
+                </Menu>
+            </Grid>
+        </Border>
         
+        <!--Status Bar-->
         <StatusBar DockPanel.Dock="Bottom">
             <TextBlock Text="{Binding StatusText}" />
         </StatusBar>
-
+        
+        <!--Everything else inbetween-->
         <Grid Margin="6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="280" />
-            </Grid.ColumnDefinitions>
-
-            <GridSplitter Grid.Column="1"
-                          Width="5"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Stretch"
-                          ResizeBehavior="PreviousAndNext"
-                          ResizeDirection="Columns" />
-
-            <Border Grid.Column="0" >
+            <Border>
                 <Grid>
                     <hx:Viewport3DX x:Name="Viewport"
                                     Background="White"
@@ -95,13 +101,9 @@
                                     RotateAroundMouseDownPoint="True"
                                     ShowCameraTarget="True"
                                     ShowCoordinateSystem="True"
-                                    ShowFrameDetails="True"
-                                    ShowFrameRate="True"
                                     ShowViewCube="True"
                                     ZoomAroundMouseDownPoint="False"
-                                    MSAA="Maximum"
-                                    ShowTriangleCountInfo="True"
-                                    ShowCameraInfo="True">
+                                    MSAA="Maximum">
 
                         <hx:Viewport3DX.Camera>
                             <hx:OrthographicCamera Position="10,10,10"
@@ -129,90 +131,44 @@
                     </Canvas>
 
                     <!--
-                        Keep permanent shell panels grouped in one horizontal strip so layout stays predictable
-                        as the workflow ribbon grows without entangling it with viewport-specific overlays.
+                        Keep viewport overlay panels anchored independently so workflow controls do not
+                        compete with layer management as the tool options panel grows.
                     -->
                     <Grid Margin="12"
-                          HorizontalAlignment="Left"
-                          VerticalAlignment="Top"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
                           IsHitTestVisible="True"
                           Panel.ZIndex="20">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="6" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="6" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
+                        
                         <layers:LayerPanel x:Name="LayerPanelOverlay"
-                                           Grid.Column="0"
                                            Width="280"
                                            Height="280"
+                                           HorizontalAlignment="Left"
                                            VerticalAlignment="Top"
                                            IsHitTestVisible="True" />
 
-                        <modes:ModePanel x:Name="WorkflowModePanelOverlay"
-                                         Grid.Column="2"
-                                         Width="420"
-                                         Height="Auto"
-                                         VerticalAlignment="Top"
-                                         IsHitTestVisible="True" />
+                        <StackPanel Width="360"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    IsHitTestVisible="True">
+                             
+                            <modes:ModePanel x:Name="WorkflowModePanelOverlay"
+                                             Width="360"
+                                             Height="Auto"
+                                             IsHitTestVisible="True" />
 
-                        <modes:ToolOptionsPanel x:Name="ToolOptionsPanelOverlay"
-                                                Grid.Column="4"
-                                                Width="280"
-                                                Height="Auto"
-                                                VerticalAlignment="Top"
-                                                Visibility="Collapsed"
-                                                IsHitTestVisible="True" />
+                            <modes:ToolOptionsPanel x:Name="ToolOptionsPanelOverlay"
+                                                    Width="360"
+                                                    Height="Auto"
+                                                    Margin="0,6,0,0"
+                                                    Visibility="Collapsed"
+                                                    IsHitTestVisible="True" />
+                        </StackPanel>
                     </Grid>
 
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" >
-                <DockPanel LastChildFill="True">
-                    <Border DockPanel.Dock="Top" >
-                        <TextBlock Text="{Binding PropertiesPanelTitle}" />
-                    </Border>
-                    <Grid Margin="12" VerticalAlignment="Top">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="12" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="8" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0"
-                                   Text="{Binding PropertiesPanelText}"
-                                   TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="2"
-                                   FontWeight="SemiBold"
-                                   Text="{Binding SelectedEntityType}" />
-
-                        <Grid Grid.Row="4"
-                              IsEnabled="{Binding IsEntitySelected}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="80" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Margin="0,3,8,0"
-                                       Text="Name" />
-                            <TextBox x:Name="SelectedEntityNameTextBox"
-                                     Grid.Column="1"
-                                     MinWidth="120"
-                                     KeyDown="SelectedEntityNameTextBox_KeyDown"
-                                     LostFocus="SelectedEntityNameTextBox_LostFocus"
-                                     Text="{Binding SelectedEntityName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
-                    </Grid>
-                </DockPanel>
-            </Border>
         </Grid>
     </DockPanel>
 

@@ -98,7 +98,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Border Style="{StaticResource LayerOverlayPanelStyle}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />

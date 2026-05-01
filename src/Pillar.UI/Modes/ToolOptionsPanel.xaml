@@ -1,12 +1,12 @@
 <!--
     ToolOptionsPanel.xaml
-    Defines the active-tool options overlay that sits beside the Mode Panel and will host per-tool settings.
+    Defines the active-tool options overlay that sits beneath the Mode Panel and hosts per-tool settings.
 -->
 <UserControl x:Class="Pillar.UI.Modes.ToolOptionsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinWidth="240">
-    <Border Style="{StaticResource LayerOverlayPanelStyle}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
                        Text="Tool Options Panel" />
@@ -29,10 +29,13 @@
                   Visibility="Collapsed">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="30" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="30" />
                     <ColumnDefinition Width="36" />
                 </Grid.ColumnDefinitions>
 
@@ -41,16 +44,40 @@
                            Margin="0,4,8,0"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="Spacing" />
+                <Button Grid.Row="0"
+                        Grid.Column="1"
+                        MinWidth="26"
+                        MinHeight="24"
+                        Padding="0"
+                        Click="DecreaseCircleSupportSpacingButton_Click"
+                        Content="-" />
                 <TextBox x:Name="CircleSupportSpacingTextBox"
                          Grid.Row="0"
-                         Grid.Column="1"
+                         Grid.Column="2"
                          MinWidth="80"
+                         TextChanged="CircleSupportSpacingTextBox_TextChanged"
                          Text="5.00" />
+                <Button Grid.Row="0"
+                        Grid.Column="3"
+                        MinWidth="26"
+                        MinHeight="24"
+                        Padding="0"
+                        Click="IncreaseCircleSupportSpacingButton_Click"
+                        Content="+" />
                 <TextBlock Grid.Row="0"
-                           Grid.Column="2"
+                           Grid.Column="4"
                            Margin="8,4,0,0"
                            Style="{StaticResource ModeOverlayBodyTextStyle}"
                            Text="mm" />
+
+                <Button Grid.Row="1"
+                        Grid.Column="0"
+                        Grid.ColumnSpan="5"
+                        Margin="0,14,0,0"
+                        MinHeight="30"
+                        HorizontalAlignment="Stretch"
+                        Click="ApplyCircleSupportButton_Click"
+                        Content="Apply" />
             </Grid>
         </StackPanel>
     </Border>

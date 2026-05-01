@@ -148,7 +148,6 @@ public partial class MainWindow : Window
         _scene.SelectionManager.SelectionChanged += OnSelectionChanged;
         _commandRunner.HistoryChanged += UpdateUndoRedoButtonState;
         _viewModel.SetStatusText("Ready");
-        _viewModel.SetSelectedEntity(null);
         UpdateUndoRedoButtonState();
     }
 
@@ -162,6 +161,8 @@ public partial class MainWindow : Window
         _layerPanelViewModel.PropertyChanged += LayerPanelViewModel_PropertyChanged;
         WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
+        ToolOptionsPanelOverlay.CircleSupportOptionsChanged += ToolOptionsPanelOverlay_CircleSupportOptionsChanged;
+        ToolOptionsPanelOverlay.CircleSupportApplyRequested += ToolOptionsPanelOverlay_CircleSupportApplyRequested;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
@@ -183,7 +184,6 @@ public partial class MainWindow : Window
     /// </summary>
     private void ActivateSelectToolForDocumentCommand()
     {
-        _viewModel.SetSelectedEntity(null);
         SetActiveMode(WorkspaceModeId.Select);
     }
 
@@ -216,4 +216,5 @@ public partial class MainWindow : Window
         _viewModel.SetStatusText("Circle support spacing is invalid; using 5.00 mm.");
         return ToolOptionsPanel.DefaultCircleSupportSpacing;
     }
+
 }
