@@ -2,6 +2,7 @@
 // Handles interactive manual support creation while routing durable document changes through CAD commands.
 using Pillar.Commands;
 using Pillar.Core.Document;
+using Pillar.Core.Layers;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
 using Pillar.Rendering.Scene;
@@ -55,9 +56,9 @@ public class ManualSupportTool : ITool
     /// <summary>
     /// Selects the operation that should receive Manual Support viewport input.
     /// </summary>
-    public void SetActiveOperation(ManualSupportOperationKind operationKind)
+    public void SetActiveOperation(ManualSupportOperationKind operationKind, bool restartExistingOperation = false)
     {
-        if (ActiveOperationKind == operationKind)
+        if (ActiveOperationKind == operationKind && !restartExistingOperation)
         {
             return;
         }
@@ -142,15 +143,36 @@ public class ManualSupportTool : ITool
     /// <summary>
     /// Applies an operation preview when the active operation supports an explicit apply step.
     /// </summary>
-    public void ApplyActiveOperation()
+    public bool ApplyActiveOperation()
     {
         if (_activeOperation is CircleSupportOperation circleSupportOperation)
         {
-            circleSupportOperation.Apply();
-            return;
+            return circleSupportOperation.Apply();
         }
 
         RaiseStatusMessageRequested("Choose the Circle Support tool before applying circle supports.");
+        return false;
+    }
+
+    /// <summary>
+    /// Loads an existing Circle Support-generated group into the Circle Support operation.
+    /// </summary>
+    public void EditCircleSupportGroup(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        if (ActiveOperationKind != ManualSupportOperationKind.Circle)
+        {
+            SetActiveOperation(ManualSupportOperationKind.Circle);
+        }
+
+        if (_activeOperation is CircleSupportOperation circleSupportOperation)
+        {
+            circleSupportOperation.EditExistingCircleSupportGroup(supportLayerGroup);
+        }
     }
 
     /// <summary>

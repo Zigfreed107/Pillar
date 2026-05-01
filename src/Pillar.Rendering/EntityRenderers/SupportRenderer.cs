@@ -54,14 +54,23 @@ public static class SupportRenderer
     /// </summary>
     public static PhongMaterial CreateMaterial(SupportLayerColor color)
     {
+        return CreateMaterial(color, 1.0f);
+    }
+
+    /// <summary>
+    /// Creates a support material with caller-controlled opacity for transient editing states.
+    /// </summary>
+    public static PhongMaterial CreateMaterial(SupportLayerColor color, float opacity)
+    {
         float red = color.Red / 255.0f;
         float green = color.Green / 255.0f;
         float blue = color.Blue / 255.0f;
+        float alpha = global::System.Math.Clamp(opacity, 0.0f, 1.0f);
 
         return new PhongMaterial
         {
-            DiffuseColor = new Color4(red, green, blue, 1.0f),
-            SpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f),
+            DiffuseColor = new Color4(red, green, blue, alpha),
+            SpecularColor = new Color4(0.18f, 0.18f, 0.18f, alpha),
             SpecularShininess = 24.0f
         };
     }

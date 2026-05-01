@@ -22,6 +22,8 @@ namespace Pillar.Rendering.Tools;
 public sealed class CircleSupportOperation : IToolOperation
 {
     private const string CircleSupportLayerGroupBaseName = "Circle Supports";
+    private const float EditingSupportGroupOpacity = 0.5f;
+    private const float DefaultSupportGroupOpacity = 1.0f;
 
     private readonly CadDocument _document;
     private readonly ProjectionService _projectionService;
@@ -34,6 +36,7 @@ public sealed class CircleSupportOperation : IToolOperation
     private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(CircleSupportPattern.MaximumSupportCount);
 
     private Guid? _targetModelEntityId;
+    private Guid? _editingSupportLayerGroupId;
     private Vector3? _firstPoint;
     private Vector3? _secondPoint;
     private Vector3? _currentPreviewSecondPoint;
@@ -72,18 +75,18 @@ public sealed class CircleSupportOperation : IToolOperation
             return;
         }
 
-        Vector3 hitPosition;
-
-        if (!TryGetHitOnSelectedMesh(screenPosition, selectedMesh, out hitPosition))
-        {
-            _statusReporter("Circle support points must be picked on the selected model.");
-            return;
-        }
-
         if (!_firstPoint.HasValue)
         {
+            Vector3 firstHitPosition;
+
+            if (!TryGetHitOnSelectedMesh(screenPosition, selectedMesh, out firstHitPosition))
+            {
+                _statusReporter("Circle support points must be picked on the selected model.");
+                return;
+            }
+
             _targetModelEntityId = selectedMesh.Id;
-            _firstPoint = hitPosition;
+            _firstPoint = firstHitPosition;
             _secondPoint = null;
             _currentPreviewSecondPoint = null;
             _scene.HideCircleSupportPreview();
@@ -94,6 +97,14 @@ public sealed class CircleSupportOperation : IToolOperation
         if (_secondPoint.HasValue)
         {
             _statusReporter("Circle support preview is ready. Adjust spacing or click Apply.");
+            return;
+        }
+
+        Vector3 hitPosition;
+
+        if (!TryGetDiameterPoint(screenPosition, selectedMesh, _firstPoint.Value, out hitPosition))
+        {
+            _statusReporter("The second circle support point could not be resolved on the construction plane.");
             return;
         }
 
@@ -129,7 +140,7 @@ public sealed class CircleSupportOperation : IToolOperation
 
         Vector3 hoverPoint;
 
-        if (!TryGetHitOnSelectedMesh(screenPosition, selectedMesh, out hoverPoint))
+        if (!TryGetDiameterPoint(screenPosition, selectedMesh, _firstPoint.Value, out hoverPoint))
         {
             return;
         }
@@ -151,13 +162,48 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     public void Cancel()
     {
+        ClearEditingSupportGroupOpacity();
         _targetModelEntityId = null;
+        _editingSupportLayerGroupId = null;
         _firstPoint = null;
         _secondPoint = null;
         _currentPreviewSecondPoint = null;
         _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
         _scene.HideCircleSupportPreview();
+    }
+
+    /// <summary>
+    /// Loads an existing Circle Support group into the operation so its settings can be edited.
+    /// </summary>
+    public void EditExistingCircleSupportGroup(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        CircleSupportSettings? settings = supportLayerGroup.CircleSupportSettings;
+
+        if (settings == null)
+        {
+            _statusReporter("The selected support group was not created with the Circle Support tool.");
+            return;
+        }
+
+        if (_editingSupportLayerGroupId.HasValue && _editingSupportLayerGroupId.Value != supportLayerGroup.Id)
+        {
+            ClearEditingSupportGroupOpacity();
+        }
+
+        _editingSupportLayerGroupId = supportLayerGroup.Id;
+        _targetModelEntityId = supportLayerGroup.ModelEntityId;
+        _firstPoint = settings.FirstDiameterPoint;
+        _secondPoint = settings.SecondDiameterPoint;
+        _currentPreviewSecondPoint = settings.SecondDiameterPoint;
+        _scene.SetSupportLayerGroupOpacity(supportLayerGroup.Id, EditingSupportGroupOpacity);
+        RefreshPreview();
+        _statusReporter("Circle support group loaded. Adjust spacing or click Apply.");
     }
 
     /// <summary>
@@ -182,14 +228,14 @@ public sealed class CircleSupportOperation : IToolOperation
     }
 
     /// <summary>
-    /// Applies the previewed circle supports to the document as one new support layer group.
+    /// Applies the previewed circle supports to either a new support group or the loaded generated support group.
     /// </summary>
-    public void Apply()
+    public bool Apply()
     {
         if (!_firstPoint.HasValue || !_secondPoint.HasValue)
         {
             _statusReporter("Pick two diameter points before applying circle supports.");
-            return;
+            return false;
         }
 
         MeshEntity? selectedMesh = ResolvePlacementMesh();
@@ -197,34 +243,130 @@ public sealed class CircleSupportOperation : IToolOperation
         if (selectedMesh == null)
         {
             _statusReporter("The selected model could not be found.");
-            return;
+            return false;
         }
 
-        CommitCircleFromDiameter(selectedMesh, _firstPoint.Value, _secondPoint.Value);
+        CircleSupportSettings settings = new CircleSupportSettings(_firstPoint.Value, _secondPoint.Value, _getSpacing());
+
+        if (_editingSupportLayerGroupId.HasValue)
+        {
+            return UpdateExistingCircleSupportGroup(selectedMesh, settings);
+        }
+
+        return CommitNewCircleSupportGroup(selectedMesh, settings);
     }
 
     /// <summary>
-    /// Creates all circle supports from the accepted preview and records them as one undoable command.
+    /// Creates a new Circle Support group from the accepted preview and records it as one undoable command.
     /// </summary>
-    private void CommitCircleFromDiameter(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint)
+    private bool CommitNewCircleSupportGroup(MeshEntity selectedMesh, CircleSupportSettings settings)
+    {
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(selectedMesh.Id, CreateCircleSupportLayerGroupName(selectedMesh.Id));
+        supportLayerGroup.SetCircleSupportSettings(settings);
+
+        int missedProjectionCount;
+        int invalidSupportCount;
+        List<SupportEntity> supportEntities = CreateSupportEntities(
+            selectedMesh,
+            supportLayerGroup.Id,
+            settings,
+            out missedProjectionCount,
+            out invalidSupportCount);
+
+        if (supportEntities.Count == 0)
+        {
+            _statusReporter("No circle supports could be projected onto the selected model.");
+            return false;
+        }
+
+        _commandRunner.Execute(new AddSupportsToNewGroupCommand(_document, supportLayerGroup, supportEntities, "Add Circle Supports"));
+        _statusReporter(CreateCompletionMessage(supportEntities.Count, missedProjectionCount, invalidSupportCount));
+        return true;
+    }
+
+    /// <summary>
+    /// Updates the loaded Circle Support group as one undoable parametric regeneration.
+    /// </summary>
+    private bool UpdateExistingCircleSupportGroup(MeshEntity selectedMesh, CircleSupportSettings newSettings)
+    {
+        if (!_editingSupportLayerGroupId.HasValue)
+        {
+            return false;
+        }
+
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(_editingSupportLayerGroupId.Value);
+
+        if (supportLayerGroup == null)
+        {
+            _statusReporter("The Circle Support group could not be found.");
+            return false;
+        }
+
+        CircleSupportSettings? oldSettings = supportLayerGroup.CircleSupportSettings;
+
+        if (oldSettings == null)
+        {
+            _statusReporter("The selected support group was not created with the Circle Support tool.");
+            return false;
+        }
+
+        int missedProjectionCount;
+        int invalidSupportCount;
+        List<SupportEntity> newSupportEntities = CreateSupportEntities(
+            selectedMesh,
+            supportLayerGroup.Id,
+            newSettings,
+            out missedProjectionCount,
+            out invalidSupportCount);
+
+        if (newSupportEntities.Count == 0)
+        {
+            _statusReporter("No circle supports could be projected onto the selected model.");
+            return false;
+        }
+
+        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        _commandRunner.Execute(new UpdateCircleSupportGroupCommand(
+            _document,
+            supportLayerGroup,
+            oldSettings,
+            oldSupportEntities,
+            newSettings,
+            newSupportEntities));
+
+        _firstPoint = newSettings.FirstDiameterPoint;
+        _secondPoint = newSettings.SecondDiameterPoint;
+        _currentPreviewSecondPoint = newSettings.SecondDiameterPoint;
+        _statusReporter(CreateCompletionMessage(newSupportEntities.Count, missedProjectionCount, invalidSupportCount));
+        return true;
+    }
+
+    /// <summary>
+    /// Generates support entities for one Circle Support definition without mutating the document.
+    /// </summary>
+    private List<SupportEntity> CreateSupportEntities(
+        MeshEntity selectedMesh,
+        Guid supportLayerGroupId,
+        CircleSupportSettings settings,
+        out int missedProjectionCount,
+        out int invalidSupportCount)
     {
         Circle3D circle;
 
-        if (!Circle3D.TryCreateHorizontalFromDiameter(firstPoint, secondPoint, out circle))
+        if (!Circle3D.TryCreateHorizontalFromDiameter(settings.FirstDiameterPoint, settings.SecondDiameterPoint, out circle))
         {
-            _statusReporter("Circle support diameter points must not overlap in the XY plane.");
-            return;
+            missedProjectionCount = 0;
+            invalidSupportCount = 0;
+            return new List<SupportEntity>();
         }
 
-        float spacing = _getSpacing();
         SupportProfile supportProfile = SupportDefaults.CreateProfile();
-        int requestedSupportCount = CircleSupportPattern.CalculateSupportCount(circle, spacing);
-        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(selectedMesh.Id, CreateCircleSupportLayerGroupName(selectedMesh.Id));
+        int requestedSupportCount = CircleSupportPattern.CalculateSupportCount(circle, settings.Spacing);
         List<SupportEntity> supportEntities = new List<SupportEntity>(requestedSupportCount);
-        int missedProjectionCount = 0;
-        int invalidSupportCount = 0;
+        missedProjectionCount = 0;
+        invalidSupportCount = 0;
 
-        CircleSupportPattern.FillGuidePoints(circle, spacing, _guidePreviewPoints);
+        CircleSupportPattern.FillGuidePoints(circle, settings.Spacing, _guidePreviewPoints);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
@@ -242,7 +384,7 @@ public sealed class CircleSupportOperation : IToolOperation
             try
             {
                 supportEntities.Add(new SupportEntity(
-                    supportLayerGroup.Id,
+                    supportLayerGroupId,
                     projectedPoint,
                     basePosition,
                     supportProfile));
@@ -253,15 +395,18 @@ public sealed class CircleSupportOperation : IToolOperation
             }
         }
 
-        if (supportEntities.Count == 0)
-        {
-            _statusReporter("No circle supports could be projected onto the selected model.");
-            return;
-        }
+        return supportEntities;
+    }
 
-        _commandRunner.Execute(new AddSupportsToNewGroupCommand(_document, supportLayerGroup, supportEntities, "Add Circle Supports"));
-        _statusReporter(CreateCompletionMessage(supportEntities.Count, missedProjectionCount, invalidSupportCount));
-        Cancel();
+    /// <summary>
+    /// Restores the support group being edited to normal opacity before the operation exits.
+    /// </summary>
+    private void ClearEditingSupportGroupOpacity()
+    {
+        if (_editingSupportLayerGroupId.HasValue)
+        {
+            _scene.SetSupportLayerGroupOpacity(_editingSupportLayerGroupId.Value, DefaultSupportGroupOpacity);
+        }
     }
 
     /// <summary>
@@ -354,6 +499,19 @@ public sealed class CircleSupportOperation : IToolOperation
 
         hitPosition = meshSurfaceHit.HitPosition;
         return true;
+    }
+
+    /// <summary>
+    /// Resolves the moving diameter endpoint from the selected mesh when possible, otherwise from a horizontal construction plane.
+    /// </summary>
+    private bool TryGetDiameterPoint(Vector2 screenPosition, MeshEntity selectedMesh, Vector3 firstPoint, out Vector3 diameterPoint)
+    {
+        if (TryGetHitOnSelectedMesh(screenPosition, selectedMesh, out diameterPoint))
+        {
+            return true;
+        }
+
+        return _projectionService.TryGetWorldPointOnHorizontalPlane(screenPosition, firstPoint.Z, out diameterPoint);
     }
 
     /// <summary>

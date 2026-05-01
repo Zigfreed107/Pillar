@@ -18,11 +18,12 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 5;
+    private const int CurrentVersion = 6;
     private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
+    private const string CircleSupportGeneratorName = "circleSupport";
     private const string DefaultSupportGroupName = "Supports Group 1";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
@@ -225,7 +226,9 @@ public sealed class GphDocumentSerializer
             Id = supportLayerGroup.Id,
             ModelEntityId = supportLayerGroup.ModelEntityId,
             Name = supportLayerGroup.Name,
-            Color = CreateSupportLayerColorDto(supportLayerGroup.Color)
+            Color = CreateSupportLayerColorDto(supportLayerGroup.Color),
+            GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
+            CircleSupport = CreateCircleSupportSettingsDto(supportLayerGroup.CircleSupportSettings)
         };
     }
 
@@ -273,7 +276,8 @@ public sealed class GphDocumentSerializer
                 supportLayerGroupDto.Id,
                 supportLayerGroupDto.ModelEntityId,
                 supportLayerGroupDto.Name,
-                CreateSupportLayerColorOrDefault(supportLayerGroupDto)));
+                CreateSupportLayerColorOrDefault(supportLayerGroupDto),
+                CreateCircleSupportSettingsOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -535,6 +539,37 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts one support group's generator kind into the persisted wire value.
+    /// </summary>
+    private static string? CreateSupportGroupGeneratorKindDto(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.CircleSupport)
+        {
+            return CircleSupportGeneratorName;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Converts Circle Support settings into their persisted representation when present.
+    /// </summary>
+    private static GphCircleSupportSettingsDto? CreateCircleSupportSettingsDto(CircleSupportSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphCircleSupportSettingsDto
+        {
+            FirstDiameterPoint = CreateVectorDto(settings.FirstDiameterPoint),
+            SecondDiameterPoint = CreateVectorDto(settings.SecondDiameterPoint),
+            Spacing = settings.Spacing
+        };
+    }
+
+    /// <summary>
     /// Converts one runtime transform into a serializable DTO payload.
     /// </summary>
     private static GphTransform3DDto CreateTransformDto(Transform3DData transform)
@@ -590,6 +625,38 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.Color.Red,
             supportLayerGroupDto.Color.Green,
             supportLayerGroupDto.Color.Blue);
+    }
+
+    /// <summary>
+    /// Converts saved generator metadata into Circle Support settings, or null for legacy/plain support groups.
+    /// </summary>
+    private static CircleSupportSettings? CreateCircleSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (string.IsNullOrWhiteSpace(supportLayerGroupDto.GeneratorKind))
+        {
+            return null;
+        }
+
+        if (!string.Equals(supportLayerGroupDto.GeneratorKind, CircleSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
+        }
+
+        if (supportLayerGroupDto.CircleSupport == null)
+        {
+            throw new InvalidDataException("A Circle Support group is missing its generator settings.");
+        }
+
+        if (supportLayerGroupDto.CircleSupport.FirstDiameterPoint == null
+            || supportLayerGroupDto.CircleSupport.SecondDiameterPoint == null)
+        {
+            throw new InvalidDataException("A Circle Support group is missing one or both diameter points.");
+        }
+
+        return new CircleSupportSettings(
+            CreateVector(supportLayerGroupDto.CircleSupport.FirstDiameterPoint),
+            CreateVector(supportLayerGroupDto.CircleSupport.SecondDiameterPoint),
+            supportLayerGroupDto.CircleSupport.Spacing);
     }
 
     /// <summary>
@@ -735,6 +802,18 @@ public sealed class GphDocumentSerializer
         public Guid ModelEntityId { get; set; }
         public string Name { get; set; } = string.Empty;
         public GphSupportLayerColorDto? Color { get; set; }
+        public string? GeneratorKind { get; set; }
+        public GphCircleSupportSettingsDto? CircleSupport { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Circle Support generator settings.
+    /// </summary>
+    private sealed class GphCircleSupportSettingsDto
+    {
+        public GphVector3Dto? FirstDiameterPoint { get; set; }
+        public GphVector3Dto? SecondDiameterPoint { get; set; }
+        public float Spacing { get; set; }
     }
 
     /// <summary>

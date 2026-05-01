@@ -76,6 +76,38 @@ public class ProjectionService
     }
 
     /// <summary>
+    /// Attempts to convert a 2D screen coordinate to a world position on a horizontal XY plane at the supplied Z height.
+    /// </summary>
+    public bool TryGetWorldPointOnHorizontalPlane(Vector2 screenPosition, float z, out Vector3 worldPoint)
+    {
+        Vector3 rayOrigin;
+        Vector3 rayDirection;
+
+        if (!_viewport.GetMouseRay(new Point(screenPosition.X, screenPosition.Y), out rayOrigin, out rayDirection))
+        {
+            worldPoint = Vector3.Zero;
+            return false;
+        }
+
+        if (System.Math.Abs(rayDirection.Z) < 0.0001f)
+        {
+            worldPoint = Vector3.Zero;
+            return false;
+        }
+
+        float distanceAlongRay = (z - rayOrigin.Z) / rayDirection.Z;
+
+        if (distanceAlongRay < 0.0f)
+        {
+            worldPoint = Vector3.Zero;
+            return false;
+        }
+
+        worldPoint = rayOrigin + rayDirection * distanceAlongRay;
+        return true;
+    }
+
+    /// <summary>
     /// Attempts to hit-test one viewport model and return its world-space hit position.
     /// </summary>
     public bool TryGetMeshSurfaceHit(Vector2 screenPosition, out MeshSurfaceHit hit)

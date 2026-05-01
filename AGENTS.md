@@ -1,17 +1,19 @@
 # CURRENT TASK:
 Creating the functionality of the "Circle Support Tool" in "Support Mode". This tool allows the user to add a ring of supports (with a set spacing between each around the circumference of a circle) by clicking two points on a model that define the diameter of the circle.
 
-The modes workflow would work as follows:
-1. User would click the "Circle Support Tool" in the Mode Panel while in Support Mode. The tool options panel shows:
-	a. A numeric spinner that sets the distance between supports around the circumference of the circle.
-2. The user is prompted to click a first point on a model's surface. This would define the first point of the diameter of the circle.
-3. As the user drags the mouse, a preview of the circle is shown. The cricle is drawn parallel to the horizontal XY plane with the second point of the diameter following the mouse cursor. 
-4. When the user clicks a second point on the model's surface, supports are added around the circle defined.
-5. The user is free to edit the distance between supports using the tool options panel setting with the supports updating in real time as the setting is changed.
-6. At the bottom of the Tool Options panel there is an "Apply" button. When this button is clicked, the supports are added to the model as a new support group in the layer panel.
+I want to continue developing the Circle Support Tool. 
+
+I want to add the ability to:
+1. select the support group added in the layer panel, 
+2. The Tool Options panel, recognising that these were created with the Circle Support Tool, show the Circle Support Tool settings in the Tool Options Panel, 
+3. The settings show in the Tool Options Panel will be the settings used to create the circle support group (When the apply button was clicked).
+4. These settings can be edited, and the supports are updated in real time.
+5. The user can click APPLY to save the changes back to the support group.
+
+Can you suggest whether we should update the code so that the support group layers remember the tool and settings used to create them, ot some other way of remembering the settings.
+
 
 When formulating your code, consider that in the future, we will add:
-- the ability to select the support group added in the layer panel. The circle support tool settings would be displaye dint the Tool Options panel, and the user could edit the settings and see the supports update in real time.
 - the original points clicked on the model to define the circle diameter would be stored as part of the support group data, and the user could edit these points to change the position and size of the circle by clicking and dragging them in the viewport.
 
 

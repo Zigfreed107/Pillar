@@ -13,6 +13,8 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
 {
     private string _name;
     private SupportLayerColor _color;
+    private SupportGroupGeneratorKind _generatorKind;
+    private CircleSupportSettings? _circleSupportSettings;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
@@ -49,6 +51,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         ModelEntityId = modelEntityId;
         _name = NormalizeName(name);
         _color = color;
+        _generatorKind = SupportGroupGeneratorKind.None;
     }
 
     /// <summary>
@@ -105,12 +108,63 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the parametric generator kind that owns this support group, if any.
+    /// </summary>
+    public SupportGroupGeneratorKind GeneratorKind
+    {
+        get { return _generatorKind; }
+        private set
+        {
+            if (_generatorKind == value)
+            {
+                return;
+            }
+
+            _generatorKind = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Gets a copy of the Circle Support settings when this group is Circle-tool generated.
+    /// </summary>
+    public CircleSupportSettings? CircleSupportSettings
+    {
+        get { return _circleSupportSettings?.Clone(); }
+        private set
+        {
+            _circleSupportSettings = value?.Clone();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
     {
         SupportLayerColor loadedColor = color ?? SupportLayerColorGenerator.CreateFromStableSeed(id);
         return new SupportLayerGroup(id, modelEntityId, name, loadedColor);
+    }
+
+    /// <summary>
+    /// Recreates a saved support group with Circle Support generator metadata.
+    /// </summary>
+    public static SupportLayerGroup CreateLoaded(
+        Guid id,
+        Guid modelEntityId,
+        string name,
+        SupportLayerColor? color,
+        CircleSupportSettings? circleSupportSettings)
+    {
+        SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
+
+        if (circleSupportSettings != null)
+        {
+            supportLayerGroup.SetCircleSupportSettings(circleSupportSettings);
+        }
+
+        return supportLayerGroup;
     }
 
     /// <summary>
@@ -127,6 +181,29 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     public void SetColor(SupportLayerColor color)
     {
         Color = color;
+    }
+
+    /// <summary>
+    /// Marks this group as Circle Support generated and stores the editable generator settings.
+    /// </summary>
+    public void SetCircleSupportSettings(CircleSupportSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        CircleSupportSettings = settings;
+        GeneratorKind = SupportGroupGeneratorKind.CircleSupport;
+    }
+
+    /// <summary>
+    /// Clears parametric generator metadata, leaving this as a plain support group.
+    /// </summary>
+    public void ClearGeneratorSettings()
+    {
+        CircleSupportSettings = null;
+        GeneratorKind = SupportGroupGeneratorKind.None;
     }
 
     /// <summary>

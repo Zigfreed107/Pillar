@@ -120,7 +120,7 @@
                         <hx:DirectionalLight3D Color="{StaticResource ViewportKeyLightColor}"
                                                Direction="-1,-1,-1" />
                         <hx:DirectionalLight3D Color="{StaticResource ViewportFillLightColor}"
-                                               Direction="1,0.35,-0.75" />
+                                               Direction="1,1,1" />
                     </hx:Viewport3DX>
 
                     <Canvas x:Name="ViewportOverlayCanvas"

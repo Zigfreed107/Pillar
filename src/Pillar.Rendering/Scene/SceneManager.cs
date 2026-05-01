@@ -24,6 +24,7 @@ namespace Pillar.Rendering.Scene;
 public class SceneManager
 {
     private const string MeshHighlightPostEffect = "highlight";
+    private const float FullyOpaqueSupportOpacity = 1.0f;
 
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
@@ -291,6 +292,21 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies a temporary opacity override to all support visuals in one support group.
+    /// </summary>
+    public void SetSupportLayerGroupOpacity(Guid supportLayerGroupId, float opacity)
+    {
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(supportLayerGroupId);
+
+        if (supportLayerGroup == null)
+        {
+            return;
+        }
+
+        ApplySupportLayerGroupMaterial(supportLayerGroup, opacity);
+    }
+
+    /// <summary>
     /// Shows the snapping marker at the supplied world position.
     /// </summary>
     public void ShowSnappingPoint(Vector3 position)
@@ -450,6 +466,14 @@ public class SceneManager
     /// </summary>
     private void ApplySupportLayerGroupColorToEntities(SupportLayerGroup supportLayerGroup)
     {
+        ApplySupportLayerGroupMaterial(supportLayerGroup, FullyOpaqueSupportOpacity);
+    }
+
+    /// <summary>
+    /// Applies one material opacity to all supports that belong to a support layer group.
+    /// </summary>
+    private void ApplySupportLayerGroupMaterial(SupportLayerGroup supportLayerGroup, float opacity)
+    {
         IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
 
         foreach (SupportEntity supportEntity in supportEntities)
@@ -463,7 +487,7 @@ public class SceneManager
 
             if (meshModel != null)
             {
-                meshModel.Material = SupportRenderer.CreateMaterial(supportLayerGroup.Color);
+                meshModel.Material = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
             }
         }
     }

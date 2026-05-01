@@ -56,6 +56,14 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether a support group row is currently selected.
+    /// </summary>
+    public bool HasSelectedSupportGroupLayer
+    {
+        get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
     /// Gets whether multiple mesh models are currently selected in the scene.
     /// </summary>
     public bool HasMultipleSelectedModels
@@ -68,7 +76,7 @@ public partial class LayerPanelViewModel : ObservableObject
     /// </summary>
     public bool CanShowWorkflowTabs
     {
-        get { return HasSelectedModelLayer || HasMultipleSelectedModels; }
+        get { return HasSelectedModelLayer || HasSelectedSupportGroupLayer || HasMultipleSelectedModels; }
     }
 
     /// <summary>
@@ -117,6 +125,7 @@ public partial class LayerPanelViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanRemoveSupportGroup));
                 OnPropertyChanged(nameof(CanRemoveModel));
                 OnPropertyChanged(nameof(HasSelectedModelLayer));
+                OnPropertyChanged(nameof(HasSelectedSupportGroupLayer));
                 OnPropertyChanged(nameof(CanShowWorkflowTabs));
                 UpdateLayerSelectionFlags();
             }

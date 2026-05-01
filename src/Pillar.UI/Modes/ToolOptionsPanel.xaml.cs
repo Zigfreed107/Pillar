@@ -15,6 +15,7 @@ public partial class ToolOptionsPanel : UserControl
     private const string CircleSupportToolName = "Circle Support";
     private const float CircleSupportSpacingStep = 0.25f;
     public const float DefaultCircleSupportSpacing = 5.0f;
+    private bool _isSynchronizingCircleSupportOptions;
 
     /// <summary>
     /// Raised when a Circle Support option changes and the active preview should be rebuilt.
@@ -72,6 +73,28 @@ public partial class ToolOptionsPanel : UserControl
     }
 
     /// <summary>
+    /// Sets the Circle Support spacing field without raising live-preview refresh events.
+    /// </summary>
+    public void SetCircleSupportSpacing(float spacing)
+    {
+        if (float.IsNaN(spacing) || float.IsInfinity(spacing) || spacing <= 0.0f)
+        {
+            spacing = DefaultCircleSupportSpacing;
+        }
+
+        _isSynchronizingCircleSupportOptions = true;
+
+        try
+        {
+            CircleSupportSpacingTextBox.Text = spacing.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _isSynchronizingCircleSupportOptions = false;
+        }
+    }
+
+    /// <summary>
     /// Decreases the Circle Support spacing spinner by one step.
     /// </summary>
     private void DecreaseCircleSupportSpacingButton_Click(object sender, RoutedEventArgs e)
@@ -98,6 +121,12 @@ public partial class ToolOptionsPanel : UserControl
     {
         _ = sender;
         _ = e;
+
+        if (_isSynchronizingCircleSupportOptions)
+        {
+            return;
+        }
+
         CircleSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
