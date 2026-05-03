@@ -14,7 +14,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     private string _name;
     private SupportLayerColor _color;
     private SupportGroupGeneratorKind _generatorKind;
-    private CircleSupportSettings? _circleSupportSettings;
+    private RingSupportSettings? _ringSupportSettings;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
@@ -126,14 +126,14 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Gets a copy of the Circle Support settings when this group is Circle-tool generated.
+    /// Gets a copy of the Ring Support settings when this group is Ring-tool generated.
     /// </summary>
-    public CircleSupportSettings? CircleSupportSettings
+    public RingSupportSettings? RingSupportSettings
     {
-        get { return _circleSupportSettings?.Clone(); }
+        get { return _ringSupportSettings?.Clone(); }
         private set
         {
-            _circleSupportSettings = value?.Clone();
+            _ringSupportSettings = value?.Clone();
             OnPropertyChanged();
         }
     }
@@ -148,20 +148,20 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Recreates a saved support group with Circle Support generator metadata.
+    /// Recreates a saved support group with Ring Support generator metadata.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(
         Guid id,
         Guid modelEntityId,
         string name,
         SupportLayerColor? color,
-        CircleSupportSettings? circleSupportSettings)
+        RingSupportSettings? ringSupportSettings)
     {
         SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
 
-        if (circleSupportSettings != null)
+        if (ringSupportSettings != null)
         {
-            supportLayerGroup.SetCircleSupportSettings(circleSupportSettings);
+            supportLayerGroup.SetRingSupportSettings(ringSupportSettings);
         }
 
         return supportLayerGroup;
@@ -184,17 +184,17 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Marks this group as Circle Support generated and stores the editable generator settings.
+    /// Marks this group as Ring Support generated and stores the editable generator settings.
     /// </summary>
-    public void SetCircleSupportSettings(CircleSupportSettings settings)
+    public void SetRingSupportSettings(RingSupportSettings settings)
     {
         if (settings == null)
         {
             throw new ArgumentNullException(nameof(settings));
         }
 
-        CircleSupportSettings = settings;
-        GeneratorKind = SupportGroupGeneratorKind.CircleSupport;
+        RingSupportSettings = settings;
+        GeneratorKind = SupportGroupGeneratorKind.RingSupport;
     }
 
     /// <summary>
@@ -202,7 +202,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     /// </summary>
     public void ClearGeneratorSettings()
     {
-        CircleSupportSettings = null;
+        RingSupportSettings = null;
         GeneratorKind = SupportGroupGeneratorKind.None;
     }
 

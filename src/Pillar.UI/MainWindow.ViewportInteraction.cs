@@ -14,11 +14,19 @@ namespace Pillar.UI;
 public partial class MainWindow
 {
     /// <summary>
-    /// Handles viewport clicks by routing left-button input into the active CAD tool while Helix owns navigation gestures.
+    /// Handles viewport clicks by routing tool input into the active CAD tool while Helix owns navigation gestures.
     /// </summary>
     private void Viewport_MouseDown(object sender, MouseButtonEventArgs e)
     {
         _ = sender;
+
+        if (e.ChangedButton == MouseButton.Right && IsRingSupportOperationActive())
+        {
+            _manualSupportTool.Cancel();
+            ExitRingSupportMode();
+            e.Handled = true;
+            return;
+        }
 
         if (e.ChangedButton != MouseButton.Left)
         {
@@ -27,7 +35,7 @@ public partial class MainWindow
 
         Vector2 screenPosition = GetScreenPosition(e);
 
-        if (IsCircleSupportOperationActive())
+        if (IsRingSupportOperationActive())
         {
             RunWithWaitCursor(() => _toolManager.ActiveTool?.OnMouseDown(screenPosition));
         }
@@ -92,11 +100,11 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Gets whether left-click handling may trigger Circle Support hit testing or marker projection.
+    /// Gets whether left-click handling may trigger Ring Support hit testing or marker projection.
     /// </summary>
-    private bool IsCircleSupportOperationActive()
+    private bool IsRingSupportOperationActive()
     {
         return _activeModeId == WorkspaceModeId.ManualSupport
-            && _manualSupportTool.ActiveOperationKind == ManualSupportOperationKind.Circle;
+            && _manualSupportTool.ActiveOperationKind == ManualSupportOperationKind.Ring;
     }
 }

@@ -8,5 +8,5 @@ namespace Pillar.Core.Layers;
 public enum SupportGroupGeneratorKind
 {
     None,
-    CircleSupport
+    RingSupport
 }

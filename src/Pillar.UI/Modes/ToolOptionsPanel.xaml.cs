@@ -13,38 +13,38 @@ namespace Pillar.UI.Modes;
 /// </summary>
 public partial class ToolOptionsPanel : UserControl
 {
-    private const string CircleSupportToolName = "Circle Support";
-    private const float CircleSupportSpacingStep = 0.25f;
-    private const int CircleSupportOptionsChangedDelayMilliseconds = 300;
-    public const float DefaultCircleSupportSpacing = 5.0f;
-    private readonly DispatcherTimer _circleSupportOptionsChangedTimer;
-    private bool _isSynchronizingCircleSupportOptions;
+    private const string RingSupportToolName = "Ring Support";
+    private const float RingSupportSpacingStep = 0.25f;
+    private const int RingSupportOptionsChangedDelayMilliseconds = 300;
+    public const float DefaultRingSupportSpacing = 5.0f;
+    private readonly DispatcherTimer _ringSupportOptionsChangedTimer;
+    private bool _isSynchronizingRingSupportOptions;
 
     /// <summary>
-    /// Raised when a Circle Support option changes and the active preview should be rebuilt.
+    /// Raised when a Ring Support option changes and the active preview should be rebuilt.
     /// </summary>
-    public event EventHandler? CircleSupportOptionsChanged;
+    public event EventHandler? RingSupportOptionsChanged;
 
     /// <summary>
-    /// Raised when the user accepts the current Circle Support preview.
+    /// Raised when the user accepts the current Ring Support preview.
     /// </summary>
-    public event EventHandler? CircleSupportApplyRequested;
+    public event EventHandler? RingSupportApplyRequested;
 
     /// <summary>
-    /// Raised when the user cancels the current Circle Support operation.
+    /// Raised when the user cancels the current Ring Support operation.
     /// </summary>
-    public event EventHandler? CircleSupportCancelRequested;
+    public event EventHandler? RingSupportCancelRequested;
 
     /// <summary>
     /// Creates the Tool Options Panel overlay.
     /// </summary>
     public ToolOptionsPanel()
     {
-        _circleSupportOptionsChangedTimer = new DispatcherTimer
+        _ringSupportOptionsChangedTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(CircleSupportOptionsChangedDelayMilliseconds)
+            Interval = TimeSpan.FromMilliseconds(RingSupportOptionsChangedDelayMilliseconds)
         };
-        _circleSupportOptionsChangedTimer.Tick += CircleSupportOptionsChangedTimer_Tick;
+        _ringSupportOptionsChangedTimer.Tick += RingSupportOptionsChangedTimer_Tick;
         InitializeComponent();
     }
 
@@ -55,23 +55,23 @@ public partial class ToolOptionsPanel : UserControl
     {
         SelectedToolNameTextBlock.Text = selectedToolName;
 
-        if (string.Equals(selectedToolName, CircleSupportToolName, StringComparison.Ordinal))
+        if (string.Equals(selectedToolName, RingSupportToolName, StringComparison.Ordinal))
         {
-            SettingsSummaryTextBlock.Text = "Circle Support options";
-            CircleSupportOptionsGrid.Visibility = Visibility.Visible;
+            SettingsSummaryTextBlock.Text = "Ring Support options";
+            RingSupportOptionsGrid.Visibility = Visibility.Visible;
             return;
         }
 
         SettingsSummaryTextBlock.Text = $"{selectedToolName} does not have options wired yet.";
-        CircleSupportOptionsGrid.Visibility = Visibility.Collapsed;
+        RingSupportOptionsGrid.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
-    /// Attempts to read the Circle Support spacing field in millimeters.
+    /// Attempts to read the Ring Support spacing field in millimeters.
     /// </summary>
-    public bool TryGetCircleSupportSpacing(out float spacing)
+    public bool TryGetRingSupportSpacing(out float spacing)
     {
-        string text = CircleSupportSpacingTextBox.Text.Trim();
+        string text = RingSupportSpacingTextBox.Text.Trim();
 
         if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out spacing)
             && spacing > 0.0f
@@ -81,124 +81,124 @@ public partial class ToolOptionsPanel : UserControl
             return true;
         }
 
-        spacing = DefaultCircleSupportSpacing;
+        spacing = DefaultRingSupportSpacing;
         return false;
     }
 
     /// <summary>
-    /// Sets the Circle Support spacing field without raising live-preview refresh events.
+    /// Sets the Ring Support spacing field without raising live-preview refresh events.
     /// </summary>
-    public void SetCircleSupportSpacing(float spacing)
+    public void SetRingSupportSpacing(float spacing)
     {
         if (float.IsNaN(spacing) || float.IsInfinity(spacing) || spacing <= 0.0f)
         {
-            spacing = DefaultCircleSupportSpacing;
+            spacing = DefaultRingSupportSpacing;
         }
 
-        _circleSupportOptionsChangedTimer.Stop();
-        _isSynchronizingCircleSupportOptions = true;
+        _ringSupportOptionsChangedTimer.Stop();
+        _isSynchronizingRingSupportOptions = true;
 
         try
         {
-            CircleSupportSpacingTextBox.Text = spacing.ToString("0.00", CultureInfo.InvariantCulture);
+            RingSupportSpacingTextBox.Text = spacing.ToString("0.00", CultureInfo.InvariantCulture);
         }
         finally
         {
-            _isSynchronizingCircleSupportOptions = false;
+            _isSynchronizingRingSupportOptions = false;
         }
     }
 
     /// <summary>
-    /// Decreases the Circle Support spacing spinner by one step.
+    /// Decreases the Ring Support spacing spinner by one step.
     /// </summary>
-    private void DecreaseCircleSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    private void DecreaseRingSupportSpacingButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        StepCircleSupportSpacing(-CircleSupportSpacingStep);
+        StepRingSupportSpacing(-RingSupportSpacingStep);
     }
 
     /// <summary>
-    /// Increases the Circle Support spacing spinner by one step.
+    /// Increases the Ring Support spacing spinner by one step.
     /// </summary>
-    private void IncreaseCircleSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    private void IncreaseRingSupportSpacingButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        StepCircleSupportSpacing(CircleSupportSpacingStep);
+        StepRingSupportSpacing(RingSupportSpacingStep);
     }
 
     /// <summary>
     /// Schedules an option-driven preview refresh after the user pauses editing.
     /// </summary>
-    private void CircleSupportSpacingTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void RingSupportSpacingTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _ = sender;
         _ = e;
 
-        if (_isSynchronizingCircleSupportOptions)
+        if (_isSynchronizingRingSupportOptions)
         {
             return;
         }
 
-        RestartCircleSupportOptionsChangedTimer();
+        RestartRingSupportOptionsChangedTimer();
     }
 
     /// <summary>
-    /// Raises the delayed Circle Support option change event after typing has paused.
+    /// Raises the delayed Ring Support option change event after typing has paused.
     /// </summary>
-    private void CircleSupportOptionsChangedTimer_Tick(object? sender, EventArgs e)
+    private void RingSupportOptionsChangedTimer_Tick(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        _circleSupportOptionsChangedTimer.Stop();
-        CircleSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
+        _ringSupportOptionsChangedTimer.Stop();
+        RingSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Requests that the owning shell apply the current Circle Support preview.
+    /// Requests that the owning shell apply the current Ring Support preview.
     /// </summary>
-    private void ApplyCircleSupportButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyRingSupportButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        _circleSupportOptionsChangedTimer.Stop();
-        CircleSupportApplyRequested?.Invoke(this, EventArgs.Empty);
+        _ringSupportOptionsChangedTimer.Stop();
+        RingSupportApplyRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Requests that the owning shell cancel the current Circle Support operation and discard transient preview state.
+    /// Requests that the owning shell cancel the current Ring Support operation and discard transient preview state.
     /// </summary>
-    private void CancelCircleSupportButton_Click(object sender, RoutedEventArgs e)
+    private void CancelRingSupportButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        _circleSupportOptionsChangedTimer.Stop();
-        CircleSupportCancelRequested?.Invoke(this, EventArgs.Empty);
+        _ringSupportOptionsChangedTimer.Stop();
+        RingSupportCancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
     /// Restarts the live-preview debounce timer so expensive projected markers are recalculated only after edits settle.
     /// </summary>
-    private void RestartCircleSupportOptionsChangedTimer()
+    private void RestartRingSupportOptionsChangedTimer()
     {
-        _circleSupportOptionsChangedTimer.Stop();
-        _circleSupportOptionsChangedTimer.Start();
+        _ringSupportOptionsChangedTimer.Stop();
+        _ringSupportOptionsChangedTimer.Start();
     }
 
     /// <summary>
     /// Applies a spinner delta while keeping the spacing finite and positive.
     /// </summary>
-    private void StepCircleSupportSpacing(float delta)
+    private void StepRingSupportSpacing(float delta)
     {
         float currentSpacing;
 
-        if (!TryGetCircleSupportSpacing(out currentSpacing))
+        if (!TryGetRingSupportSpacing(out currentSpacing))
         {
-            currentSpacing = DefaultCircleSupportSpacing;
+            currentSpacing = DefaultRingSupportSpacing;
         }
 
-        float nextSpacing = MathF.Max(CircleSupportSpacingStep, currentSpacing + delta);
-        CircleSupportSpacingTextBox.Text = nextSpacing.ToString("0.00", CultureInfo.InvariantCulture);
+        float nextSpacing = MathF.Max(RingSupportSpacingStep, currentSpacing + delta);
+        RingSupportSpacingTextBox.Text = nextSpacing.ToString("0.00", CultureInfo.InvariantCulture);
     }
 }

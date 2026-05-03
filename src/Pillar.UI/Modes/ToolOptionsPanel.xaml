@@ -22,9 +22,9 @@
             <TextBlock x:Name="SettingsSummaryTextBlock"
                        Margin="0,12,0,0"
                        Style="{StaticResource ModeOverlayBodyTextStyle}"
-                       Text="Select the Circle Support tool to edit its available options." />
+                       Text="Select the Ring Support tool to edit its available options." />
 
-            <Grid x:Name="CircleSupportOptionsGrid"
+            <Grid x:Name="RingSupportOptionsGrid"
                   Margin="0,14,0,0"
                   Visibility="Collapsed">
                 <Grid.RowDefinitions>
@@ -49,20 +49,20 @@
                         MinWidth="26"
                         MinHeight="24"
                         Padding="0"
-                        Click="DecreaseCircleSupportSpacingButton_Click"
+                        Click="DecreaseRingSupportSpacingButton_Click"
                         Content="-" />
-                <TextBox x:Name="CircleSupportSpacingTextBox"
+                <TextBox x:Name="RingSupportSpacingTextBox"
                          Grid.Row="0"
                          Grid.Column="2"
                          MinWidth="80"
-                         TextChanged="CircleSupportSpacingTextBox_TextChanged"
+                         TextChanged="RingSupportSpacingTextBox_TextChanged"
                          Text="5.00" />
                 <Button Grid.Row="0"
                         Grid.Column="3"
                         MinWidth="26"
                         MinHeight="24"
                         Padding="0"
-                        Click="IncreaseCircleSupportSpacingButton_Click"
+                        Click="IncreaseRingSupportSpacingButton_Click"
                         Content="+" />
                 <TextBlock Grid.Row="0"
                            Grid.Column="4"
@@ -83,12 +83,12 @@
                     <Button Grid.Column="0"
                             MinHeight="30"
                             HorizontalAlignment="Stretch"
-                            Click="ApplyCircleSupportButton_Click"
+                            Click="ApplyRingSupportButton_Click"
                             Content="Apply" />
                     <Button Grid.Column="2"
                             MinHeight="30"
                             HorizontalAlignment="Stretch"
-                            Click="CancelCircleSupportButton_Click"
+                            Click="CancelRingSupportButton_Click"
                             Content="Cancel" />
                 </Grid>
             </Grid>

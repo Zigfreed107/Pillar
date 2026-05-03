@@ -38,7 +38,7 @@ public class SceneManager
     private readonly BackgroundGridRenderer _backgroundGridRenderer;
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private readonly PreviewLineRenderer _previewLineRenderer;
-    private readonly CircleSupportPreviewRenderer _circleSupportPreviewRenderer;
+    private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly PhongMaterial _highlightMaterial = new PhongMaterial
@@ -81,7 +81,7 @@ public class SceneManager
         _viewport.Items.Add(_entityRoot);
 
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
-        _circleSupportPreviewRenderer = new CircleSupportPreviewRenderer(_previewRoot);
+        _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
@@ -269,75 +269,75 @@ public class SceneManager
     }
 
     /// <summary>
-    /// Shows the transient Circle Support guide circle.
+    /// Shows the transient Ring Support guide circle.
     /// </summary>
-    public void ShowCircleSupportPreview(Pillar.Geometry.Primitives.Circle3D circle)
+    public void ShowRingSupportPreview(Pillar.Geometry.Primitives.Circle3D circle)
     {
-        _circleSupportPreviewRenderer.ShowCircle(circle);
+        _ringSupportPreviewRenderer.ShowCircle(circle);
     }
 
     /// <summary>
-    /// Shows transient projected support marker positions for the Circle Support tool.
+    /// Shows transient projected support marker positions for the Ring Support tool.
     /// </summary>
-    public void ShowCircleSupportMarkers(IReadOnlyList<Vector3> markerPositions)
+    public void ShowRingSupportMarkers(IReadOnlyList<Vector3> markerPositions)
     {
-        _circleSupportPreviewRenderer.ShowMarkers(markerPositions);
+        _ringSupportPreviewRenderer.ShowMarkers(markerPositions);
     }
 
     /// <summary>
-    /// Hides transient projected support marker positions while leaving the circle and diameter handles visible.
+    /// Hides transient projected support marker positions while leaving the circle and point handles visible.
     /// </summary>
-    public void HideCircleSupportMarkers()
+    public void HideRingSupportMarkers()
     {
-        _circleSupportPreviewRenderer.HideMarkers();
+        _ringSupportPreviewRenderer.HideMarkers();
     }
 
     /// <summary>
-    /// Shows transient diameter handles for the Circle Support tool.
+    /// Shows transient point handles for the Ring Support tool.
     /// </summary>
-    public void ShowCircleSupportDiameterHandles(
+    public void ShowRingSupportPointHandles(
         Vector3 firstPoint,
         Vector3? secondPoint,
-        float handleDiameter,
-        CircleSupportDiameterHandleKind activeHandle)
+        Vector3? thirdPoint,
+        float handleDiameter)
     {
-        _circleSupportPreviewRenderer.ShowDiameterHandles(firstPoint, secondPoint, handleDiameter, activeHandle);
+        _ringSupportPreviewRenderer.ShowPointHandles(firstPoint, secondPoint, thirdPoint, handleDiameter);
     }
 
     /// <summary>
-    /// Hit-tests only the transient Circle Support diameter handles.
+    /// Hit-tests only the transient Ring Support point handles.
     /// </summary>
-    public bool TryHitCircleSupportDiameterHandle(Vector2 screenPosition, out CircleSupportDiameterHandleKind handleKind)
+    public bool TryHitRingSupportPointHandle(Vector2 screenPosition, out RingSupportPointHandleKind handleKind)
     {
         IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
 
         for (int i = 0; i < hits.Count; i++)
         {
             if (hits[i].ModelHit is Element3D hitModel
-                && _circleSupportPreviewRenderer.TryGetDiameterHandleKind(hitModel, out handleKind))
+                && _ringSupportPreviewRenderer.TryGetPointHandleKind(hitModel, out handleKind))
             {
                 return true;
             }
         }
 
-        handleKind = CircleSupportDiameterHandleKind.None;
+        handleKind = RingSupportPointHandleKind.None;
         return false;
     }
 
     /// <summary>
-    /// Hides all transient Circle Support preview geometry.
+    /// Hides all transient Ring Support preview geometry.
     /// </summary>
-    public void HideCircleSupportPreview()
+    public void HideRingSupportPreview()
     {
-        _circleSupportPreviewRenderer.Hide();
+        _ringSupportPreviewRenderer.Hide();
     }
 
     /// <summary>
-    /// Hides the generated Circle Support circle and support markers while keeping diameter handles visible.
+    /// Hides the generated Ring Support circle and support markers while keeping point handles visible.
     /// </summary>
-    public void HideCircleSupportCircleAndMarkers()
+    public void HideRingSupportCircleAndMarkers()
     {
-        _circleSupportPreviewRenderer.HideCircleAndMarkers();
+        _ringSupportPreviewRenderer.HideCircleAndMarkers();
     }
 
     /// <summary>

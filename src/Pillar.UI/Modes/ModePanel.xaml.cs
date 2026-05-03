@@ -167,16 +167,16 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
-    /// Selects the planned circle-support operation and shows its mock options.
+    /// Selects the ring-support operation and shows its options.
     /// </summary>
-    private void CircleSupportButton_Click(object sender, RoutedEventArgs e)
+    private void RingSupportButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
         SupportOperationToggleRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Circle, true));
-        RaiseToolSelected("Circle Support");
+            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Ring, true));
+        RaiseToolSelected("Ring Support");
     }
 
     /// <summary>

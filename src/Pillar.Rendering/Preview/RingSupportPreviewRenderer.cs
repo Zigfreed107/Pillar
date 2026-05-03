@@ -1,5 +1,5 @@
-// CircleSupportPreviewRenderer.cs
-// Draws transient circle-support guide geometry in the viewport without mutating the CAD document.
+// RingSupportPreviewRenderer.cs
+// Draws transient Ring Support guide geometry in the viewport without mutating the CAD document.
 using HelixToolkit;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
@@ -19,14 +19,16 @@ using TranslateTransform3D = System.Windows.Media.Media3D.TranslateTransform3D;
 namespace Pillar.Rendering.Preview;
 
 /// <summary>
-/// Renders the Circle Support tool's temporary circle outline and projected support markers.
+/// Renders the Ring Support tool's temporary circle outline, projected support markers, and editable point handles.
 /// </summary>
-public sealed class CircleSupportPreviewRenderer
+public sealed class RingSupportPreviewRenderer
 {
     private const int CircleSegmentCount = 96;
+    private const int PointHandleCount = 3;
     private const int MaximumMarkerCount = 512;
     private const float MarkerHalfSize = 0.18f;
     private const float MinimumHandleDiameter = 0.001f;
+    private const float PointHandleOpacity = 0.5f;
 
     private readonly LineGeometry3D _circleGeometry;
     private readonly LineGeometryModel3D _circleModel;
@@ -36,17 +38,22 @@ public sealed class CircleSupportPreviewRenderer
     private readonly TopMostGroup3D _markerTopMostRoot;
     private readonly MeshGeometryModel3D _firstHandleModel;
     private readonly MeshGeometryModel3D _secondHandleModel;
+    private readonly MeshGeometryModel3D _thirdHandleModel;
+    private readonly LineGeometry3D _handleRingGeometry;
+    private readonly LineGeometryModel3D _handleRingModel;
+    private readonly TopMostGroup3D _handleTopMostRoot;
     private readonly ScaleTransform3D _firstHandleScale;
     private readonly ScaleTransform3D _secondHandleScale;
+    private readonly ScaleTransform3D _thirdHandleScale;
     private readonly TranslateTransform3D _firstHandleTranslation;
     private readonly TranslateTransform3D _secondHandleTranslation;
+    private readonly TranslateTransform3D _thirdHandleTranslation;
     private readonly PhongMaterial _handleMaterial;
-    private readonly PhongMaterial _activeHandleMaterial;
 
     /// <summary>
     /// Creates the reusable preview geometry and attaches it to the supplied preview scene root.
     /// </summary>
-    public CircleSupportPreviewRenderer(GroupModel3D sceneRoot)
+    public RingSupportPreviewRenderer(GroupModel3D sceneRoot)
     {
         _circleGeometry = CreateCircleGeometry();
         _circleModel = new LineGeometryModel3D
@@ -77,19 +84,36 @@ public sealed class CircleSupportPreviewRenderer
         _markerTopMostRoot.Children.Add(_markerModel);
 
         SharpDxMeshGeometry3D handleGeometry = CreateHandleGeometry();
-        _handleMaterial = CreateHandleMaterial(new Color4(0.1f, 0.55f, 1.0f, 1.0f));
-        _activeHandleMaterial = CreateHandleMaterial(new Color4(1.0f, 0.55f, 0.08f, 1.0f));
+        _handleMaterial = CreateHandleMaterial(new Color4(0.0f, 0.75f, 1.0f, PointHandleOpacity));
         _firstHandleScale = new ScaleTransform3D(1.0, 1.0, 1.0);
         _secondHandleScale = new ScaleTransform3D(1.0, 1.0, 1.0);
+        _thirdHandleScale = new ScaleTransform3D(1.0, 1.0, 1.0);
         _firstHandleTranslation = new TranslateTransform3D();
         _secondHandleTranslation = new TranslateTransform3D();
+        _thirdHandleTranslation = new TranslateTransform3D();
         _firstHandleModel = CreateHandleModel(handleGeometry, _firstHandleScale, _firstHandleTranslation);
         _secondHandleModel = CreateHandleModel(handleGeometry, _secondHandleScale, _secondHandleTranslation);
+        _thirdHandleModel = CreateHandleModel(handleGeometry, _thirdHandleScale, _thirdHandleTranslation);
+        _handleRingGeometry = CreateHandleRingGeometry();
+        _handleRingModel = new LineGeometryModel3D
+        {
+            Geometry = _handleRingGeometry,
+            Color = Colors.DeepSkyBlue,
+            Thickness = 2.0f,
+            Visibility = Visibility.Collapsed
+        };
+        _handleTopMostRoot = new TopMostGroup3D
+        {
+            EnableTopMost = true
+        };
+        _handleTopMostRoot.Children.Add(_firstHandleModel);
+        _handleTopMostRoot.Children.Add(_secondHandleModel);
+        _handleTopMostRoot.Children.Add(_thirdHandleModel);
+        _handleTopMostRoot.Children.Add(_handleRingModel);
 
         sceneRoot.Children.Add(_circleTopMostRoot);
         sceneRoot.Children.Add(_markerTopMostRoot);
-        sceneRoot.Children.Add(_firstHandleModel);
-        sceneRoot.Children.Add(_secondHandleModel);
+        sceneRoot.Children.Add(_handleTopMostRoot);
     }
 
     /// <summary>
@@ -153,58 +177,70 @@ public sealed class CircleSupportPreviewRenderer
     }
 
     /// <summary>
-    /// Updates the transient diameter editing handles and sizes them from the active spacing setting.
+    /// Updates the transient circumference point handles and sizes them from the active spacing setting.
     /// </summary>
-    public void ShowDiameterHandles(
+    public void ShowPointHandles(
         Vector3 firstPoint,
         Vector3? secondPoint,
-        float handleDiameter,
-        CircleSupportDiameterHandleKind activeHandle)
+        Vector3? thirdPoint,
+        float handleDiameter)
     {
         double diameter = System.Math.Max(handleDiameter, MinimumHandleDiameter);
         ApplyHandleTransform(_firstHandleScale, _firstHandleTranslation, firstPoint, diameter);
-        _firstHandleModel.Material = activeHandle == CircleSupportDiameterHandleKind.FirstPoint
-            ? _activeHandleMaterial
-            : _handleMaterial;
+        _firstHandleModel.Material = _handleMaterial;
         _firstHandleModel.Visibility = Visibility.Visible;
+        UpdateHandleRing(0, firstPoint, diameter, true);
 
-        if (secondPoint.HasValue)
-        {
-            ApplyHandleTransform(_secondHandleScale, _secondHandleTranslation, secondPoint.Value, diameter);
-            _secondHandleModel.Material = activeHandle == CircleSupportDiameterHandleKind.SecondPoint
-                ? _activeHandleMaterial
-                : _handleMaterial;
-            _secondHandleModel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            _secondHandleModel.Visibility = Visibility.Collapsed;
-        }
+        ShowOptionalPointHandle(
+            1,
+            _secondHandleModel,
+            _secondHandleScale,
+            _secondHandleTranslation,
+            secondPoint,
+            diameter);
+
+        ShowOptionalPointHandle(
+            2,
+            _thirdHandleModel,
+            _thirdHandleScale,
+            _thirdHandleTranslation,
+            thirdPoint,
+            diameter);
+
+        _handleRingGeometry.UpdateVertices();
+        _handleRingGeometry.UpdateBounds();
+        _handleRingModel.Visibility = Visibility.Visible;
     }
 
     /// <summary>
-    /// Returns the diameter handle represented by one hit-tested preview model.
+    /// Returns the point handle represented by one hit-tested preview model.
     /// </summary>
-    public bool TryGetDiameterHandleKind(Element3D hitModel, out CircleSupportDiameterHandleKind handleKind)
+    public bool TryGetPointHandleKind(Element3D hitModel, out RingSupportPointHandleKind handleKind)
     {
         if (ReferenceEquals(hitModel, _firstHandleModel))
         {
-            handleKind = CircleSupportDiameterHandleKind.FirstPoint;
+            handleKind = RingSupportPointHandleKind.FirstPoint;
             return true;
         }
 
         if (ReferenceEquals(hitModel, _secondHandleModel))
         {
-            handleKind = CircleSupportDiameterHandleKind.SecondPoint;
+            handleKind = RingSupportPointHandleKind.SecondPoint;
             return true;
         }
 
-        handleKind = CircleSupportDiameterHandleKind.None;
+        if (ReferenceEquals(hitModel, _thirdHandleModel))
+        {
+            handleKind = RingSupportPointHandleKind.ThirdPoint;
+            return true;
+        }
+
+        handleKind = RingSupportPointHandleKind.None;
         return false;
     }
 
     /// <summary>
-    /// Hides all Circle Support preview geometry.
+    /// Hides all Ring Support preview geometry.
     /// </summary>
     public void Hide()
     {
@@ -212,6 +248,8 @@ public sealed class CircleSupportPreviewRenderer
         _markerModel.Visibility = Visibility.Collapsed;
         _firstHandleModel.Visibility = Visibility.Collapsed;
         _secondHandleModel.Visibility = Visibility.Collapsed;
+        _thirdHandleModel.Visibility = Visibility.Collapsed;
+        _handleRingModel.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -272,7 +310,33 @@ public sealed class CircleSupportPreviewRenderer
     }
 
     /// <summary>
-    /// Creates one unit-diameter sphere mesh reused by both diameter handles.
+    /// Creates fixed point-handle outline topology so handle rings can stay topmost without allocating during drags.
+    /// </summary>
+    private static LineGeometry3D CreateHandleRingGeometry()
+    {
+        LineGeometry3D geometry = new LineGeometry3D
+        {
+            Positions = new Vector3Collection(PointHandleCount * CircleSegmentCount),
+            Indices = new IntCollection(PointHandleCount * CircleSegmentCount * 2)
+        };
+
+        for (int handleIndex = 0; handleIndex < PointHandleCount; handleIndex++)
+        {
+            int baseIndex = handleIndex * CircleSegmentCount;
+
+            for (int segmentIndex = 0; segmentIndex < CircleSegmentCount; segmentIndex++)
+            {
+                geometry.Positions.Add(Vector3.Zero);
+                geometry.Indices.Add(baseIndex + segmentIndex);
+                geometry.Indices.Add(baseIndex + ((segmentIndex + 1) % CircleSegmentCount));
+            }
+        }
+
+        return geometry;
+    }
+
+    /// <summary>
+    /// Creates one unit-diameter sphere mesh reused by all point handles.
     /// </summary>
     private static SharpDxMeshGeometry3D CreateHandleGeometry()
     {
@@ -297,15 +361,16 @@ public sealed class CircleSupportPreviewRenderer
         {
             Geometry = geometry,
             Material = _handleMaterial,
-            Name = "CircleSupportDiameterHandle",
+            Name = "RingSupportPointHandle",
             Transform = transform,
             CullMode = SharpDX.Direct3D11.CullMode.None,
+            IsTransparent = true,
             Visibility = Visibility.Collapsed
         };
     }
 
     /// <summary>
-    /// Creates a translucent material for the interactive diameter handles.
+    /// Creates a translucent material for the interactive point handles.
     /// </summary>
     private static PhongMaterial CreateHandleMaterial(Color4 color)
     {
@@ -316,6 +381,30 @@ public sealed class CircleSupportPreviewRenderer
             SpecularColor = new Color4(0.9f, 0.9f, 0.9f, color.Alpha),
             SpecularShininess = 24.0f
         };
+    }
+
+    /// <summary>
+    /// Shows or hides one optional point handle without rebuilding its mesh.
+    /// </summary>
+    private void ShowOptionalPointHandle(
+        int handleIndex,
+        MeshGeometryModel3D handleModel,
+        ScaleTransform3D handleScale,
+        TranslateTransform3D handleTranslation,
+        Vector3? point,
+        double diameter)
+    {
+        if (!point.HasValue)
+        {
+            handleModel.Visibility = Visibility.Collapsed;
+            UpdateHandleRing(handleIndex, Vector3.Zero, diameter, false);
+            return;
+        }
+
+        ApplyHandleTransform(handleScale, handleTranslation, point.Value, diameter);
+        handleModel.Material = _handleMaterial;
+        handleModel.Visibility = Visibility.Visible;
+        UpdateHandleRing(handleIndex, point.Value, diameter, true);
     }
 
     /// <summary>
@@ -333,5 +422,29 @@ public sealed class CircleSupportPreviewRenderer
         translation.OffsetX = position.X;
         translation.OffsetY = position.Y;
         translation.OffsetZ = position.Z;
+    }
+
+    /// <summary>
+    /// Updates one topmost blue circle around a sphere handle while preserving the shared line buffer.
+    /// </summary>
+    private void UpdateHandleRing(int handleIndex, Vector3 center, double diameter, bool isVisible)
+    {
+        Vector3Collection positions = _handleRingGeometry.Positions!;
+        int baseIndex = handleIndex * CircleSegmentCount;
+        float radius = (float)(diameter * 0.5);
+
+        for (int segmentIndex = 0; segmentIndex < CircleSegmentCount; segmentIndex++)
+        {
+            if (!isVisible)
+            {
+                positions[baseIndex + segmentIndex] = Vector3.Zero;
+                continue;
+            }
+
+            float angle = (float)(segmentIndex * System.Math.PI * 2.0 / CircleSegmentCount);
+            float x = center.X + (float)System.Math.Cos(angle) * radius;
+            float y = center.Y + (float)System.Math.Sin(angle) * radius;
+            positions[baseIndex + segmentIndex] = new Vector3(x, y, center.Z);
+        }
     }
 }

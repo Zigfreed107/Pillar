@@ -1,5 +1,5 @@
-// CircleSupportPattern.cs
-// Converts Circle Support tool spacing settings into stable support positions without depending on WPF or Helix rendering.
+// RingSupportPattern.cs
+// Converts Ring Support tool spacing settings into stable support positions without depending on WPF or Helix rendering.
 using Pillar.Geometry.Primitives;
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ namespace Pillar.Geometry.Supports;
 /// <summary>
 /// Provides renderer-agnostic support distribution helpers for circular support patterns.
 /// </summary>
-public static class CircleSupportPattern
+public static class RingSupportPattern
 {
     public const int MinimumSupportCount = 3;
     public const int MaximumSupportCount = 512;

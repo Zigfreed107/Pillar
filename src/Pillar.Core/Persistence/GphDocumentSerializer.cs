@@ -18,12 +18,12 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 6;
+    private const int CurrentVersion = 8;
     private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
-    private const string CircleSupportGeneratorName = "circleSupport";
+    private const string RingSupportGeneratorName = "ringSupport";
     private const string DefaultSupportGroupName = "Supports Group 1";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
@@ -228,7 +228,7 @@ public sealed class GphDocumentSerializer
             Name = supportLayerGroup.Name,
             Color = CreateSupportLayerColorDto(supportLayerGroup.Color),
             GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
-            CircleSupport = CreateCircleSupportSettingsDto(supportLayerGroup.CircleSupportSettings)
+            RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings)
         };
     }
 
@@ -277,7 +277,7 @@ public sealed class GphDocumentSerializer
                 supportLayerGroupDto.ModelEntityId,
                 supportLayerGroupDto.Name,
                 CreateSupportLayerColorOrDefault(supportLayerGroupDto),
-                CreateCircleSupportSettingsOrDefault(supportLayerGroupDto)));
+                CreateRingSupportSettingsOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -543,28 +543,29 @@ public sealed class GphDocumentSerializer
     /// </summary>
     private static string? CreateSupportGroupGeneratorKindDto(SupportLayerGroup supportLayerGroup)
     {
-        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.CircleSupport)
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.RingSupport)
         {
-            return CircleSupportGeneratorName;
+            return RingSupportGeneratorName;
         }
 
         return null;
     }
 
     /// <summary>
-    /// Converts Circle Support settings into their persisted representation when present.
+    /// Converts Ring Support settings into their persisted representation when present.
     /// </summary>
-    private static GphCircleSupportSettingsDto? CreateCircleSupportSettingsDto(CircleSupportSettings? settings)
+    private static GphRingSupportSettingsDto? CreateRingSupportSettingsDto(RingSupportSettings? settings)
     {
         if (settings == null)
         {
             return null;
         }
 
-        return new GphCircleSupportSettingsDto
+        return new GphRingSupportSettingsDto
         {
-            FirstDiameterPoint = CreateVectorDto(settings.FirstDiameterPoint),
-            SecondDiameterPoint = CreateVectorDto(settings.SecondDiameterPoint),
+            FirstPoint = CreateVectorDto(settings.FirstPoint),
+            SecondPoint = CreateVectorDto(settings.SecondPoint),
+            ThirdPoint = CreateVectorDto(settings.ThirdPoint),
             Spacing = settings.Spacing
         };
     }
@@ -628,35 +629,37 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
-    /// Converts saved generator metadata into Circle Support settings, or null for legacy/plain support groups.
+    /// Converts saved generator metadata into Ring Support settings, or null for legacy/plain support groups.
     /// </summary>
-    private static CircleSupportSettings? CreateCircleSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    private static RingSupportSettings? CreateRingSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
     {
         if (string.IsNullOrWhiteSpace(supportLayerGroupDto.GeneratorKind))
         {
             return null;
         }
 
-        if (!string.Equals(supportLayerGroupDto.GeneratorKind, CircleSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
         }
 
-        if (supportLayerGroupDto.CircleSupport == null)
+        if (supportLayerGroupDto.RingSupport == null)
         {
-            throw new InvalidDataException("A Circle Support group is missing its generator settings.");
+            throw new InvalidDataException("A Ring Support group is missing its generator settings.");
         }
 
-        if (supportLayerGroupDto.CircleSupport.FirstDiameterPoint == null
-            || supportLayerGroupDto.CircleSupport.SecondDiameterPoint == null)
+        if (supportLayerGroupDto.RingSupport.FirstPoint == null
+            || supportLayerGroupDto.RingSupport.SecondPoint == null
+            || supportLayerGroupDto.RingSupport.ThirdPoint == null)
         {
-            throw new InvalidDataException("A Circle Support group is missing one or both diameter points.");
+            throw new InvalidDataException("A Ring Support group is missing one or more ring points.");
         }
 
-        return new CircleSupportSettings(
-            CreateVector(supportLayerGroupDto.CircleSupport.FirstDiameterPoint),
-            CreateVector(supportLayerGroupDto.CircleSupport.SecondDiameterPoint),
-            supportLayerGroupDto.CircleSupport.Spacing);
+        return new RingSupportSettings(
+            CreateVector(supportLayerGroupDto.RingSupport.FirstPoint),
+            CreateVector(supportLayerGroupDto.RingSupport.SecondPoint),
+            CreateVector(supportLayerGroupDto.RingSupport.ThirdPoint),
+            supportLayerGroupDto.RingSupport.Spacing);
     }
 
     /// <summary>
@@ -803,16 +806,17 @@ public sealed class GphDocumentSerializer
         public string Name { get; set; } = string.Empty;
         public GphSupportLayerColorDto? Color { get; set; }
         public string? GeneratorKind { get; set; }
-        public GphCircleSupportSettingsDto? CircleSupport { get; set; }
+        public GphRingSupportSettingsDto? RingSupport { get; set; }
     }
 
     /// <summary>
-    /// DTO for persisted Circle Support generator settings.
+    /// DTO for persisted Ring Support generator settings.
     /// </summary>
-    private sealed class GphCircleSupportSettingsDto
+    private sealed class GphRingSupportSettingsDto
     {
-        public GphVector3Dto? FirstDiameterPoint { get; set; }
-        public GphVector3Dto? SecondDiameterPoint { get; set; }
+        public GphVector3Dto? FirstPoint { get; set; }
+        public GphVector3Dto? SecondPoint { get; set; }
+        public GphVector3Dto? ThirdPoint { get; set; }
         public float Spacing { get; set; }
     }
 

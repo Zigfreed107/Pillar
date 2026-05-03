@@ -1,5 +1,5 @@
-// UpdateCircleSupportGroupCommand.cs
-// Replaces the generated children and stored parameters for an existing Circle Support group as one undoable edit.
+// UpdateRingSupportGroupCommand.cs
+// Replaces the generated children and stored parameters for an existing Ring Support group as one undoable edit.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
@@ -9,27 +9,27 @@ using System.Collections.Generic;
 namespace Pillar.Commands;
 
 /// <summary>
-/// Updates one Circle Support generated group by replacing its generated supports and parametric settings.
+/// Updates one Ring Support generated group by replacing its generated supports and parametric settings.
 /// </summary>
-public sealed class UpdateCircleSupportGroupCommand : ICadCommand
+public sealed class UpdateRingSupportGroupCommand : ICadCommand
 {
     private readonly CadDocument _document;
     private readonly SupportLayerGroup _supportLayerGroup;
-    private readonly CircleSupportSettings _oldSettings;
-    private readonly CircleSupportSettings _newSettings;
+    private readonly RingSupportSettings _oldSettings;
+    private readonly RingSupportSettings _newSettings;
     private readonly IReadOnlyList<SupportEntity> _oldSupportEntities;
     private readonly IReadOnlyList<SupportEntity> _newSupportEntities;
     private bool _hasExecuted;
 
     /// <summary>
-    /// Creates an undoable Circle Support group update.
+    /// Creates an undoable Ring Support group update.
     /// </summary>
-    public UpdateCircleSupportGroupCommand(
+    public UpdateRingSupportGroupCommand(
         CadDocument document,
         SupportLayerGroup supportLayerGroup,
-        CircleSupportSettings oldSettings,
+        RingSupportSettings oldSettings,
         IReadOnlyList<SupportEntity> oldSupportEntities,
-        CircleSupportSettings newSettings,
+        RingSupportSettings newSettings,
         IReadOnlyList<SupportEntity> newSupportEntities)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -48,7 +48,7 @@ public sealed class UpdateCircleSupportGroupCommand : ICadCommand
     /// </summary>
     public string DisplayName
     {
-        get { return "Update Circle Supports"; }
+        get { return "Update Ring Supports"; }
     }
 
     /// <summary>
@@ -85,14 +85,14 @@ public sealed class UpdateCircleSupportGroupCommand : ICadCommand
     private void ReplaceSupports(
         IReadOnlyList<SupportEntity> supportsToRemove,
         IReadOnlyList<SupportEntity> supportsToAdd,
-        CircleSupportSettings settings)
+        RingSupportSettings settings)
     {
         for (int i = supportsToRemove.Count - 1; i >= 0; i--)
         {
             _document.RemoveEntity(supportsToRemove[i]);
         }
 
-        _supportLayerGroup.SetCircleSupportSettings(settings);
+        _supportLayerGroup.SetRingSupportSettings(settings);
 
         for (int i = 0; i < supportsToAdd.Count; i++)
         {

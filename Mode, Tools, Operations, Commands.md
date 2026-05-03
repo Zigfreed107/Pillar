@@ -13,7 +13,7 @@ ManualSupportOperationKind
 IToolOperation
 PointSupportOperation
 LineSupportOperation
-CircleSupportOperation
+RingSupportOperation
 AddSupportCommand
 Where each concept means:
 

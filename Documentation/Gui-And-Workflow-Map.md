@@ -85,7 +85,7 @@ This document is a naming map for the main application shell. It connects the hu
   - Import prompt
   - Selection prompt
   - Transform tab: Translate, Rotate, Scale
-  - Supports tab: Point, Line, Circle
+  - Supports tab: Point, Line, Ring
   - Multi-model selection prompt
 - Purpose: Lets the user choose the current workflow area and tool. It decides what the user wants to do, not the detailed settings for that tool.
 
@@ -97,8 +97,8 @@ This document is a naming map for the main application shell. It connects the hu
 - Contains:
   - Title: Tool Options Panel
   - Selected Tool label
-  - Circle Support options: Spacing
-- Purpose: Shows settings for the selected tool. It is hidden until a tool is selected. Right now, Circle Support is the first tool with a visible option: Spacing.
+  - Ring Support options: Spacing
+- Purpose: Shows settings for the selected tool. It is hidden until a tool is selected. Right now, Ring Support is the first tool with a visible option: Spacing.
 
 ### 1.4 Right Side Panel
 
@@ -225,19 +225,19 @@ Manual Support Workflow
       None
       Point
       Line
-      Circle
+      Ring
 
   PointSupportOperation
     Current implemented support operation.
     Converts a click on the active model surface into one SupportEntity.
 
-  Circle Support
+  Ring Support
     Current GUI state:
       Selectable in Mode Panel.
       Shows Spacing in Tool Options Panel.
     Current implementation state:
-      CircleSupportOperation creates a projected ring of individual supports from three surface picks.
-      ManualSupportTool creates PointSupportOperation for Point and CircleSupportOperation for Circle.
+      RingSupportOperation creates a projected ring of individual supports from three surface picks.
+      ManualSupportTool creates PointSupportOperation for Point and RingSupportOperation for Ring.
 
 
 ## How The Panels Relate In The User Workflow
@@ -311,7 +311,7 @@ Operation
   Use for a selectable sub-tool inside a larger tool.
   Examples:
     PointSupportOperation
-    Future CircleSupportOperation
+    Future RingSupportOperation
 
 Settings / Options
   Use Tool Options for active tool parameters.

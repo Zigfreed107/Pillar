@@ -10,5 +10,5 @@ public enum ManualSupportOperationKind
     None,
     Point,
     Line,
-    Circle
+    Ring
 }

@@ -26,7 +26,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaions", "Documentaions", "{B64C065D-C640-4395-862F-EFCC3FDF3090}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\Gui-And-Workflow-Map.md = Documentation\Gui-And-Workflow-Map.md
-		Circle Support Tool behaviours.txt = Circle Support Tool behaviours.txt
+		Ring Support Tool behaviours.txt = Ring Support Tool behaviours.txt
 		Tool Behaviour Template.md = Tool Behaviour Template.md
 	EndProjectSection
 EndProject

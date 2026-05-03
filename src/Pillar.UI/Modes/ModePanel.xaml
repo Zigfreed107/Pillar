@@ -208,10 +208,10 @@
                                 </Button>
 
                                 <Button Style="{StaticResource ModePanelToolButtonStyle}"
-                                        Click="CircleSupportButton_Click">
+                                        Click="RingSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
-                                                   Text="Circle" />
+                                                   Text="Ring" />
                                         <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
                                                    Text="Distribute supports around a circular region" />
                                     </StackPanel>

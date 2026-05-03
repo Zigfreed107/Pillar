@@ -47,6 +47,8 @@ public partial class MainWindow : Window
     private string _activeToolStatusText = "Select tool active";
     private bool _hasFramedStartupView;
     private bool _isSynchronizingLayerAndViewportSelection;
+    private bool _isPrecisionSelectCursorActive;
+    private Cursor? _cursorBeforePrecisionSelect;
 
     public DefaultEffectsManager EffectsManager { get; }
 
@@ -80,7 +82,7 @@ public partial class MainWindow : Window
             _scene,
             _commandRunner,
             _layerPanelViewModel.GetSelectedModelEntityId,
-            GetCircleSupportSpacingOrDefault);
+            GetRingSupportSpacingOrDefault);
         _stlImporter = new StlImporter();
         WireLayerPanel();
         _documentFileService = new DocumentFileService(
@@ -96,6 +98,7 @@ public partial class MainWindow : Window
         RegisterWorkspaceModes();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
+        _manualSupportTool.PrecisionSelectCursorRequested += ManualSupportTool_PrecisionSelectCursorRequested;
         ContentRendered += MainWindow_ContentRendered;
         Closed += MainWindow_Closed;
         SetActiveMode(WorkspaceModeId.Select);
@@ -116,6 +119,8 @@ public partial class MainWindow : Window
     {
         _ = sender;
         _ = e;
+        SetPrecisionSelectCursor(false);
+        _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
         _viewportCameraService.Dispose();
     }
 
@@ -162,9 +167,9 @@ public partial class MainWindow : Window
         _layerPanelViewModel.PropertyChanged += LayerPanelViewModel_PropertyChanged;
         WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
-        ToolOptionsPanelOverlay.CircleSupportOptionsChanged += ToolOptionsPanelOverlay_CircleSupportOptionsChanged;
-        ToolOptionsPanelOverlay.CircleSupportApplyRequested += ToolOptionsPanelOverlay_CircleSupportApplyRequested;
-        ToolOptionsPanelOverlay.CircleSupportCancelRequested += ToolOptionsPanelOverlay_CircleSupportCancelRequested;
+        ToolOptionsPanelOverlay.RingSupportOptionsChanged += ToolOptionsPanelOverlay_RingSupportOptionsChanged;
+        ToolOptionsPanelOverlay.RingSupportApplyRequested += ToolOptionsPanelOverlay_RingSupportApplyRequested;
+        ToolOptionsPanelOverlay.RingSupportCancelRequested += ToolOptionsPanelOverlay_RingSupportCancelRequested;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
@@ -207,17 +212,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Reads Circle Support spacing from the Tool Options Panel while keeping WPF controls out of rendering tools.
+    /// Reads Ring Support spacing from the Tool Options Panel while keeping WPF controls out of rendering tools.
     /// </summary>
-    private float GetCircleSupportSpacingOrDefault()
+    private float GetRingSupportSpacingOrDefault()
     {
-        if (ToolOptionsPanelOverlay.TryGetCircleSupportSpacing(out float spacing))
+        if (ToolOptionsPanelOverlay.TryGetRingSupportSpacing(out float spacing))
         {
             return spacing;
         }
 
-        _viewModel.SetStatusText("Circle support spacing is invalid; using 5.00 mm.");
-        return ToolOptionsPanel.DefaultCircleSupportSpacing;
+        _viewModel.SetStatusText("Ring support spacing is invalid; using 5.00 mm.");
+        return ToolOptionsPanel.DefaultRingSupportSpacing;
     }
 
     /// <summary>
@@ -239,7 +244,55 @@ public partial class MainWindow : Window
         }
         finally
         {
-            Mouse.OverrideCursor = previousCursor;
+            if (ReferenceEquals(previousCursor, Cursors.Cross) && !_isPrecisionSelectCursorActive)
+            {
+                Mouse.OverrideCursor = _cursorBeforePrecisionSelect;
+                _cursorBeforePrecisionSelect = null;
+            }
+            else
+            {
+                Mouse.OverrideCursor = previousCursor;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies or restores the precision-selection cursor requested by transient CAD operations.
+    /// </summary>
+    private void ManualSupportTool_PrecisionSelectCursorRequested(bool isPrecisionSelectCursorRequested)
+    {
+        SetPrecisionSelectCursor(isPrecisionSelectCursorRequested);
+    }
+
+    /// <summary>
+    /// Shows a crosshair cursor while an operation is collecting exact pick points.
+    /// </summary>
+    private void SetPrecisionSelectCursor(bool isPrecisionSelectCursorRequested)
+    {
+        if (isPrecisionSelectCursorRequested)
+        {
+            if (_isPrecisionSelectCursorActive)
+            {
+                return;
+            }
+
+            _cursorBeforePrecisionSelect = Mouse.OverrideCursor;
+            Mouse.OverrideCursor = Cursors.Cross;
+            _isPrecisionSelectCursorActive = true;
+            return;
+        }
+
+        if (!_isPrecisionSelectCursorActive)
+        {
+            return;
+        }
+
+        _isPrecisionSelectCursorActive = false;
+
+        if (ReferenceEquals(Mouse.OverrideCursor, Cursors.Cross))
+        {
+            Mouse.OverrideCursor = _cursorBeforePrecisionSelect;
+            _cursorBeforePrecisionSelect = null;
         }
     }
 }
