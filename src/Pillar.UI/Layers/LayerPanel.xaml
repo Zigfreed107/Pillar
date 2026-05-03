@@ -42,6 +42,7 @@
         <Style x:Key="LayerTreeItemContainerStyle" TargetType="TreeViewItem">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
 
         <Style x:Key="SupportGroupColorButtonStyle" TargetType="Button">
@@ -59,6 +60,21 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="SupportGroupEditButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanEditSupportGroup}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <HierarchicalDataTemplate DataType="{x:Type viewModels:LayerTreeItemViewModel}"
                                   ItemsSource="{Binding Children}">
             <Grid MinHeight="24">
@@ -71,15 +87,22 @@
                          KeyDown="RenameTextBox_KeyDown"
                          Text="{Binding EditingName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                <StackPanel x:Name="LayerRowPanel"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
+                <Grid x:Name="LayerRowPanel"
+                      VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <Button Style="{StaticResource SupportGroupColorButtonStyle}"
+                            Grid.Column="0"
                             ToolTip="Choose support color"
                             Click="SupportGroupColorButton_Click"
                             Background="{Binding SupportColor, Converter={StaticResource SupportLayerColorToBrushConverter}}" />
 
                     <TextBlock x:Name="LayerNameTextBlock"
+                               Grid.Column="1"
                                VerticalAlignment="Center"
                                Text="{Binding Name}">
                         <TextBlock.ContextMenu>
@@ -90,7 +113,12 @@
                             </ContextMenu>
                         </TextBlock.ContextMenu>
                     </TextBlock>
-                </StackPanel>
+                    <Button Grid.Column="2"
+                            Style="{StaticResource SupportGroupEditButtonStyle}"
+                            ToolTip="Edit support group"
+                            Click="SupportGroupEditButton_Click"
+                            Content="E" />
+                </Grid>
             </Grid>
 
             <HierarchicalDataTemplate.Triggers>

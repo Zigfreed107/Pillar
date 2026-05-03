@@ -9,6 +9,7 @@ using Pillar.Core.Tools;
 using Pillar.Geometry.Primitives;
 using Pillar.Geometry.Supports;
 using Pillar.Rendering.Math;
+using Pillar.Rendering.Preview;
 using Pillar.Rendering.Scene;
 using System;
 using System.Collections.Generic;
@@ -40,6 +41,7 @@ public sealed class CircleSupportOperation : IToolOperation
     private Vector3? _firstPoint;
     private Vector3? _secondPoint;
     private Vector3? _currentPreviewSecondPoint;
+    private CircleSupportDiameterHandleKind _activeDiameterHandle = CircleSupportDiameterHandleKind.None;
 
     /// <summary>
     /// Creates the circle support operation.
@@ -90,12 +92,23 @@ public sealed class CircleSupportOperation : IToolOperation
             _secondPoint = null;
             _currentPreviewSecondPoint = null;
             _scene.HideCircleSupportPreview();
+            UpdateDiameterHandlePreview();
             _statusReporter("Move the cursor to preview the support ring, then click the second diameter point.");
             return;
         }
 
         if (_secondPoint.HasValue)
         {
+            CircleSupportDiameterHandleKind hitHandle;
+
+            if (_scene.TryHitCircleSupportDiameterHandle(screenPosition, out hitHandle))
+            {
+                _activeDiameterHandle = hitHandle;
+                UpdateDiameterHandlePreview();
+                _statusReporter("Drag the diameter handle to refine the circle, then click Apply.");
+                return;
+            }
+
             _statusReporter("Circle support preview is ready. Adjust spacing or click Apply.");
             return;
         }
@@ -108,10 +121,11 @@ public sealed class CircleSupportOperation : IToolOperation
             return;
         }
 
-        _secondPoint = hitPosition;
-        _currentPreviewSecondPoint = hitPosition;
+        Vector3 normalizedSecondPoint = NormalizeSecondPointToCirclePlane(_firstPoint.Value, hitPosition);
+        _secondPoint = normalizedSecondPoint;
+        _currentPreviewSecondPoint = normalizedSecondPoint;
 
-        if (UpdateCirclePreview(selectedMesh, _firstPoint.Value, hitPosition))
+        if (UpdateCirclePreview(selectedMesh, _firstPoint.Value, normalizedSecondPoint))
         {
             _statusReporter("Circle support preview is ready. Adjust spacing or click Apply.");
             return;
@@ -126,6 +140,18 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     public void OnMouseMove(Vector2 screenPosition)
     {
+        if (_activeDiameterHandle != CircleSupportDiameterHandleKind.None)
+        {
+            MeshEntity? dragMesh = ResolvePlacementMesh();
+
+            if (dragMesh != null)
+            {
+                UpdateDraggedDiameterHandle(screenPosition, dragMesh);
+            }
+
+            return;
+        }
+
         if (!_firstPoint.HasValue || _secondPoint.HasValue)
         {
             return;
@@ -140,21 +166,30 @@ public sealed class CircleSupportOperation : IToolOperation
 
         Vector3 hoverPoint;
 
-        if (!TryGetDiameterPoint(screenPosition, selectedMesh, _firstPoint.Value, out hoverPoint))
+        if (!TryGetPreviewDiameterPoint(screenPosition, _firstPoint.Value, out hoverPoint))
         {
             return;
         }
 
-        _currentPreviewSecondPoint = hoverPoint;
-        UpdateCirclePreview(selectedMesh, _firstPoint.Value, hoverPoint);
+        Vector3 normalizedHoverPoint = NormalizeSecondPointToCirclePlane(_firstPoint.Value, hoverPoint);
+        _currentPreviewSecondPoint = normalizedHoverPoint;
+        UpdateCirclePreview(selectedMesh, _firstPoint.Value, normalizedHoverPoint, false);
     }
 
     /// <summary>
-    /// Ignores mouse-up because the editable preview is accepted by click and committed by Apply.
+    /// Ends any active diameter-handle drag; commits are still controlled by the Apply button.
     /// </summary>
     public void OnMouseUp(Vector2 screenPosition)
     {
         _ = screenPosition;
+        bool wasDraggingDiameterHandle = _activeDiameterHandle != CircleSupportDiameterHandleKind.None;
+        _activeDiameterHandle = CircleSupportDiameterHandleKind.None;
+        UpdateDiameterHandlePreview();
+
+        if (wasDraggingDiameterHandle)
+        {
+            RefreshPreview();
+        }
     }
 
     /// <summary>
@@ -168,6 +203,7 @@ public sealed class CircleSupportOperation : IToolOperation
         _firstPoint = null;
         _secondPoint = null;
         _currentPreviewSecondPoint = null;
+        _activeDiameterHandle = CircleSupportDiameterHandleKind.None;
         _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
         _scene.HideCircleSupportPreview();
@@ -199,8 +235,9 @@ public sealed class CircleSupportOperation : IToolOperation
         _editingSupportLayerGroupId = supportLayerGroup.Id;
         _targetModelEntityId = supportLayerGroup.ModelEntityId;
         _firstPoint = settings.FirstDiameterPoint;
-        _secondPoint = settings.SecondDiameterPoint;
-        _currentPreviewSecondPoint = settings.SecondDiameterPoint;
+        _secondPoint = NormalizeSecondPointToCirclePlane(settings.FirstDiameterPoint, settings.SecondDiameterPoint);
+        _currentPreviewSecondPoint = _secondPoint;
+        _activeDiameterHandle = CircleSupportDiameterHandleKind.None;
         _scene.SetSupportLayerGroupOpacity(supportLayerGroup.Id, EditingSupportGroupOpacity);
         RefreshPreview();
         _statusReporter("Circle support group loaded. Adjust spacing or click Apply.");
@@ -211,8 +248,14 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     public void RefreshPreview()
     {
-        if (!_firstPoint.HasValue || !_currentPreviewSecondPoint.HasValue)
+        if (!_firstPoint.HasValue)
         {
+            return;
+        }
+
+        if (!_currentPreviewSecondPoint.HasValue)
+        {
+            UpdateDiameterHandlePreview();
             return;
         }
 
@@ -224,7 +267,7 @@ public sealed class CircleSupportOperation : IToolOperation
             return;
         }
 
-        UpdateCirclePreview(selectedMesh, _firstPoint.Value, _currentPreviewSecondPoint.Value);
+        UpdateCirclePreview(selectedMesh, _firstPoint.Value, _currentPreviewSecondPoint.Value, true);
     }
 
     /// <summary>
@@ -437,17 +480,111 @@ public sealed class CircleSupportOperation : IToolOperation
     /// </summary>
     private bool UpdateCirclePreview(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint)
     {
-        Circle3D circle;
+        return UpdateCirclePreview(selectedMesh, firstPoint, secondPoint, true);
+    }
 
-        if (!Circle3D.TryCreateHorizontalFromDiameter(firstPoint, secondPoint, out circle))
+    /// <summary>
+    /// Updates the horizontal circle and optionally refreshes projected marker hits for stable interaction states.
+    /// </summary>
+    private bool UpdateCirclePreview(MeshEntity selectedMesh, Vector3 firstPoint, Vector3 secondPoint, bool showProjectedMarkers)
+    {
+        Circle3D circle;
+        Vector3 normalizedSecondPoint = NormalizeSecondPointToCirclePlane(firstPoint, secondPoint);
+
+        UpdateDiameterHandlePreview(firstPoint, normalizedSecondPoint);
+
+        if (!Circle3D.TryCreateHorizontalFromDiameter(firstPoint, normalizedSecondPoint, out circle))
         {
-            _scene.HideCircleSupportPreview();
+            _scene.HideCircleSupportCircleAndMarkers();
             return false;
         }
 
         _scene.ShowCircleSupportPreview(circle);
-        UpdateProjectedMarkerPreview(selectedMesh, circle);
+
+        if (showProjectedMarkers)
+        {
+            UpdateProjectedMarkerPreview(selectedMesh, circle);
+        }
+        else
+        {
+            _scene.HideCircleSupportMarkers();
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Updates handle positions from the operation's current point state.
+    /// </summary>
+    private void UpdateDiameterHandlePreview()
+    {
+        if (!_firstPoint.HasValue)
+        {
+            return;
+        }
+
+        UpdateDiameterHandlePreview(_firstPoint.Value, _currentPreviewSecondPoint);
+    }
+
+    /// <summary>
+    /// Updates handle positions using caller-supplied endpoint values.
+    /// </summary>
+    private void UpdateDiameterHandlePreview(Vector3 firstPoint, Vector3? secondPoint)
+    {
+        Vector3? normalizedSecondPoint = secondPoint.HasValue
+            ? NormalizeSecondPointToCirclePlane(firstPoint, secondPoint.Value)
+            : null;
+
+        _scene.ShowCircleSupportDiameterHandles(
+            firstPoint,
+            normalizedSecondPoint,
+            _getSpacing(),
+            _activeDiameterHandle);
+    }
+
+    /// <summary>
+    /// Moves whichever diameter handle is active and refreshes the generated preview without committing document changes.
+    /// </summary>
+    private void UpdateDraggedDiameterHandle(Vector2 screenPosition, MeshEntity selectedMesh)
+    {
+        if (!_firstPoint.HasValue || !_secondPoint.HasValue)
+        {
+            return;
+        }
+
+        Vector3 dragPoint;
+
+        if (!TryGetPreviewDiameterPoint(screenPosition, _firstPoint.Value, out dragPoint))
+        {
+            return;
+        }
+
+        Vector3 nextFirstPoint = _firstPoint.Value;
+        Vector3 nextSecondPoint = _secondPoint.Value;
+
+        if (_activeDiameterHandle == CircleSupportDiameterHandleKind.FirstPoint)
+        {
+            nextFirstPoint = dragPoint;
+            nextSecondPoint = NormalizeSecondPointToCirclePlane(nextFirstPoint, nextSecondPoint);
+        }
+        else if (_activeDiameterHandle == CircleSupportDiameterHandleKind.SecondPoint)
+        {
+            nextSecondPoint = NormalizeSecondPointToCirclePlane(nextFirstPoint, dragPoint);
+        }
+        else
+        {
+            return;
+        }
+
+        _firstPoint = nextFirstPoint;
+        _secondPoint = nextSecondPoint;
+        _currentPreviewSecondPoint = nextSecondPoint;
+
+        if (!UpdateCirclePreview(selectedMesh, nextFirstPoint, nextSecondPoint, false))
+        {
+            _statusReporter("Circle support diameter points must not overlap in the XY plane.");
+            return;
+        }
     }
 
     /// <summary>
@@ -512,6 +649,22 @@ public sealed class CircleSupportOperation : IToolOperation
         }
 
         return _projectionService.TryGetWorldPointOnHorizontalPlane(screenPosition, firstPoint.Z, out diameterPoint);
+    }
+
+    /// <summary>
+    /// Resolves live preview movement on the construction plane so dense model hit testing does not run every mouse event.
+    /// </summary>
+    private bool TryGetPreviewDiameterPoint(Vector2 screenPosition, Vector3 firstPoint, out Vector3 diameterPoint)
+    {
+        return _projectionService.TryGetWorldPointOnHorizontalPlane(screenPosition, firstPoint.Z, out diameterPoint);
+    }
+
+    /// <summary>
+    /// Keeps the second endpoint on the horizontal circle plane because only its XY offset defines the circle.
+    /// </summary>
+    private static Vector3 NormalizeSecondPointToCirclePlane(Vector3 firstPoint, Vector3 secondPoint)
+    {
+        return new Vector3(secondPoint.X, secondPoint.Y, firstPoint.Z);
     }
 
     /// <summary>

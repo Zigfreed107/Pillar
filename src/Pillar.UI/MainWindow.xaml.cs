@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media.Media3D;
 using SelectionWindowOverlayController = Pillar.UI.Overlays.SelectionWindowOverlay;
 
@@ -163,12 +164,14 @@ public partial class MainWindow : Window
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
         ToolOptionsPanelOverlay.CircleSupportOptionsChanged += ToolOptionsPanelOverlay_CircleSupportOptionsChanged;
         ToolOptionsPanelOverlay.CircleSupportApplyRequested += ToolOptionsPanelOverlay_CircleSupportApplyRequested;
+        ToolOptionsPanelOverlay.CircleSupportCancelRequested += ToolOptionsPanelOverlay_CircleSupportCancelRequested;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
         LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
         LayerPanelOverlay.RenameSupportGroupRequested += LayerPanel_RenameSupportGroupRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
+        LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
     }
 
     /// <summary>
@@ -217,4 +220,26 @@ public partial class MainWindow : Window
         return ToolOptionsPanel.DefaultCircleSupportSpacing;
     }
 
+    /// <summary>
+    /// Shows a wait cursor while synchronous geometry or hit-test work blocks the UI thread.
+    /// </summary>
+    private void RunWithWaitCursor(Action action)
+    {
+        if (action == null)
+        {
+            throw new ArgumentNullException(nameof(action));
+        }
+
+        Cursor? previousCursor = Mouse.OverrideCursor;
+        Mouse.OverrideCursor = Cursors.Wait;
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            Mouse.OverrideCursor = previousCursor;
+        }
+    }
 }

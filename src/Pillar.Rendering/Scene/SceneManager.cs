@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Numerics;
+using System.Windows;
 using System.Windows.Media.Media3D;
 
 namespace Pillar.Rendering.Scene;
@@ -284,11 +285,59 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Hides transient projected support marker positions while leaving the circle and diameter handles visible.
+    /// </summary>
+    public void HideCircleSupportMarkers()
+    {
+        _circleSupportPreviewRenderer.HideMarkers();
+    }
+
+    /// <summary>
+    /// Shows transient diameter handles for the Circle Support tool.
+    /// </summary>
+    public void ShowCircleSupportDiameterHandles(
+        Vector3 firstPoint,
+        Vector3? secondPoint,
+        float handleDiameter,
+        CircleSupportDiameterHandleKind activeHandle)
+    {
+        _circleSupportPreviewRenderer.ShowDiameterHandles(firstPoint, secondPoint, handleDiameter, activeHandle);
+    }
+
+    /// <summary>
+    /// Hit-tests only the transient Circle Support diameter handles.
+    /// </summary>
+    public bool TryHitCircleSupportDiameterHandle(Vector2 screenPosition, out CircleSupportDiameterHandleKind handleKind)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is Element3D hitModel
+                && _circleSupportPreviewRenderer.TryGetDiameterHandleKind(hitModel, out handleKind))
+            {
+                return true;
+            }
+        }
+
+        handleKind = CircleSupportDiameterHandleKind.None;
+        return false;
+    }
+
+    /// <summary>
     /// Hides all transient Circle Support preview geometry.
     /// </summary>
     public void HideCircleSupportPreview()
     {
         _circleSupportPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Hides the generated Circle Support circle and support markers while keeping diameter handles visible.
+    /// </summary>
+    public void HideCircleSupportCircleAndMarkers()
+    {
+        _circleSupportPreviewRenderer.HideCircleAndMarkers();
     }
 
     /// <summary>

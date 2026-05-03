@@ -4,6 +4,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace Pillar.UI.Modes;
 
@@ -14,7 +15,9 @@ public partial class ToolOptionsPanel : UserControl
 {
     private const string CircleSupportToolName = "Circle Support";
     private const float CircleSupportSpacingStep = 0.25f;
+    private const int CircleSupportOptionsChangedDelayMilliseconds = 300;
     public const float DefaultCircleSupportSpacing = 5.0f;
+    private readonly DispatcherTimer _circleSupportOptionsChangedTimer;
     private bool _isSynchronizingCircleSupportOptions;
 
     /// <summary>
@@ -28,10 +31,20 @@ public partial class ToolOptionsPanel : UserControl
     public event EventHandler? CircleSupportApplyRequested;
 
     /// <summary>
+    /// Raised when the user cancels the current Circle Support operation.
+    /// </summary>
+    public event EventHandler? CircleSupportCancelRequested;
+
+    /// <summary>
     /// Creates the Tool Options Panel overlay.
     /// </summary>
     public ToolOptionsPanel()
     {
+        _circleSupportOptionsChangedTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(CircleSupportOptionsChangedDelayMilliseconds)
+        };
+        _circleSupportOptionsChangedTimer.Tick += CircleSupportOptionsChangedTimer_Tick;
         InitializeComponent();
     }
 
@@ -82,6 +95,7 @@ public partial class ToolOptionsPanel : UserControl
             spacing = DefaultCircleSupportSpacing;
         }
 
+        _circleSupportOptionsChangedTimer.Stop();
         _isSynchronizingCircleSupportOptions = true;
 
         try
@@ -115,7 +129,7 @@ public partial class ToolOptionsPanel : UserControl
     }
 
     /// <summary>
-    /// Notifies the owner that option-driven previews should be refreshed.
+    /// Schedules an option-driven preview refresh after the user pauses editing.
     /// </summary>
     private void CircleSupportSpacingTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -127,6 +141,17 @@ public partial class ToolOptionsPanel : UserControl
             return;
         }
 
+        RestartCircleSupportOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Raises the delayed Circle Support option change event after typing has paused.
+    /// </summary>
+    private void CircleSupportOptionsChangedTimer_Tick(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _circleSupportOptionsChangedTimer.Stop();
         CircleSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -137,7 +162,28 @@ public partial class ToolOptionsPanel : UserControl
     {
         _ = sender;
         _ = e;
+        _circleSupportOptionsChangedTimer.Stop();
         CircleSupportApplyRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Requests that the owning shell cancel the current Circle Support operation and discard transient preview state.
+    /// </summary>
+    private void CancelCircleSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _circleSupportOptionsChangedTimer.Stop();
+        CircleSupportCancelRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Restarts the live-preview debounce timer so expensive projected markers are recalculated only after edits settle.
+    /// </summary>
+    private void RestartCircleSupportOptionsChangedTimer()
+    {
+        _circleSupportOptionsChangedTimer.Stop();
+        _circleSupportOptionsChangedTimer.Start();
     }
 
     /// <summary>

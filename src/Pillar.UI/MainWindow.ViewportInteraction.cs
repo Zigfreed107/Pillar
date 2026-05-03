@@ -2,6 +2,8 @@
 // Hosts viewport input and camera-navigation glue so the shell can route WPF events into CAD tools without mixing that code with unrelated workflows.
 using Pillar.Rendering.Math;
 using HelixToolkit.Wpf.SharpDX;
+using Pillar.Core.Tools;
+using Pillar.UI.Modes;
 using System.Numerics;
 using System.Windows;
 using System.Windows.Input;
@@ -23,7 +25,17 @@ public partial class MainWindow
             return;
         }
 
-        _toolManager.ActiveTool?.OnMouseDown(GetScreenPosition(e));
+        Vector2 screenPosition = GetScreenPosition(e);
+
+        if (IsCircleSupportOperationActive())
+        {
+            RunWithWaitCursor(() => _toolManager.ActiveTool?.OnMouseDown(screenPosition));
+        }
+        else
+        {
+            _toolManager.ActiveTool?.OnMouseDown(screenPosition);
+        }
+
         Viewport.CaptureMouse();
         e.Handled = true;
     }
@@ -77,5 +89,14 @@ public partial class MainWindow
     {
         Point mousePosition = e.GetPosition(Viewport);
         return new Vector2((float)mousePosition.X, (float)mousePosition.Y);
+    }
+
+    /// <summary>
+    /// Gets whether left-click handling may trigger Circle Support hit testing or marker projection.
+    /// </summary>
+    private bool IsCircleSupportOperationActive()
+    {
+        return _activeModeId == WorkspaceModeId.ManualSupport
+            && _manualSupportTool.ActiveOperationKind == ManualSupportOperationKind.Circle;
     }
 }

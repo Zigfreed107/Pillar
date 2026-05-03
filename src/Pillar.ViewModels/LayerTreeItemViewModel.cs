@@ -74,6 +74,14 @@ public partial class LayerTreeItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether this row should show a support-group tool edit button.
+    /// </summary>
+    public bool CanEditSupportGroup
+    {
+        get { return Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
     /// Gets or sets whether WPF should keep this tree row expanded.
     /// </summary>
     public bool IsExpanded

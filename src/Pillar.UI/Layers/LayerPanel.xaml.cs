@@ -54,6 +54,11 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerColorChangeRequestedEventArgs>? ChangeSupportGroupColorRequested;
 
     /// <summary>
+    /// Raised when the selected support group should be opened for tool-specific editing.
+    /// </summary>
+    public event EventHandler<LayerSupportGroupEditRequestedEventArgs>? EditSupportGroupRequested;
+
+    /// <summary>
     /// Requests the shared import workflow from the owning window.
     /// </summary>
     private void ImportModelButton_Click(object sender, RoutedEventArgs e)
@@ -162,6 +167,26 @@ public partial class LayerPanel : UserControl
         ChangeSupportGroupColorRequested?.Invoke(
             this,
             new LayerColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
+    }
+
+    /// <summary>
+    /// Publishes an explicit edit request for the support group row that owns the edit button.
+    /// </summary>
+    private void SupportGroupEditButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = e;
+
+        if (sender is not Button button || button.DataContext is not LayerTreeItemViewModel layer || !layer.CanEditSupportGroup)
+        {
+            return;
+        }
+
+        if (DataContext is LayerPanelViewModel layerPanelViewModel)
+        {
+            layerPanelViewModel.SetSelectedLayer(layer);
+        }
+
+        EditSupportGroupRequested?.Invoke(this, new LayerSupportGroupEditRequestedEventArgs(layer.Id));
     }
 
     /// <summary>
@@ -296,4 +321,23 @@ public sealed class LayerColorChangeRequestedEventArgs : EventArgs
     /// Gets the color requested by the color picker.
     /// </summary>
     public SupportLayerColor NewColor { get; }
+}
+
+/// <summary>
+/// Carries one support group edit request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerSupportGroupEditRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates support group edit request data.
+    /// </summary>
+    public LayerSupportGroupEditRequestedEventArgs(Guid supportLayerGroupId)
+    {
+        SupportLayerGroupId = supportLayerGroupId;
+    }
+
+    /// <summary>
+    /// Gets the support group id that should be edited with its generator tool.
+    /// </summary>
+    public Guid SupportLayerGroupId { get; }
 }
