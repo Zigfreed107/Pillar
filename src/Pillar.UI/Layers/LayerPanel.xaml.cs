@@ -44,9 +44,9 @@ public partial class LayerPanel : UserControl
     public event EventHandler? RemoveSupportGroupRequested;
 
     /// <summary>
-    /// Raised when a completed inline rename should be applied to a support group.
+    /// Raised when a completed inline rename should be applied to a model or support group layer.
     /// </summary>
-    public event EventHandler<LayerRenameRequestedEventArgs>? RenameSupportGroupRequested;
+    public event EventHandler<LayerRenameRequestedEventArgs>? RenameLayerRequested;
 
     /// <summary>
     /// Raised when a support group color should be changed.
@@ -122,7 +122,7 @@ public partial class LayerPanel : UserControl
     }
 
     /// <summary>
-    /// Starts inline rename editing for support group rows.
+    /// Starts inline rename editing for model and support group rows.
     /// </summary>
     private void RenameSupportGroupMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -255,31 +255,37 @@ public partial class LayerPanel : UserControl
             return;
         }
 
-        RenameSupportGroupRequested?.Invoke(
+        RenameLayerRequested?.Invoke(
             this,
-            new LayerRenameRequestedEventArgs(layer.Id, layer.Name, requestedName ?? string.Empty));
+            new LayerRenameRequestedEventArgs(layer.Id, layer.Kind, layer.Name, requestedName ?? string.Empty));
     }
 }
 
 /// <summary>
-/// Carries one completed support group rename request from the Layer Panel to the shell.
+/// Carries one completed layer rename request from the Layer Panel to the shell.
 /// </summary>
 public sealed class LayerRenameRequestedEventArgs : EventArgs
 {
     /// <summary>
     /// Creates rename request data.
     /// </summary>
-    public LayerRenameRequestedEventArgs(Guid supportLayerGroupId, string oldName, string newName)
+    public LayerRenameRequestedEventArgs(Guid layerId, LayerTreeItemKind layerKind, string oldName, string newName)
     {
-        SupportLayerGroupId = supportLayerGroupId;
+        LayerId = layerId;
+        LayerKind = layerKind;
         OldName = oldName;
         NewName = newName;
     }
 
     /// <summary>
-    /// Gets the support group id being renamed.
+    /// Gets the document id represented by the renamed layer row.
     /// </summary>
-    public Guid SupportLayerGroupId { get; }
+    public Guid LayerId { get; }
+
+    /// <summary>
+    /// Gets the kind of layer row being renamed.
+    /// </summary>
+    public LayerTreeItemKind LayerKind { get; }
 
     /// <summary>
     /// Gets the name displayed before the edit.

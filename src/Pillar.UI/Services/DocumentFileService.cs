@@ -104,6 +104,38 @@ public sealed class DocumentFileService
     }
 
     /// <summary>
+    /// Opens a project path from user settings during startup, falling back to the existing blank document on any load failure.
+    /// </summary>
+    public DocumentFileOperationResult TryOpenAtStartup(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return new DocumentFileOperationResult(string.Empty, null);
+        }
+
+        string trimmedFilePath = filePath.Trim();
+
+        try
+        {
+            if (!File.Exists(trimmedFilePath))
+            {
+                return new DocumentFileOperationResult(string.Empty, null);
+            }
+
+            GphDocumentData documentData = _serializer.LoadDocument(trimmedFilePath);
+            ReplaceCurrentDocument(documentData.Entities, documentData.SupportLayerGroups);
+
+            string fileName = Path.GetFileName(trimmedFilePath);
+            return new DocumentFileOperationResult($"Opened {fileName}", $"Opened {fileName}");
+        }
+        catch (Exception ex) when (IsStartupLoadFailure(ex))
+        {
+            ReplaceCurrentDocument(Array.Empty<CadEntity>(), Array.Empty<SupportLayerGroup>());
+            return new DocumentFileOperationResult("Startup project could not be loaded; opened a new document", null);
+        }
+    }
+
+    /// <summary>
     /// Saves the current document to a Graphite project file selected by the user.
     /// </summary>
     public DocumentFileOperationResult Save()
@@ -130,6 +162,19 @@ public sealed class DocumentFileService
             MessageBoxImage.Warning);
 
         return result == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// Identifies exceptions that should never prevent the application shell from opening a blank document.
+    /// </summary>
+    private static bool IsStartupLoadFailure(Exception ex)
+    {
+        return ex is IOException
+            || ex is InvalidDataException
+            || ex is NotSupportedException
+            || ex is ArgumentException
+            || ex is UnauthorizedAccessException
+            || ex is InvalidOperationException;
     }
 
     /// <summary>

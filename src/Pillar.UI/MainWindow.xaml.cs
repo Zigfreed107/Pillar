@@ -2,6 +2,7 @@
 // Composes the WPF workspace shell by constructing services, wiring shell state, and performing startup-only setup.
 using Pillar.Core.Document;
 using Pillar.Commands;
+using Pillar.Core.Entities;
 using Pillar.Core.Import;
 using Pillar.Core.Persistence;
 using Pillar.Core.Snapping;
@@ -105,6 +106,7 @@ public partial class MainWindow : Window
         ContentRendered += MainWindow_ContentRendered;
         Closed += MainWindow_Closed;
         SetActiveMode(WorkspaceModeId.Select);
+        ApplyDocumentFileResult(_documentFileService.TryOpenAtStartup(Properties.Settings.Default.LoadAtStartup));
     }
 
     /// <summary>
@@ -147,8 +149,42 @@ public partial class MainWindow : Window
             return;
         }
 
-        Viewport.ZoomExtents(_scene.BackgroundGridBounds, 0.0);
+        Viewport.ZoomExtents(GetStartupViewportBounds(), 0.0);
         _hasFramedStartupView = true;
+    }
+
+    /// <summary>
+    /// Gets startup camera bounds for either the loaded project or the empty workspace grid.
+    /// </summary>
+    private Rect3D GetStartupViewportBounds()
+    {
+        bool hasEntityBounds = false;
+        Rect3D startupBounds = Rect3D.Empty;
+
+        foreach (CadEntity entity in _document.Entities)
+        {
+            (System.Numerics.Vector3 Min, System.Numerics.Vector3 Max) bounds = entity.GetBounds();
+            double width = global::System.Math.Max(bounds.Max.X - bounds.Min.X, 0.01f);
+            double height = global::System.Math.Max(bounds.Max.Y - bounds.Min.Y, 0.01f);
+            double depth = global::System.Math.Max(bounds.Max.Z - bounds.Min.Z, 0.01f);
+            Rect3D entityBounds = new Rect3D(bounds.Min.X, bounds.Min.Y, bounds.Min.Z, width, height, depth);
+
+            if (!hasEntityBounds)
+            {
+                startupBounds = entityBounds;
+                hasEntityBounds = true;
+                continue;
+            }
+
+            startupBounds.Union(entityBounds);
+        }
+
+        if (!hasEntityBounds)
+        {
+            return _scene.BackgroundGridBounds;
+        }
+
+        return startupBounds;
     }
 
     /// <summary>
@@ -181,7 +217,7 @@ public partial class MainWindow : Window
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
         LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
-        LayerPanelOverlay.RenameSupportGroupRequested += LayerPanel_RenameSupportGroupRequested;
+        LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
         LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
     }

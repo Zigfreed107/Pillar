@@ -16,6 +16,7 @@ public class MeshEntity : CadEntity
     private Transform3DData _userTransform;
 
     public string? SourcePath { get; }
+    public string OriginalFileName { get; }
     public IReadOnlyList<Vector3> Vertices { get; }
     public IReadOnlyList<int> TriangleIndices { get; }
     public IReadOnlyList<Vector3> Normals { get; }
@@ -76,7 +77,8 @@ public class MeshEntity : CadEntity
         IReadOnlyList<Vector3> normals,
         string? sourcePath = null,
         Transform3DData? importPlacementTransform = null,
-        Transform3DData? userTransform = null)
+        Transform3DData? userTransform = null,
+        string? originalFileName = null)
         : base(string.IsNullOrWhiteSpace(name) ? "Imported mesh" : name)
     {
         if (vertices == null)
@@ -122,6 +124,7 @@ public class MeshEntity : CadEntity
         }
 
         SourcePath = sourcePath;
+        OriginalFileName = CreateOriginalFileName(originalFileName, sourcePath, Name);
         Vertices = new ReadOnlyCollection<Vector3>(new List<Vector3>(vertices));
         TriangleIndices = new ReadOnlyCollection<int>(new List<int>(triangleIndices));
         Normals = new ReadOnlyCollection<Vector3>(new List<Vector3>(normals));
@@ -139,10 +142,11 @@ public class MeshEntity : CadEntity
         IReadOnlyList<int> triangleIndices,
         IReadOnlyList<Vector3> normals,
         string? sourcePath,
+        string? originalFileName,
         Transform3DData? importPlacementTransform = null,
         Transform3DData? userTransform = null)
     {
-        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, normals, sourcePath, importPlacementTransform, userTransform);
+        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, normals, sourcePath, importPlacementTransform, userTransform, originalFileName);
         mesh.Id = id;
         return mesh;
     }
@@ -193,5 +197,53 @@ public class MeshEntity : CadEntity
         Vector3 transformedCorner = Vector3.Transform(localCorner, worldTransform);
         min = Vector3.Min(min, transformedCorner);
         max = Vector3.Max(max, transformedCorner);
+    }
+
+    /// <summary>
+    /// Preserves the original imported filename, using legacy source path data when older projects do not have the dedicated field.
+    /// </summary>
+    private static string CreateOriginalFileName(string? originalFileName, string? sourcePath, string displayName)
+    {
+        string? normalizedOriginalFileName = GetFileNameOrNull(originalFileName);
+
+        if (!string.IsNullOrWhiteSpace(normalizedOriginalFileName))
+        {
+            return normalizedOriginalFileName;
+        }
+
+        string? sourceFileName = GetFileNameOrNull(sourcePath);
+
+        if (!string.IsNullOrWhiteSpace(sourceFileName))
+        {
+            return sourceFileName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName.Trim();
+        }
+
+        return "Imported mesh";
+    }
+
+    /// <summary>
+    /// Extracts a filename from a possibly legacy path while tolerating malformed persisted path values.
+    /// </summary>
+    private static string? GetFileNameOrNull(string? pathOrFileName)
+    {
+        if (string.IsNullOrWhiteSpace(pathOrFileName))
+        {
+            return null;
+        }
+
+        try
+        {
+            string fileName = System.IO.Path.GetFileName(pathOrFileName.Trim());
+            return string.IsNullOrWhiteSpace(fileName) ? null : fileName;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 }

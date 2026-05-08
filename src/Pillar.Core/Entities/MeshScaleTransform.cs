@@ -11,7 +11,7 @@ namespace Pillar.Core.Entities;
 public static class MeshScaleTransform
 {
     /// <summary>
-    /// Calculates the import-space scaling origin from the mesh vertex centroid and lowest model Z value.
+    /// Calculates the import-space scaling origin from the XY footprint bounds center and lowest model Z value.
     /// </summary>
     public static Vector3 CalculateImportSpaceOrigin(MeshEntity mesh)
     {
@@ -21,18 +21,45 @@ public static class MeshScaleTransform
         }
 
         Matrix4x4 importPlacementMatrix = mesh.ImportPlacementTransform.ToMatrix4x4();
-        Vector3 centroidAccumulator = Vector3.Zero;
-        float minZ = float.PositiveInfinity;
+        Vector3 firstVertex = Vector3.Transform(mesh.Vertices[0], importPlacementMatrix);
+        Vector3 min = firstVertex;
+        Vector3 max = firstVertex;
 
-        for (int i = 0; i < mesh.Vertices.Count; i++)
+        for (int i = 1; i < mesh.Vertices.Count; i++)
         {
             Vector3 importSpaceVertex = Vector3.Transform(mesh.Vertices[i], importPlacementMatrix);
-            centroidAccumulator += importSpaceVertex;
-            minZ = MathF.Min(minZ, importSpaceVertex.Z);
+            min = Vector3.Min(min, importSpaceVertex);
+            max = Vector3.Max(max, importSpaceVertex);
         }
 
-        Vector3 centroid = centroidAccumulator / mesh.Vertices.Count;
-        return new Vector3(centroid.X, centroid.Y, minZ);
+        float centerX = (min.X + max.X) / 2.0f;
+        float centerY = (min.Y + max.Y) / 2.0f;
+        return new Vector3(centerX, centerY, min.Z);
+    }
+
+    /// <summary>
+    /// Calculates the original 100% model size along import-space X, Y, and Z axes.
+    /// </summary>
+    public static Vector3 CalculateImportSpaceSize(MeshEntity mesh)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        Matrix4x4 importPlacementMatrix = mesh.ImportPlacementTransform.ToMatrix4x4();
+        Vector3 firstVertex = Vector3.Transform(mesh.Vertices[0], importPlacementMatrix);
+        Vector3 min = firstVertex;
+        Vector3 max = firstVertex;
+
+        for (int i = 1; i < mesh.Vertices.Count; i++)
+        {
+            Vector3 importSpaceVertex = Vector3.Transform(mesh.Vertices[i], importPlacementMatrix);
+            min = Vector3.Min(min, importSpaceVertex);
+            max = Vector3.Max(max, importSpaceVertex);
+        }
+
+        return max - min;
     }
 
     /// <summary>

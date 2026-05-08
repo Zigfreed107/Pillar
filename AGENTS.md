@@ -75,6 +75,7 @@ A "Supports Settings Panel" overlays the viewport on the bottom left. This is wh
 - Please comment your code for maintainability. Please briefly add comment for each function, and more detailed comments for complex logic. This will help me understand the code and maintain it in the future.
 - Please add a comment at the top of each file explaining its purpose and how it fits into the overall architecture of the application.
 - Use Windows (CR LF) line endings in all code files for consistency with the rest of the project.
+- Consider including Undo/Redo functionality, but only where it is a natural workflow fit.
 
 # Don't:
 - Hard code colours or other constants that might need to be changed later

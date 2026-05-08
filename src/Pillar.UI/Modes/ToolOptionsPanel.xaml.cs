@@ -100,6 +100,14 @@ public partial class ToolOptionsPanel : UserControl
     }
 
     /// <summary>
+    /// Sets the original 100% model size used by the Scale tool size fields.
+    /// </summary>
+    public void SetScaleOriginalSize(Vector3 originalSize)
+    {
+        ScaleOptionsControl.SetOriginalSize(originalSize);
+    }
+
+    /// <summary>
     /// Attempts to read Transform Scale fields as scale factors where 1.0 means 100%.
     /// </summary>
     public bool TryGetScaleFactors(out Vector3 scaleFactors)

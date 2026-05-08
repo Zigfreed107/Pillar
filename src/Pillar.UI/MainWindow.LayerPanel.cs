@@ -4,6 +4,7 @@ using Pillar.Commands;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.UI.Layers;
+using Pillar.ViewModels;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -184,11 +185,55 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies a completed layer rename as one undoable command.
+    /// </summary>
+    private void LayerPanel_RenameLayerRequested(object? sender, LayerRenameRequestedEventArgs e)
+    {
+        if (e.LayerKind == LayerTreeItemKind.Model)
+        {
+            RenameModelLayer(e);
+            return;
+        }
+
+        if (e.LayerKind == LayerTreeItemKind.SupportGroup)
+        {
+            RenameSupportGroupLayer(e);
+        }
+    }
+
+    /// <summary>
+    /// Applies a completed model layer rename as one undoable command.
+    /// </summary>
+    private void RenameModelLayer(LayerRenameRequestedEventArgs e)
+    {
+        MeshEntity? mesh = FindEntityById(e.LayerId) as MeshEntity;
+
+        if (mesh == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        string oldName = NormalizeModelName(mesh.Name);
+        string newName = NormalizeModelName(e.NewName);
+
+        if (string.Equals(oldName, newName, StringComparison.Ordinal))
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _commandRunner.Execute(new RenameModelCommand(mesh, oldName, newName));
+        _layerPanelViewModel.RefreshFromDocument();
+        _viewModel.SetStatusText("Renamed model");
+    }
+
+    /// <summary>
     /// Applies a completed support group rename as one undoable command.
     /// </summary>
-    private void LayerPanel_RenameSupportGroupRequested(object? sender, LayerRenameRequestedEventArgs e)
+    private void RenameSupportGroupLayer(LayerRenameRequestedEventArgs e)
     {
-        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(e.SupportLayerGroupId);
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(e.LayerId);
 
         if (supportLayerGroup == null)
         {
@@ -208,6 +253,19 @@ public partial class MainWindow
         _commandRunner.Execute(new RenameSupportLayerGroupCommand(_document, supportLayerGroup, oldName, newName));
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText("Renamed support group");
+    }
+
+    /// <summary>
+    /// Normalizes imported model names entered through inline layer editing.
+    /// </summary>
+    private static string NormalizeModelName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Imported mesh";
+        }
+
+        return name.Trim();
     }
 
     /// <summary>

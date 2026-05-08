@@ -40,5 +40,17 @@ namespace Pillar.UI.Properties {
                 return ((double)(this["DefaultModelZStandoffFromOrigin"]));
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Coding\\Pillar\\Documentation\\Sample.gph")]
+        public string LoadAtStartup {
+            get {
+                return ((string)(this["LoadAtStartup"]));
+            }
+            set {
+                this["LoadAtStartup"] = value;
+            }
+        }
     }
 }

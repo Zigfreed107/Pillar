@@ -9,6 +9,7 @@
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="36" />
             <RowDefinition Height="36" />
             <RowDefinition Height="36" />
@@ -16,72 +17,118 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="72" />
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="58" />
+            <ColumnDefinition Width="88" />
+            <ColumnDefinition Width="8" />
+            <ColumnDefinition Width="88" />
             <ColumnDefinition Width="20" />
             <ColumnDefinition Width="36" />
         </Grid.ColumnDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Grid.Column="0"
-                   Margin="0,4,8,0"
+                   Grid.Column="1"
+                   Margin="0,0,0,4"
                    Style="{StaticResource ModeOverlayLabelTextStyle}"
-                   Text="X scale" Foreground="Red" />
-        <controls:NumericUpDown x:Name="ScaleXNumericUpDown"
-                                Grid.Row="0"
-                                Grid.Column="1"
-                                MinWidth="104"
-                                Minimum="0"
-                                Increment="5"
-                                DecimalPlaces="1"
-                                Value="100.0"
-                                ValueChanged="ScaleNumericUpDown_ValueChanged" />
+                   Text="Scale %" />
+        <TextBlock Grid.Row="0"
+                   Grid.Column="3"
+                   Margin="0,0,0,4"
+                   Style="{StaticResource ModeOverlayLabelTextStyle}"
+                   Text="Size" />
 
         <TextBlock Grid.Row="1"
                    Grid.Column="0"
-                   Margin="0,8,8,0"
+                   Margin="0,4,8,0"
                    Style="{StaticResource ModeOverlayLabelTextStyle}"
-                   Text="Y scale" Foreground="Lime" />
-        <controls:NumericUpDown x:Name="ScaleYNumericUpDown"
+                   Text="X"
+                   Foreground="Red" />
+        <controls:NumericUpDown x:Name="ScaleXNumericUpDown"
                                 Grid.Row="1"
                                 Grid.Column="1"
-                                Margin="0,4,0,0"
-                                MinWidth="104"
+                                MinWidth="82"
                                 Minimum="0"
                                 Increment="5"
-                                DecimalPlaces="1"
+                                DecimalPlaces="3"
                                 Value="100.0"
                                 ValueChanged="ScaleNumericUpDown_ValueChanged" />
+        <controls:NumericUpDown x:Name="SizeXNumericUpDown"
+                                Grid.Row="1"
+                                Grid.Column="3"
+                                MinWidth="82"
+                                Minimum="0"
+                                Increment="1"
+                                DecimalPlaces="3"
+                                Value="0.000"
+                                ValueChanged="SizeNumericUpDown_ValueChanged" />
 
         <TextBlock Grid.Row="2"
                    Grid.Column="0"
                    Margin="0,8,8,0"
                    Style="{StaticResource ModeOverlayLabelTextStyle}"
-                   Text="Z scale" Foreground="Blue" />
-        <controls:NumericUpDown x:Name="ScaleZNumericUpDown"
+                   Text="Y"
+                   Foreground="Lime" />
+        <controls:NumericUpDown x:Name="ScaleYNumericUpDown"
                                 Grid.Row="2"
                                 Grid.Column="1"
                                 Margin="0,4,0,0"
-                                MinWidth="104"
+                                MinWidth="82"
                                 Minimum="0"
                                 Increment="5"
-                                DecimalPlaces="1"
+                                DecimalPlaces="3"
                                 Value="100.0"
                                 ValueChanged="ScaleNumericUpDown_ValueChanged" />
-        <Canvas Grid.Row="0" Margin="5,0,5,0"
+        <controls:NumericUpDown x:Name="SizeYNumericUpDown"
+                                Grid.Row="2"
+                                Grid.Column="3"
+                                Margin="0,4,0,0"
+                                MinWidth="82"
+                                Minimum="0"
+                                Increment="1"
+                                DecimalPlaces="3"
+                                Value="0.000"
+                                ValueChanged="SizeNumericUpDown_ValueChanged" />
+
+        <TextBlock Grid.Row="3"
+                   Grid.Column="0"
+                   Margin="0,8,8,0"
+                   Style="{StaticResource ModeOverlayLabelTextStyle}"
+                   Text="Z"
+                   Foreground="Blue" />
+        <controls:NumericUpDown x:Name="ScaleZNumericUpDown"
+                                Grid.Row="3"
+                                Grid.Column="1"
+                                Margin="0,4,0,0"
+                                MinWidth="82"
+                                Minimum="0"
+                                Increment="5"
+                                DecimalPlaces="3"
+                                Value="100.0"
+                                ValueChanged="ScaleNumericUpDown_ValueChanged" />
+        <controls:NumericUpDown x:Name="SizeZNumericUpDown"
+                                Grid.Row="3"
+                                Grid.Column="3"
+                                Margin="0,4,0,0"
+                                MinWidth="82"
+                                Minimum="0"
+                                Increment="1"
+                                DecimalPlaces="3"
+                                Value="0.000"
+                                ValueChanged="SizeNumericUpDown_ValueChanged" />
+
+        <Canvas Grid.Row="1"
                 Grid.RowSpan="3"
-                Grid.Column="2">
-            <Polyline Points="0,9 10,9 10,99, 0,99"
-                  Stroke="{StaticResource ModeOverlayBodyBrush}"
-                  StrokeThickness="1"
-                  IsHitTestVisible="False" />
+                Grid.Column="4"
+                Margin="5,0,5,0">
+            <Polyline Points="0,9 10,9 10,99 0,99"
+                      Stroke="{StaticResource ModeOverlayBodyBrush}"
+                      StrokeThickness="1"
+                      IsHitTestVisible="False" />
         </Canvas>
 
-
         <primitives:ToggleButton x:Name="ScaleLockToggleButton"
-                                 Grid.Row="0"
+                                 Grid.Row="1"
                                  Grid.RowSpan="3"
-                                 Grid.Column="3"
+                                 Grid.Column="5"
                                  Width="30"
                                  Height="30"
                                  Margin="6,0,0,0"
@@ -91,18 +138,18 @@
                                  Content="L"
                                  ToolTip="Lock scale axes" />
 
-        <Button Grid.Row="3"
+        <Button Grid.Row="4"
                 Grid.Column="0"
-                Grid.ColumnSpan="4"
+                Grid.ColumnSpan="6"
                 Margin="0,14,0,0"
                 MinHeight="30"
                 HorizontalAlignment="Stretch"
                 Click="ResetScaleButton_Click"
                 Content="Reset" />
 
-        <Button Grid.Row="4"
+        <Button Grid.Row="5"
                 Grid.Column="0"
-                Grid.ColumnSpan="4"
+                Grid.ColumnSpan="6"
                 Margin="0,16,0,0"
                 MinHeight="30"
                 HorizontalAlignment="Stretch"

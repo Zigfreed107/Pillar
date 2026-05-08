@@ -39,6 +39,7 @@ public partial class MainWindow
         _isTransformScaleToolActive = true;
 
         ToolOptionsPanelOverlay.SetSelectedTool(TransformScaleToolName);
+        ToolOptionsPanelOverlay.SetScaleOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
         ToolOptionsPanelOverlay.SetScaleFactors(selectedMesh.UserTransform.Scale);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
         ShowScaleOriginPreview(selectedMesh);
@@ -114,6 +115,7 @@ public partial class MainWindow
             return;
         }
 
+        ToolOptionsPanelOverlay.SetScaleOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
         ToolOptionsPanelOverlay.SetScaleFactors(selectedMesh.UserTransform.Scale);
         ShowScaleOriginPreview(selectedMesh);
     }

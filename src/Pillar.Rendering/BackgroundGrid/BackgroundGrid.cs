@@ -17,9 +17,9 @@ namespace Pillar.Rendering.BackgroundGrid;
 public class BackgroundGridRenderer
 {
     private readonly BackgroundGridDefinition _definition;
-    private readonly LineGeometryModel3D _grid;
+    private readonly MeshGeometryModel3D _grid;
     private readonly MeshGeometryModel3D _border;
-    private readonly LineGeometryModel3D _doubleBorder;
+    private readonly MeshGeometryModel3D _doubleBorder;
     private readonly LineGeometryModel3D _origin;
 
     /// <summary>
@@ -29,18 +29,12 @@ public class BackgroundGridRenderer
     {
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
 
-        LineBuilder doubleBorderBuilder = new LineBuilder();
-        doubleBorderBuilder.AddBox(
-            new Vector3(0.0f, 0.0f, 0.0f),
-            _definition.Width + _definition.OutlineOffset,
-            _definition.Height + _definition.OutlineOffset,
-            0.0f);
-
-        _doubleBorder = new LineGeometryModel3D
+        MeshBuilder doubleBorderBuilder = BuildDoubleBorder();
+        _doubleBorder = new MeshGeometryModel3D
         {
-            Geometry = doubleBorderBuilder.ToLineGeometry3D(),
-            Color = _definition.DoubleBorderColor,
-            Thickness = _definition.DoubleBorderThickness
+            Geometry = doubleBorderBuilder.ToMeshGeometry3D(),
+            Material = CreateFlatMaterial(_definition.DoubleBorderColor),
+            CullMode = SharpDX.Direct3D11.CullMode.Back
         };
 
         sceneRoot.Children.Add(_doubleBorder);
@@ -50,18 +44,17 @@ public class BackgroundGridRenderer
         {
             Geometry = borderBuilder.ToMeshGeometry3D(),
             Material = CreateFlatMaterial(_definition.BorderColor),
-
             CullMode = SharpDX.Direct3D11.CullMode.Back
         };
 
         sceneRoot.Children.Add(_border);
 
-        LineBuilder gridBuilder = BuildGridLineGeometry();
-        _grid = new LineGeometryModel3D
+        MeshBuilder gridBuilder = BuildGridMeshGeometry();
+        _grid = new MeshGeometryModel3D
         {
-            Geometry = gridBuilder.ToLineGeometry3D(),
-            Color = _definition.GridColor,
-            Thickness = _definition.GridThickness
+            Geometry = gridBuilder.ToMeshGeometry3D(),
+            Material = CreateFlatMaterial(_definition.GridColor),
+            CullMode = SharpDX.Direct3D11.CullMode.Back
         };
 
         sceneRoot.Children.Add(_grid);
@@ -86,13 +79,14 @@ public class BackgroundGridRenderer
     }
 
     /// <summary>
-    /// Builds the regularly spaced interior grid lines from the current definition.
+    /// Builds the regularly spaced interior grid strips from the current definition.
     /// </summary>
-    private LineBuilder BuildGridLineGeometry()
+    private MeshBuilder BuildGridMeshGeometry()
     {
-        LineBuilder gridBuilder = new LineBuilder();
+        MeshBuilder gridBuilder = new MeshBuilder();
         float halfWidth = _definition.Width / 2.0f;
         float halfHeight = _definition.Height / 2.0f;
+        float halfThickness = _definition.GridThickness / 2.0f;
 
         float startY = (float)global::System.Math.Round((-halfHeight) / _definition.Spacing) * _definition.Spacing;
         float startX = (float)global::System.Math.Round((-halfWidth) / _definition.Spacing) * _definition.Spacing;
@@ -103,40 +97,82 @@ public class BackgroundGridRenderer
         for (int horizontalLineIndex = 0; horizontalLineIndex <= horizontalLineCount; horizontalLineIndex += 1)
         {
             float currentY = startY + (horizontalLineIndex * _definition.Spacing);
-            gridBuilder.AddLine(new Vector3(-halfWidth, currentY, 0.0f), new Vector3(halfWidth, currentY, 0.0f));
+            AddFlatQuad(
+                gridBuilder,
+                -halfWidth,
+                currentY - halfThickness,
+                halfWidth,
+                currentY + halfThickness);
         }
 
         for (int verticalLineIndex = 0; verticalLineIndex <= verticalLineCount; verticalLineIndex += 1)
         {
             float currentX = startX + (verticalLineIndex * _definition.Spacing);
-            gridBuilder.AddLine(new Vector3(currentX, -halfHeight, 0.0f), new Vector3(currentX, halfHeight, 0.0f));
+            AddFlatQuad(
+                gridBuilder,
+                currentX - halfThickness,
+                -halfHeight,
+                currentX + halfThickness,
+                halfHeight);
         }
 
         return gridBuilder;
     }
 
-
     /// <summary>
-    /// Builds the primary border as four flat mesh strips so the border has stable screen-independent thickness.
+    /// Builds the primary border as four top-facing mesh strips so back-face culling hides it from below.
     /// </summary>
     private MeshBuilder BuildBorder()
     {
-        float halfWidth = _definition.Width / 2.0f;
-        float halfHeight = _definition.Height / 2.0f;
-        float thickness = _definition.BorderThickness;
-        float outerLeft = -halfWidth - thickness;
-        float outerRight = halfWidth + thickness;
-        float outerBottom = -halfHeight - thickness;
-        float outerTop = halfHeight + thickness;
+        return BuildRectangleFrame(_definition.Width, _definition.Height, _definition.BorderThickness);
+    }
 
-        MeshBuilder borderBuilder = new MeshBuilder();
+    /// <summary>
+    /// Builds the outer decorative border as top-facing mesh strips around the build plate.
+    /// </summary>
+    private MeshBuilder BuildDoubleBorder()
+    {
+        return BuildRectangleFrame(
+            _definition.Width + _definition.OutlineOffset,
+            _definition.Height + _definition.OutlineOffset,
+            _definition.DoubleBorderThickness);
+    }
 
-        AddFlatQuad(borderBuilder, outerLeft, halfHeight, outerRight, outerTop);
-        AddFlatQuad(borderBuilder, halfWidth, -halfHeight, outerRight, halfHeight);
-        AddFlatQuad(borderBuilder, outerLeft, outerBottom, outerRight, -halfHeight);
-        AddFlatQuad(borderBuilder, outerLeft, -halfHeight, -halfWidth, halfHeight);
+    /// <summary>
+    /// Builds one rectangular frame from four flat quads in the grid plane.
+    /// </summary>
+    private MeshBuilder BuildRectangleFrame(float width, float height, float thickness)
+    {
+        MeshBuilder frameBuilder = new MeshBuilder();
+        float halfWidth = width / 2.0f;
+        float halfHeight = height / 2.0f;
+        float halfThickness = thickness / 2.0f;
+        float outerLeft = -halfWidth - halfThickness;
+        float outerRight = halfWidth + halfThickness;
+        float outerBottom = -halfHeight - halfThickness;
+        float outerTop = halfHeight + halfThickness;
 
-        return borderBuilder;
+        AddFlatQuad(frameBuilder, outerLeft, halfHeight - halfThickness, outerRight, outerTop);
+        AddFlatQuad(frameBuilder, halfWidth - halfThickness, -halfHeight, outerRight, halfHeight);
+        AddFlatQuad(frameBuilder, outerLeft, outerBottom, outerRight, -halfHeight + halfThickness);
+        AddFlatQuad(frameBuilder, outerLeft, -halfHeight, -halfWidth + halfThickness, halfHeight);
+
+        return frameBuilder;
+    }
+
+    /// <summary>
+    /// Builds the origin triad marker shown at the center of the build plate.
+    /// </summary>
+    private LineBuilder BuildOriginGeometry()
+    {
+        LineBuilder originBuilder = new LineBuilder();
+        float originAxisLength = _definition.Spacing / 2.0f;
+
+        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(originAxisLength, 0.0f, 0.0f));
+        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, originAxisLength, 0.0f));
+        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, originAxisLength));
+
+        return originBuilder;
     }
 
     /// <summary>
@@ -168,18 +204,4 @@ public class BackgroundGridRenderer
         builder.AddTriangle(southWest, northEast, northWest);
     }
 
-    /// <summary>
-    /// Builds the origin triad marker shown at the center of the build plate.
-    /// </summary>
-    private LineBuilder BuildOriginGeometry()
-    {
-        LineBuilder originBuilder = new LineBuilder();
-        float originAxisLength = _definition.Spacing / 2.0f;
-
-        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(originAxisLength, 0.0f, 0.0f));
-        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, originAxisLength, 0.0f));
-        originBuilder.AddLine(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, originAxisLength));
-
-        return originBuilder;
-    }
 }

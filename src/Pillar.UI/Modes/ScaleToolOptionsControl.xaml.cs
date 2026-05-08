@@ -14,7 +14,9 @@ public partial class ScaleToolOptionsControl : UserControl
 {
     private const double ScalePercentageToFactor = 0.01;
     private const double ScaleFactorToPercentage = 100.0;
+    private const float DimensionTolerance = 0.0001f;
     private bool _isSynchronizingOptions;
+    private Vector3 _originalSize = Vector3.One;
 
     /// <summary>
     /// Raised when one of the scale percentage fields changes.
@@ -53,6 +55,36 @@ public partial class ScaleToolOptionsControl : UserControl
             ScaleXNumericUpDown.Value = scaleFactors.X * ScaleFactorToPercentage;
             ScaleYNumericUpDown.Value = scaleFactors.Y * ScaleFactorToPercentage;
             ScaleZNumericUpDown.Value = scaleFactors.Z * ScaleFactorToPercentage;
+            SetSizeValuesFromScaleFactors(scaleFactors);
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the model's original 100% size used to synchronize scale percentages and unit-size fields.
+    /// </summary>
+    public void SetOriginalSize(Vector3 originalSize)
+    {
+        _originalSize = new Vector3(
+            SanitizeOriginalDimension(originalSize.X),
+            SanitizeOriginalDimension(originalSize.Y),
+            SanitizeOriginalDimension(originalSize.Z));
+
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            SizeXNumericUpDown.IsEnabled = CanScaleFromSize(_originalSize.X);
+            SizeYNumericUpDown.IsEnabled = CanScaleFromSize(_originalSize.Y);
+            SizeZNumericUpDown.IsEnabled = CanScaleFromSize(_originalSize.Z);
+
+            if (TryGetScaleFactors(out Vector3 scaleFactors))
+            {
+                SetSizeValuesFromScaleFactors(scaleFactors);
+            }
         }
         finally
         {
@@ -91,6 +123,70 @@ public partial class ScaleToolOptionsControl : UserControl
         if (ScaleLockToggleButton.IsChecked == true && sender is Pillar.UI.Controls.NumericUpDown numericUpDown)
         {
             SynchronizeLockedScaleValues(numericUpDown.Value);
+        }
+        else if (TryGetScaleFactors(out Vector3 scaleFactors))
+        {
+            _isSynchronizingOptions = true;
+
+            try
+            {
+                SetSizeValuesFromScaleFactors(scaleFactors);
+            }
+            finally
+            {
+                _isSynchronizingOptions = false;
+            }
+        }
+
+        RaiseOptionsChanged();
+    }
+
+    /// <summary>
+    /// Derives scale factors from a unit-size edit, then synchronizes the percentage fields.
+    /// </summary>
+    private void SizeNumericUpDown_ValueChanged(object? sender, EventArgs e)
+    {
+        if (_isSynchronizingOptions || !AreScaleControlsReady())
+        {
+            return;
+        }
+
+        if (!TryGetScaleFactors(out Vector3 scaleFactors))
+        {
+            return;
+        }
+
+        if (sender == SizeXNumericUpDown && CanScaleFromSize(_originalSize.X))
+        {
+            scaleFactors.X = (float)(SizeXNumericUpDown.Value / _originalSize.X);
+        }
+        else if (sender == SizeYNumericUpDown && CanScaleFromSize(_originalSize.Y))
+        {
+            scaleFactors.Y = (float)(SizeYNumericUpDown.Value / _originalSize.Y);
+        }
+        else if (sender == SizeZNumericUpDown && CanScaleFromSize(_originalSize.Z))
+        {
+            scaleFactors.Z = (float)(SizeZNumericUpDown.Value / _originalSize.Z);
+        }
+
+        if (ScaleLockToggleButton.IsChecked == true)
+        {
+            float lockedScale = GetEditedScaleFactor(sender, scaleFactors);
+            scaleFactors = new Vector3(lockedScale, lockedScale, lockedScale);
+        }
+
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            ScaleXNumericUpDown.Value = scaleFactors.X * ScaleFactorToPercentage;
+            ScaleYNumericUpDown.Value = scaleFactors.Y * ScaleFactorToPercentage;
+            ScaleZNumericUpDown.Value = scaleFactors.Z * ScaleFactorToPercentage;
+            SetSizeValuesFromScaleFactors(scaleFactors);
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
         }
 
         RaiseOptionsChanged();
@@ -142,6 +238,7 @@ public partial class ScaleToolOptionsControl : UserControl
             ScaleXNumericUpDown.Value = ScaleFactorToPercentage;
             ScaleYNumericUpDown.Value = ScaleFactorToPercentage;
             ScaleZNumericUpDown.Value = ScaleFactorToPercentage;
+            SetSizeValuesFromScaleFactors(Vector3.One);
         }
         finally
         {
@@ -178,6 +275,7 @@ public partial class ScaleToolOptionsControl : UserControl
             ScaleXNumericUpDown.Value = value;
             ScaleYNumericUpDown.Value = value;
             ScaleZNumericUpDown.Value = value;
+            SetSizeValuesFromScaleFactors(new Vector3((float)(value * ScalePercentageToFactor)));
         }
         finally
         {
@@ -201,6 +299,39 @@ public partial class ScaleToolOptionsControl : UserControl
         }
 
         OptionsChanged?.Invoke(this, new ScaleToolOptionsChangedEventArgs(scaleFactors));
+    }
+
+    /// <summary>
+    /// Updates unit-size fields from the original model size and current scale factors.
+    /// </summary>
+    private void SetSizeValuesFromScaleFactors(Vector3 scaleFactors)
+    {
+        SizeXNumericUpDown.Value = _originalSize.X * scaleFactors.X;
+        SizeYNumericUpDown.Value = _originalSize.Y * scaleFactors.Y;
+        SizeZNumericUpDown.Value = _originalSize.Z * scaleFactors.Z;
+    }
+
+    /// <summary>
+    /// Gets the scale factor from the edited size axis so locked axes can share it.
+    /// </summary>
+    private float GetEditedScaleFactor(object? sender, Vector3 scaleFactors)
+    {
+        if (sender == SizeXNumericUpDown)
+        {
+            return scaleFactors.X;
+        }
+
+        if (sender == SizeYNumericUpDown)
+        {
+            return scaleFactors.Y;
+        }
+
+        if (sender == SizeZNumericUpDown)
+        {
+            return scaleFactors.Z;
+        }
+
+        return scaleFactors.X;
     }
 
     /// <summary>
@@ -239,10 +370,8 @@ public partial class ScaleToolOptionsControl : UserControl
     /// </summary>
     private static bool AreScaleFactorsUniform(Vector3 scaleFactors)
     {
-        const float Tolerance = 0.0001f;
-
-        return MathF.Abs(scaleFactors.X - scaleFactors.Y) <= Tolerance
-            && MathF.Abs(scaleFactors.X - scaleFactors.Z) <= Tolerance;
+        return MathF.Abs(scaleFactors.X - scaleFactors.Y) <= DimensionTolerance
+            && MathF.Abs(scaleFactors.X - scaleFactors.Z) <= DimensionTolerance;
     }
 
     /// <summary>
@@ -253,7 +382,31 @@ public partial class ScaleToolOptionsControl : UserControl
         return ScaleLockToggleButton != null
             && ScaleXNumericUpDown != null
             && ScaleYNumericUpDown != null
-            && ScaleZNumericUpDown != null;
+            && ScaleZNumericUpDown != null
+            && SizeXNumericUpDown != null
+            && SizeYNumericUpDown != null
+            && SizeZNumericUpDown != null;
+    }
+
+    /// <summary>
+    /// Converts an invalid original dimension into a harmless zero-size value.
+    /// </summary>
+    private static float SanitizeOriginalDimension(float dimension)
+    {
+        if (float.IsNaN(dimension) || float.IsInfinity(dimension) || dimension < 0.0f)
+        {
+            return 0.0f;
+        }
+
+        return dimension;
+    }
+
+    /// <summary>
+    /// Gets whether a size edit can safely be converted back into a scale factor.
+    /// </summary>
+    private static bool CanScaleFromSize(float originalDimension)
+    {
+        return originalDimension > DimensionTolerance;
     }
 }
 

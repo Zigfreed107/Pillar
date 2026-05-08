@@ -62,7 +62,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanRename
     {
-        get { return Kind == LayerTreeItemKind.SupportGroup; }
+        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.SupportGroup; }
     }
 
     /// <summary>

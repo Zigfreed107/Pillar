@@ -93,7 +93,7 @@ public class StlImporter : IModelImporter
             AddTriangle(vertices, indices, normals, a, b, c, normal);
         }
 
-        return new MeshEntity(name, vertices, indices, normals, filePath);
+        return new MeshEntity(name, vertices, indices, normals, filePath, originalFileName: Path.GetFileName(filePath));
     }
 
     /// <summary>
@@ -144,7 +144,7 @@ public class StlImporter : IModelImporter
             }
         }
 
-        return new MeshEntity(name, vertices, indices, normals, filePath);
+        return new MeshEntity(name, vertices, indices, normals, filePath, originalFileName: Path.GetFileName(filePath));
     }
 
     /// <summary>

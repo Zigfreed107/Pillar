@@ -24,7 +24,6 @@ public sealed class GphDocumentSerializer
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
     private const string RingSupportGeneratorName = "ringSupport";
-    private const string DefaultSupportGroupName = "Supports Group 1";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -126,7 +125,6 @@ public sealed class GphDocumentSerializer
         }
 
         List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
-        AddDefaultSupportGroupsForMeshesWithoutGroups(entities, supportLayerGroups);
         AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
 
         return new GphDocumentData(entities, supportLayerGroups);
@@ -181,6 +179,7 @@ public sealed class GphDocumentSerializer
                 Id = mesh.Id,
                 Name = mesh.Name,
                 SourcePath = mesh.SourcePath,
+                OriginalFileName = mesh.OriginalFileName,
                 TriangleIndices = new List<int>(mesh.TriangleIndices),
                 ImportPlacementTransform = CreateTransformDto(mesh.ImportPlacementTransform),
                 UserTransform = CreateTransformDto(mesh.UserTransform)
@@ -331,34 +330,6 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
-    /// Gives legacy projects and partially populated files a default support group under each imported model.
-    /// </summary>
-    private static void AddDefaultSupportGroupsForMeshesWithoutGroups(
-        IReadOnlyList<CadEntity> entities,
-        List<SupportLayerGroup> supportLayerGroups)
-    {
-        HashSet<Guid> modelIdsWithGroups = new HashSet<Guid>();
-
-        foreach (SupportLayerGroup supportLayerGroup in supportLayerGroups)
-        {
-            modelIdsWithGroups.Add(supportLayerGroup.ModelEntityId);
-        }
-
-        foreach (CadEntity entity in entities)
-        {
-            if (entity is MeshEntity && !modelIdsWithGroups.Contains(entity.Id))
-            {
-                supportLayerGroups.Add(new SupportLayerGroup(
-                    entity.Id,
-                    DefaultSupportGroupName,
-                    SupportLayerColorGenerator.CreateFromStableSeed(entity.Id)));
-
-                modelIdsWithGroups.Add(entity.Id);
-            }
-        }
-    }
-
-    /// <summary>
     /// Recreates saved support entities after support group ownership has been validated and restored.
     /// </summary>
     private static void AddSupportEntities(
@@ -459,6 +430,7 @@ public sealed class GphDocumentSerializer
             triangleIndices,
             normals,
             entityDto.SourcePath,
+            entityDto.OriginalFileName,
             CreateTransformOrIdentity(entityDto.ImportPlacementTransform),
             CreateTransformOrIdentity(entityDto.UserTransform));
     }
@@ -742,6 +714,7 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? Start { get; set; }
         public GphVector3Dto? End { get; set; }
         public string? SourcePath { get; set; }
+        public string? OriginalFileName { get; set; }
         public List<GphVector3Dto> Vertices { get; set; } = new List<GphVector3Dto>();
         public List<int>? TriangleIndices { get; set; }
         public List<GphVector3Dto> Normals { get; set; } = new List<GphVector3Dto>();
