@@ -105,6 +105,7 @@ public partial class MainWindow
         }
 
         _layerPanelViewModel.RefreshFromDocument();
+        RefreshTransformScaleToolForSelection();
         _viewModel.SetStatusText($"Undid {command.DisplayName}");
     }
 
@@ -121,6 +122,7 @@ public partial class MainWindow
         }
 
         _layerPanelViewModel.RefreshFromDocument();
+        RefreshTransformScaleToolForSelection();
         _viewModel.SetStatusText($"Redid {command.DisplayName}");
     }
 

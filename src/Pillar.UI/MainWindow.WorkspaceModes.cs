@@ -138,7 +138,7 @@ public partial class MainWindow
             return;
         }
 
-        RunWithWaitCursor(_manualSupportTool.RefreshActiveOperationPreview);
+        _manualSupportTool.RefreshActiveOperationPreview();
     }
 
     /// <summary>
@@ -157,7 +157,7 @@ public partial class MainWindow
         }
 
         bool didApply = false;
-        RunWithWaitCursor(() => didApply = _manualSupportTool.ApplyActiveOperation());
+        didApply = _manualSupportTool.ApplyActiveOperation();
 
         if (!didApply)
         {
@@ -196,6 +196,13 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, TransformScaleToolName, StringComparison.Ordinal))
+        {
+            ShowTransformScaleTool();
+            return;
+        }
+
+        ClearTransformScaleToolState();
         ToolOptionsPanelOverlay.SetSelectedTool(selectedToolName);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
     }
@@ -205,6 +212,7 @@ public partial class MainWindow
     /// </summary>
     private void HideToolOptionsPanel()
     {
+        ClearTransformScaleToolState();
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
     }
 
@@ -279,7 +287,7 @@ public partial class MainWindow
         ToolOptionsPanelOverlay.SetSelectedTool("Ring Support");
         ToolOptionsPanelOverlay.SetRingSupportSpacing(settings.Spacing);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
-        RunWithWaitCursor(() => _manualSupportTool.EditRingSupportGroup(supportLayerGroup));
+        _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
     }
 

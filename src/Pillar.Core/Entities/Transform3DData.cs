@@ -43,7 +43,7 @@ public readonly struct Transform3DData : IEquatable<Transform3DData>
     public Quaternion Rotation { get; }
 
     /// <summary>
-    /// Gets the non-zero scale component.
+    /// Gets the non-negative scale component.
     /// </summary>
     public Vector3 Scale { get; }
 
@@ -135,7 +135,7 @@ public readonly struct Transform3DData : IEquatable<Transform3DData>
     }
 
     /// <summary>
-    /// Rejects invalid or collapsed scale values that would produce unusable transforms.
+    /// Rejects invalid or mirrored scale values that would produce unusable transforms.
     /// </summary>
     private static void ValidateScale(Vector3 scale)
     {
@@ -144,9 +144,9 @@ public readonly struct Transform3DData : IEquatable<Transform3DData>
             throw new ArgumentException("Transform scale must contain only finite values.", nameof(scale));
         }
 
-        if (MathF.Abs(scale.X) <= float.Epsilon || MathF.Abs(scale.Y) <= float.Epsilon || MathF.Abs(scale.Z) <= float.Epsilon)
+        if (scale.X < 0.0f || scale.Y < 0.0f || scale.Z < 0.0f)
         {
-            throw new ArgumentException("Transform scale cannot contain zero components.", nameof(scale));
+            throw new ArgumentException("Transform scale cannot contain negative components.", nameof(scale));
         }
     }
 

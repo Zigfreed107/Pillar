@@ -35,14 +35,7 @@ public partial class MainWindow
 
         Vector2 screenPosition = GetScreenPosition(e);
 
-        if (IsRingSupportOperationActive())
-        {
-            RunWithWaitCursor(() => _toolManager.ActiveTool?.OnMouseDown(screenPosition));
-        }
-        else
-        {
-            _toolManager.ActiveTool?.OnMouseDown(screenPosition);
-        }
+        _toolManager.ActiveTool?.OnMouseDown(screenPosition);
 
         Viewport.CaptureMouse();
         e.Handled = true;

@@ -59,6 +59,11 @@ public class ManualSupportTool : ITool
     public event Action<bool>? PrecisionSelectCursorRequested;
 
     /// <summary>
+    /// Raised when an operation starts or finishes synchronous preview work that may block viewport feedback.
+    /// </summary>
+    public event Action<bool>? PreviewCalculationStateChanged;
+
+    /// <summary>
     /// Selects the operation that should receive Manual Support viewport input.
     /// </summary>
     public void SetActiveOperation(ManualSupportOperationKind operationKind, bool restartExistingOperation = false)
@@ -94,7 +99,8 @@ public class ManualSupportTool : ITool
                 _getSelectedModelEntityId,
                 _getRingSupportSpacing,
                 RaiseStatusMessageRequested,
-                RaisePrecisionSelectCursorRequested);
+                RaisePrecisionSelectCursorRequested,
+                RaisePreviewCalculationStateChanged);
 
             RaiseStatusMessageRequested("Click the first point on the selected model for ring supports.");
             return;
@@ -195,5 +201,13 @@ public class ManualSupportTool : ITool
     private void RaisePrecisionSelectCursorRequested(bool isPrecisionSelectCursorRequested)
     {
         PrecisionSelectCursorRequested?.Invoke(isPrecisionSelectCursorRequested);
+    }
+
+    /// <summary>
+    /// Raises one abstract preview-calculation state change from the current operation.
+    /// </summary>
+    private void RaisePreviewCalculationStateChanged(bool isCalculating)
+    {
+        PreviewCalculationStateChanged?.Invoke(isCalculating);
     }
 }

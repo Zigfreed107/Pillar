@@ -1,10 +1,11 @@
 <!--
     ToolOptionsPanel.xaml
-    Defines the active-tool options overlay that sits beneath the Mode Panel and hosts per-tool settings.
+    Defines the active-tool options overlay host that selects a focused options control for the current tool.
 -->
 <UserControl x:Class="Pillar.UI.Modes.ToolOptionsPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:modes="clr-namespace:Pillar.UI.Modes"
              MinWidth="240">
     <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
@@ -22,76 +23,14 @@
             <TextBlock x:Name="SettingsSummaryTextBlock"
                        Margin="0,12,0,0"
                        Style="{StaticResource ModeOverlayBodyTextStyle}"
-                       Text="Select the Ring Support tool to edit its available options." />
+                       Text="Select a tool to edit its available options." />
 
-            <Grid x:Name="RingSupportOptionsGrid"
-                  Margin="0,14,0,0"
-                  Visibility="Collapsed">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="90" />
-                    <ColumnDefinition Width="30" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="30" />
-                    <ColumnDefinition Width="36" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           Margin="0,4,8,0"
-                           Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="Spacing" />
-                <Button Grid.Row="0"
-                        Grid.Column="1"
-                        MinWidth="26"
-                        MinHeight="24"
-                        Padding="0"
-                        Click="DecreaseRingSupportSpacingButton_Click"
-                        Content="-" />
-                <TextBox x:Name="RingSupportSpacingTextBox"
-                         Grid.Row="0"
-                         Grid.Column="2"
-                         MinWidth="80"
-                         TextChanged="RingSupportSpacingTextBox_TextChanged"
-                         Text="5.00" />
-                <Button Grid.Row="0"
-                        Grid.Column="3"
-                        MinWidth="26"
-                        MinHeight="24"
-                        Padding="0"
-                        Click="IncreaseRingSupportSpacingButton_Click"
-                        Content="+" />
-                <TextBlock Grid.Row="0"
-                           Grid.Column="4"
-                           Margin="8,4,0,0"
-                           Style="{StaticResource ModeOverlayBodyTextStyle}"
-                           Text="mm" />
-
-                <Grid Grid.Row="1"
-                      Grid.Column="0"
-                      Grid.ColumnSpan="5"
-                      Margin="0,14,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Button Grid.Column="0"
-                            MinHeight="30"
-                            HorizontalAlignment="Stretch"
-                            Click="ApplyRingSupportButton_Click"
-                            Content="Apply" />
-                    <Button Grid.Column="2"
-                            MinHeight="30"
-                            HorizontalAlignment="Stretch"
-                            Click="CancelRingSupportButton_Click"
-                            Content="Cancel" />
-                </Grid>
-            </Grid>
+            <modes:RingSupportToolOptionsControl x:Name="RingSupportOptionsControl"
+                                                 Margin="0,14,0,0"
+                                                 Visibility="Collapsed" />
+            <modes:ScaleToolOptionsControl x:Name="ScaleOptionsControl"
+                                           Margin="0,14,0,0"
+                                           Visibility="Collapsed" />
         </StackPanel>
     </Border>
 </UserControl>

@@ -39,6 +39,7 @@ public class SceneManager
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private readonly PreviewLineRenderer _previewLineRenderer;
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
+    private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly PhongMaterial _highlightMaterial = new PhongMaterial
@@ -82,6 +83,7 @@ public class SceneManager
 
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
         _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
+        _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
@@ -330,6 +332,22 @@ public class SceneManager
     public void HideRingSupportPreview()
     {
         _ringSupportPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows the visual-only Transform Scale origin marker at the supplied world-space position.
+    /// </summary>
+    public void ShowScaleOriginPreview(Vector3 origin, float radius)
+    {
+        _scaleOriginPreviewRenderer.Show(origin, radius);
+    }
+
+    /// <summary>
+    /// Hides the Transform Scale origin marker.
+    /// </summary>
+    public void HideScaleOriginPreview()
+    {
+        _scaleOriginPreviewRenderer.Hide();
     }
 
     /// <summary>

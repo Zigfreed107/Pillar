@@ -34,6 +34,7 @@ public sealed class RingSupportOperation : IToolOperation
     private readonly Func<float> _getSpacing;
     private readonly Action<string> _statusReporter;
     private readonly Action<bool> _precisionSelectCursorRequester;
+    private readonly Action<bool> _previewCalculationStateReporter;
     private readonly List<Vector3> _guidePreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
     private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
 
@@ -56,7 +57,8 @@ public sealed class RingSupportOperation : IToolOperation
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
         Action<string> statusReporter,
-        Action<bool> precisionSelectCursorRequester)
+        Action<bool> precisionSelectCursorRequester,
+        Action<bool> previewCalculationStateReporter)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _projectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
@@ -66,6 +68,7 @@ public sealed class RingSupportOperation : IToolOperation
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
         _precisionSelectCursorRequester = precisionSelectCursorRequester ?? throw new ArgumentNullException(nameof(precisionSelectCursorRequester));
+        _previewCalculationStateReporter = previewCalculationStateReporter ?? throw new ArgumentNullException(nameof(previewCalculationStateReporter));
         _precisionSelectCursorRequester(true);
     }
 
@@ -237,6 +240,24 @@ public sealed class RingSupportOperation : IToolOperation
     /// </summary>
     public void RefreshPreview()
     {
+        RunWithPreviewCalculationFeedback(RefreshPreviewCore);
+    }
+
+    /// <summary>
+    /// Applies the previewed ring supports to either a new support group or the loaded generated support group.
+    /// </summary>
+    public bool Apply()
+    {
+        bool didApply = false;
+        RunWithPreviewCalculationFeedback(() => didApply = ApplyCore());
+        return didApply;
+    }
+
+    /// <summary>
+    /// Rebuilds the transient ring preview from the current tool state and spacing settings.
+    /// </summary>
+    private void RefreshPreviewCore()
+    {
         if (!_firstPoint.HasValue)
         {
             return;
@@ -278,9 +299,9 @@ public sealed class RingSupportOperation : IToolOperation
     }
 
     /// <summary>
-    /// Applies the previewed ring supports to either a new support group or the loaded generated support group.
+    /// Applies the current ring preview without directly controlling shell feedback.
     /// </summary>
-    public bool Apply()
+    private bool ApplyCore()
     {
         if (!_firstPoint.HasValue || !_secondPoint.HasValue || !_thirdPoint.HasValue)
         {
@@ -387,8 +408,19 @@ public sealed class RingSupportOperation : IToolOperation
         Vector3 normalizedThirdPoint = NormalizePointToRingPlane(_firstPoint.Value, hitPosition);
         _thirdPoint = normalizedThirdPoint;
         _currentPreviewPoint = normalizedThirdPoint;
+        Vector3 firstPoint = _firstPoint.Value;
+        Vector3 secondPoint = _secondPoint.Value;
 
-        if (UpdateThreePointPreview(selectedMesh, _firstPoint.Value, _secondPoint.Value, normalizedThirdPoint, true))
+        bool didUpdatePreview = false;
+        RunWithPreviewCalculationFeedback(
+            () => didUpdatePreview = UpdateThreePointPreview(
+                selectedMesh,
+                firstPoint,
+                secondPoint,
+                normalizedThirdPoint,
+                true));
+
+        if (didUpdatePreview)
         {
             _precisionSelectCursorRequester(false);
             _statusReporter("Ring support preview is ready. Adjust spacing or click Apply.");
@@ -397,6 +429,28 @@ public sealed class RingSupportOperation : IToolOperation
 
         _thirdPoint = null;
         _statusReporter("Ring support points must be distinct and not collinear.");
+    }
+
+    /// <summary>
+    /// Notifies the shell while synchronous preview projection or regeneration work is running.
+    /// </summary>
+    private void RunWithPreviewCalculationFeedback(Action action)
+    {
+        if (action == null)
+        {
+            throw new ArgumentNullException(nameof(action));
+        }
+
+        _previewCalculationStateReporter(true);
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _previewCalculationStateReporter(false);
+        }
     }
 
     /// <summary>

@@ -48,7 +48,9 @@ public partial class MainWindow : Window
     private bool _hasFramedStartupView;
     private bool _isSynchronizingLayerAndViewportSelection;
     private bool _isPrecisionSelectCursorActive;
-    private Cursor? _cursorBeforePrecisionSelect;
+    private Cursor? _viewportCursorBeforePrecisionSelect;
+    private int _previewCalculationCursorDepth;
+    private Cursor? _cursorBeforePreviewCalculation;
 
     public DefaultEffectsManager EffectsManager { get; }
 
@@ -99,6 +101,7 @@ public partial class MainWindow : Window
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
         _manualSupportTool.PrecisionSelectCursorRequested += ManualSupportTool_PrecisionSelectCursorRequested;
+        _manualSupportTool.PreviewCalculationStateChanged += ManualSupportTool_PreviewCalculationStateChanged;
         ContentRendered += MainWindow_ContentRendered;
         Closed += MainWindow_Closed;
         SetActiveMode(WorkspaceModeId.Select);
@@ -121,6 +124,8 @@ public partial class MainWindow : Window
         _ = e;
         SetPrecisionSelectCursor(false);
         _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
+        _manualSupportTool.PreviewCalculationStateChanged -= ManualSupportTool_PreviewCalculationStateChanged;
+        ClearPreviewCalculationCursor();
         _viewportCameraService.Dispose();
     }
 
@@ -170,6 +175,8 @@ public partial class MainWindow : Window
         ToolOptionsPanelOverlay.RingSupportOptionsChanged += ToolOptionsPanelOverlay_RingSupportOptionsChanged;
         ToolOptionsPanelOverlay.RingSupportApplyRequested += ToolOptionsPanelOverlay_RingSupportApplyRequested;
         ToolOptionsPanelOverlay.RingSupportCancelRequested += ToolOptionsPanelOverlay_RingSupportCancelRequested;
+        ToolOptionsPanelOverlay.ScaleOptionsChanged += ToolOptionsPanelOverlay_ScaleOptionsChanged;
+        ToolOptionsPanelOverlay.ScaleFinishRequested += ToolOptionsPanelOverlay_ScaleFinishRequested;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
@@ -244,15 +251,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            if (ReferenceEquals(previousCursor, Cursors.Cross) && !_isPrecisionSelectCursorActive)
-            {
-                Mouse.OverrideCursor = _cursorBeforePrecisionSelect;
-                _cursorBeforePrecisionSelect = null;
-            }
-            else
-            {
-                Mouse.OverrideCursor = previousCursor;
-            }
+            Mouse.OverrideCursor = previousCursor;
         }
     }
 
@@ -265,7 +264,61 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Shows a crosshair cursor while an operation is collecting exact pick points.
+    /// Applies or restores the busy cursor requested by expensive synchronous support preview calculations.
+    /// </summary>
+    private void ManualSupportTool_PreviewCalculationStateChanged(bool isCalculating)
+    {
+        SetPreviewCalculationCursor(isCalculating);
+    }
+
+    /// <summary>
+    /// Shows a wait cursor while support tools perform synchronous preview projection or regeneration.
+    /// </summary>
+    private void SetPreviewCalculationCursor(bool isCalculating)
+    {
+        if (isCalculating)
+        {
+            if (_previewCalculationCursorDepth == 0)
+            {
+                _cursorBeforePreviewCalculation = Mouse.OverrideCursor;
+                Mouse.OverrideCursor = Cursors.Wait;
+            }
+
+            _previewCalculationCursorDepth++;
+            return;
+        }
+
+        if (_previewCalculationCursorDepth == 0)
+        {
+            return;
+        }
+
+        _previewCalculationCursorDepth--;
+
+        if (_previewCalculationCursorDepth == 0)
+        {
+            Mouse.OverrideCursor = _cursorBeforePreviewCalculation;
+            _cursorBeforePreviewCalculation = null;
+        }
+    }
+
+    /// <summary>
+    /// Restores the cursor if the window closes while support preview feedback is active.
+    /// </summary>
+    private void ClearPreviewCalculationCursor()
+    {
+        if (_previewCalculationCursorDepth == 0)
+        {
+            return;
+        }
+
+        _previewCalculationCursorDepth = 0;
+        Mouse.OverrideCursor = _cursorBeforePreviewCalculation;
+        _cursorBeforePreviewCalculation = null;
+    }
+
+    /// <summary>
+    /// Shows a crosshair cursor over the 3D viewport while an operation is collecting exact pick points.
     /// </summary>
     private void SetPrecisionSelectCursor(bool isPrecisionSelectCursorRequested)
     {
@@ -276,8 +329,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _cursorBeforePrecisionSelect = Mouse.OverrideCursor;
-            Mouse.OverrideCursor = Cursors.Cross;
+            _viewportCursorBeforePrecisionSelect = Viewport.Cursor;
+            Viewport.Cursor = Cursors.Cross;
             _isPrecisionSelectCursorActive = true;
             return;
         }
@@ -288,11 +341,7 @@ public partial class MainWindow : Window
         }
 
         _isPrecisionSelectCursorActive = false;
-
-        if (ReferenceEquals(Mouse.OverrideCursor, Cursors.Cross))
-        {
-            Mouse.OverrideCursor = _cursorBeforePrecisionSelect;
-            _cursorBeforePrecisionSelect = null;
-        }
+        Viewport.Cursor = _viewportCursorBeforePrecisionSelect;
+        _viewportCursorBeforePrecisionSelect = null;
     }
 }

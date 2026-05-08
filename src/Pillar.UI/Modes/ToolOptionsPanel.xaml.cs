@@ -1,24 +1,20 @@
 // ToolOptionsPanel.xaml.cs
-// Provides the code-behind for the active-tool options overlay without owning tool behavior or document state.
+// Hosts per-tool options controls and exposes a stable shell-facing API for the active tool options overlay.
 using System;
-using System.Globalization;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Threading;
 
 namespace Pillar.UI.Modes;
 
 /// <summary>
-/// Interaction logic for the active-tool options overlay.
+/// Interaction logic for the active-tool options overlay host.
 /// </summary>
 public partial class ToolOptionsPanel : UserControl
 {
     private const string RingSupportToolName = "Ring Support";
-    private const float RingSupportSpacingStep = 0.25f;
-    private const int RingSupportOptionsChangedDelayMilliseconds = 300;
-    public const float DefaultRingSupportSpacing = 5.0f;
-    private readonly DispatcherTimer _ringSupportOptionsChangedTimer;
-    private bool _isSynchronizingRingSupportOptions;
+    private const string ScaleToolName = "Scale";
+    public const float DefaultRingSupportSpacing = RingSupportToolOptionsControl.DefaultRingSupportSpacing;
 
     /// <summary>
     /// Raised when a Ring Support option changes and the active preview should be rebuilt.
@@ -36,20 +32,26 @@ public partial class ToolOptionsPanel : UserControl
     public event EventHandler? RingSupportCancelRequested;
 
     /// <summary>
-    /// Creates the Tool Options Panel overlay.
+    /// Raised when one of the Transform Scale percentage fields changes.
+    /// </summary>
+    public event EventHandler<ScaleOptionsChangedEventArgs>? ScaleOptionsChanged;
+
+    /// <summary>
+    /// Raised when the user asks to close the Transform Scale options.
+    /// </summary>
+    public event EventHandler? ScaleFinishRequested;
+
+    /// <summary>
+    /// Creates the Tool Options Panel overlay and wires child option events.
     /// </summary>
     public ToolOptionsPanel()
     {
-        _ringSupportOptionsChangedTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(RingSupportOptionsChangedDelayMilliseconds)
-        };
-        _ringSupportOptionsChangedTimer.Tick += RingSupportOptionsChangedTimer_Tick;
         InitializeComponent();
+        WireChildOptionEvents();
     }
 
     /// <summary>
-    /// Updates the mock panel copy for the selected tool.
+    /// Updates the host copy and reveals the options control for the selected tool.
     /// </summary>
     public void SetSelectedTool(string selectedToolName)
     {
@@ -58,12 +60,19 @@ public partial class ToolOptionsPanel : UserControl
         if (string.Equals(selectedToolName, RingSupportToolName, StringComparison.Ordinal))
         {
             SettingsSummaryTextBlock.Text = "Ring Support options";
-            RingSupportOptionsGrid.Visibility = Visibility.Visible;
+            ShowOnlyRingSupportOptions();
+            return;
+        }
+
+        if (string.Equals(selectedToolName, ScaleToolName, StringComparison.Ordinal))
+        {
+            SettingsSummaryTextBlock.Text = "Transform Scale options";
+            ShowOnlyScaleOptions();
             return;
         }
 
         SettingsSummaryTextBlock.Text = $"{selectedToolName} does not have options wired yet.";
-        RingSupportOptionsGrid.Visibility = Visibility.Collapsed;
+        HideToolSpecificOptions();
     }
 
     /// <summary>
@@ -71,18 +80,7 @@ public partial class ToolOptionsPanel : UserControl
     /// </summary>
     public bool TryGetRingSupportSpacing(out float spacing)
     {
-        string text = RingSupportSpacingTextBox.Text.Trim();
-
-        if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out spacing)
-            && spacing > 0.0f
-            && !float.IsNaN(spacing)
-            && !float.IsInfinity(spacing))
-        {
-            return true;
-        }
-
-        spacing = DefaultRingSupportSpacing;
-        return false;
+        return RingSupportOptionsControl.TryGetRingSupportSpacing(out spacing);
     }
 
     /// <summary>
@@ -90,115 +88,129 @@ public partial class ToolOptionsPanel : UserControl
     /// </summary>
     public void SetRingSupportSpacing(float spacing)
     {
-        if (float.IsNaN(spacing) || float.IsInfinity(spacing) || spacing <= 0.0f)
-        {
-            spacing = DefaultRingSupportSpacing;
-        }
-
-        _ringSupportOptionsChangedTimer.Stop();
-        _isSynchronizingRingSupportOptions = true;
-
-        try
-        {
-            RingSupportSpacingTextBox.Text = spacing.ToString("0.00", CultureInfo.InvariantCulture);
-        }
-        finally
-        {
-            _isSynchronizingRingSupportOptions = false;
-        }
+        RingSupportOptionsControl.SetRingSupportSpacing(spacing);
     }
 
     /// <summary>
-    /// Decreases the Ring Support spacing spinner by one step.
+    /// Sets Transform Scale fields from stored scale factors without raising scale-change events.
     /// </summary>
-    private void DecreaseRingSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    public void SetScaleFactors(Vector3 scaleFactors)
     {
-        _ = sender;
-        _ = e;
-        StepRingSupportSpacing(-RingSupportSpacingStep);
+        ScaleOptionsControl.SetScaleFactors(scaleFactors);
     }
 
     /// <summary>
-    /// Increases the Ring Support spacing spinner by one step.
+    /// Attempts to read Transform Scale fields as scale factors where 1.0 means 100%.
     /// </summary>
-    private void IncreaseRingSupportSpacingButton_Click(object sender, RoutedEventArgs e)
+    public bool TryGetScaleFactors(out Vector3 scaleFactors)
     {
-        _ = sender;
-        _ = e;
-        StepRingSupportSpacing(RingSupportSpacingStep);
+        return ScaleOptionsControl.TryGetScaleFactors(out scaleFactors);
     }
 
     /// <summary>
-    /// Schedules an option-driven preview refresh after the user pauses editing.
+    /// Wires child option controls to the host events consumed by MainWindow.
     /// </summary>
-    private void RingSupportSpacingTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void WireChildOptionEvents()
     {
-        _ = sender;
-        _ = e;
-
-        if (_isSynchronizingRingSupportOptions)
-        {
-            return;
-        }
-
-        RestartRingSupportOptionsChangedTimer();
+        RingSupportOptionsControl.OptionsChanged += RingSupportOptionsControl_OptionsChanged;
+        RingSupportOptionsControl.ApplyRequested += RingSupportOptionsControl_ApplyRequested;
+        RingSupportOptionsControl.CancelRequested += RingSupportOptionsControl_CancelRequested;
+        ScaleOptionsControl.OptionsChanged += ScaleOptionsControl_OptionsChanged;
+        ScaleOptionsControl.FinishRequested += ScaleOptionsControl_FinishRequested;
     }
 
     /// <summary>
-    /// Raises the delayed Ring Support option change event after typing has paused.
+    /// Shows only the Ring Support options control.
     /// </summary>
-    private void RingSupportOptionsChangedTimer_Tick(object? sender, EventArgs e)
+    private void ShowOnlyRingSupportOptions()
+    {
+        RingSupportOptionsControl.Visibility = Visibility.Visible;
+        ScaleOptionsControl.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Shows only the Transform Scale options control.
+    /// </summary>
+    private void ShowOnlyScaleOptions()
+    {
+        RingSupportOptionsControl.Visibility = Visibility.Collapsed;
+        ScaleOptionsControl.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Hides all tool-specific option controls.
+    /// </summary>
+    private void HideToolSpecificOptions()
+    {
+        RingSupportOptionsControl.Visibility = Visibility.Collapsed;
+        ScaleOptionsControl.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Forwards Ring Support option edits to shell code.
+    /// </summary>
+    private void RingSupportOptionsControl_OptionsChanged(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        _ringSupportOptionsChangedTimer.Stop();
         RingSupportOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Requests that the owning shell apply the current Ring Support preview.
+    /// Forwards Ring Support apply requests to shell code.
     /// </summary>
-    private void ApplyRingSupportButton_Click(object sender, RoutedEventArgs e)
+    private void RingSupportOptionsControl_ApplyRequested(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        _ringSupportOptionsChangedTimer.Stop();
         RingSupportApplyRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Requests that the owning shell cancel the current Ring Support operation and discard transient preview state.
+    /// Forwards Ring Support cancel requests to shell code.
     /// </summary>
-    private void CancelRingSupportButton_Click(object sender, RoutedEventArgs e)
+    private void RingSupportOptionsControl_CancelRequested(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        _ringSupportOptionsChangedTimer.Stop();
         RingSupportCancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Restarts the live-preview debounce timer so expensive projected markers are recalculated only after edits settle.
+    /// Converts child Transform Scale events into the host event type consumed by shell code.
     /// </summary>
-    private void RestartRingSupportOptionsChangedTimer()
+    private void ScaleOptionsControl_OptionsChanged(object? sender, ScaleToolOptionsChangedEventArgs e)
     {
-        _ringSupportOptionsChangedTimer.Stop();
-        _ringSupportOptionsChangedTimer.Start();
+        _ = sender;
+        ScaleOptionsChanged?.Invoke(this, new ScaleOptionsChangedEventArgs(e.ScaleFactors));
     }
 
     /// <summary>
-    /// Applies a spinner delta while keeping the spacing finite and positive.
+    /// Forwards Transform Scale finish requests to shell code.
     /// </summary>
-    private void StepRingSupportSpacing(float delta)
+    private void ScaleOptionsControl_FinishRequested(object? sender, EventArgs e)
     {
-        float currentSpacing;
+        _ = sender;
+        _ = e;
+        ScaleFinishRequested?.Invoke(this, EventArgs.Empty);
+    }
 
-        if (!TryGetRingSupportSpacing(out currentSpacing))
+    /// <summary>
+    /// Carries Transform Scale factor values from the options panel to the owning shell.
+    /// </summary>
+    public sealed class ScaleOptionsChangedEventArgs : EventArgs
+    {
+        /// <summary>
+        /// Creates event data for one scale-factor edit.
+        /// </summary>
+        public ScaleOptionsChangedEventArgs(Vector3 scaleFactors)
         {
-            currentSpacing = DefaultRingSupportSpacing;
+            ScaleFactors = scaleFactors;
         }
 
-        float nextSpacing = MathF.Max(RingSupportSpacingStep, currentSpacing + delta);
-        RingSupportSpacingTextBox.Text = nextSpacing.ToString("0.00", CultureInfo.InvariantCulture);
+        /// <summary>
+        /// Gets the requested scale factors where 1.0 means 100%.
+        /// </summary>
+        public Vector3 ScaleFactors { get; }
     }
 }

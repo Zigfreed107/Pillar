@@ -1,11 +1,29 @@
 # CURRENT TASK:
-To Be Advised.
+Implement the Transform Scale tool.
+
+The tool allows the user to re-scale imported models. The orginal scale of the imported model is always considered 100%. When a model is rescaled, the scale factor is remembered with the model (including when saving).
+
+## GUI
+The Transfrom > Scale button presents controls on the Tool Options Panel. These controls are:
+- X scale. NumericUpDown with minimum of 0.
+- Y scale. NumericUpDown with minimum of 0.
+- Z scale. NumericUpDown with minimum of 0.
+- A reset button that resets X, Y, & Z scales to 100% each. This button should be shown underneath all other controls.
+- A 'lock' button that forces the X, Y, & Z scales to be the same value - change one and all change. The lock button should appear to the right of the X, Y, & Z controls, and have the letter "L" as its content. Between the X, Y, & Z controls and the lock button, a "]" shape should be drawn from the X to Z controls, to indicate that the lock button applies to them all.
+- Undo & Redo should function with scales applied.
+- The scaling origin should be the centroid of the model, but at the minimum z value instead of the z centroid. An origin preview gizmo should be drawn in the Viewport around the origin of the scaling transform. This gizmo is visual only, and can't be interacted with.
+- A "Finish" button at the very bottom that closes the Scale tool. Since the scale is applied with any edit, this button's only function is to close the options.
+
+## Workflow
+- The user selects the model, either in the viewer or layer panel
+- The user can now select Transform tab in the mode panel.
+- The user now selects the Scale button on the Transform panel.
+- The GUI displayed above is displayed in the Tool Options Panel.
+- The user changes the values for X, Y, or Z in the options. They can also interact with any of the other controls. As they change them, the model updates.
 
 
 # BACKGROUND:
 You are helping me build an application for adding resin printing supports to 3D models the user imports. The app uses WPF, HelixToolkit and SharpDX. 
-
-
 
 ## User Workflow:
 The general workflow a user is expected to use is as follows:
@@ -23,6 +41,7 @@ For example, there is a "Transform Mode" for transforming the model, and a "Supp
 The application has a main window with a 3D viewport (HelixToolkit Sharp DX) that takes up the majority of the screen. 
 The "Main Toolbar" at the top of the application provides the ability to switch between the operating modes as well as a File menu
 A "Mode Panel" overlays the viewport on the top right hand side of the screen. What is displayed in this Mode Panel depends on the current mode, and its size will lengthen down the screen depending on how many tools are in the current mode.
+A "Tool Options Panel" overlays the viewport under the "Mode Panel" on the right hand side of the screen. This is where options for the currently selected tool are displayed.
 A "Layer Panel" overlays the viewport on the top left. It is a simple Layer system, where each imported model is its own layer, and groups of supports can be organised into sub-layers. This will allow the user to easily manage complex models with many supports, and toggle visibility of different layers.
 A "Supports Settings Panel" overlays the viewport on the bottom left. This is where the user can adjust settings for the supports they are adding - for example, thickness, angle, etc. This will allow the user to easily customise the supports to their specific model and printing needs.
 

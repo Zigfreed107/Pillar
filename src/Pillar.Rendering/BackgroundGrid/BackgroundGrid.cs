@@ -1,10 +1,13 @@
 // BackgroundGrid.cs
 // Builds the viewport background grid visuals from a reusable grid definition so camera framing and rendering stay aligned.
+using HelixToolkit.Geometry;
+using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using System;
 using System.Numerics;
 using System.Windows.Media.Media3D;
+using MediaColor = System.Windows.Media.Color;
 
 namespace Pillar.Rendering.BackgroundGrid;
 
@@ -15,7 +18,7 @@ public class BackgroundGridRenderer
 {
     private readonly BackgroundGridDefinition _definition;
     private readonly LineGeometryModel3D _grid;
-    private readonly LineGeometryModel3D _border;
+    private readonly MeshGeometryModel3D _border;
     private readonly LineGeometryModel3D _doubleBorder;
     private readonly LineGeometryModel3D _origin;
 
@@ -42,14 +45,13 @@ public class BackgroundGridRenderer
 
         sceneRoot.Children.Add(_doubleBorder);
 
-        LineBuilder borderBuilder = new LineBuilder();
-        borderBuilder.AddBox(new Vector3(0.0f, 0.0f, 0.0f), _definition.Width, _definition.Height, 0.0f);
-
-        _border = new LineGeometryModel3D
+        MeshBuilder borderBuilder = BuildBorder();
+        _border = new MeshGeometryModel3D
         {
-            Geometry = borderBuilder.ToLineGeometry3D(),
-            Color = _definition.BorderColor,
-            Thickness = _definition.BorderThickness
+            Geometry = borderBuilder.ToMeshGeometry3D(),
+            Material = CreateFlatMaterial(_definition.BorderColor),
+
+            CullMode = SharpDX.Direct3D11.CullMode.Back
         };
 
         sceneRoot.Children.Add(_border);
@@ -91,8 +93,10 @@ public class BackgroundGridRenderer
         LineBuilder gridBuilder = new LineBuilder();
         float halfWidth = _definition.Width / 2.0f;
         float halfHeight = _definition.Height / 2.0f;
+
         float startY = (float)global::System.Math.Round((-halfHeight) / _definition.Spacing) * _definition.Spacing;
         float startX = (float)global::System.Math.Round((-halfWidth) / _definition.Spacing) * _definition.Spacing;
+
         int horizontalLineCount = (int)(_definition.Height / _definition.Spacing);
         int verticalLineCount = (int)(_definition.Width / _definition.Spacing);
 
@@ -109,6 +113,59 @@ public class BackgroundGridRenderer
         }
 
         return gridBuilder;
+    }
+
+
+    /// <summary>
+    /// Builds the primary border as four flat mesh strips so the border has stable screen-independent thickness.
+    /// </summary>
+    private MeshBuilder BuildBorder()
+    {
+        float halfWidth = _definition.Width / 2.0f;
+        float halfHeight = _definition.Height / 2.0f;
+        float thickness = _definition.BorderThickness;
+        float outerLeft = -halfWidth - thickness;
+        float outerRight = halfWidth + thickness;
+        float outerBottom = -halfHeight - thickness;
+        float outerTop = halfHeight + thickness;
+
+        MeshBuilder borderBuilder = new MeshBuilder();
+
+        AddFlatQuad(borderBuilder, outerLeft, halfHeight, outerRight, outerTop);
+        AddFlatQuad(borderBuilder, halfWidth, -halfHeight, outerRight, halfHeight);
+        AddFlatQuad(borderBuilder, outerLeft, outerBottom, outerRight, -halfHeight);
+        AddFlatQuad(borderBuilder, outerLeft, -halfHeight, -halfWidth, halfHeight);
+
+        return borderBuilder;
+    }
+
+    /// <summary>
+    /// Creates an unlit-looking material for flat background mesh elements.
+    /// </summary>
+    private static PhongMaterial CreateFlatMaterial(MediaColor color)
+    {
+        Color4 color4 = new Color4(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f, color.A / 255.0f);
+
+        return new PhongMaterial
+        {
+            AmbientColor = color4,
+            DiffuseColor = color4,
+            SpecularColor = new Color4(0.0f, 0.0f, 0.0f, color4.Alpha)
+        };
+    }
+
+    /// <summary>
+    /// Adds a two-triangle rectangle in the grid plane.
+    /// </summary>
+    private static void AddFlatQuad(MeshBuilder builder, float left, float bottom, float right, float top)
+    {
+        Vector3 southWest = new Vector3(left, bottom, 0.0f);
+        Vector3 southEast = new Vector3(right, bottom, 0.0f);
+        Vector3 northWest = new Vector3(left, top, 0.0f);
+        Vector3 northEast = new Vector3(right, top, 0.0f);
+
+        builder.AddTriangle(southWest, southEast, northEast);
+        builder.AddTriangle(southWest, northEast, northWest);
     }
 
     /// <summary>

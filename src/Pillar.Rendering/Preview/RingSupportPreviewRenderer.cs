@@ -28,7 +28,7 @@ public sealed class RingSupportPreviewRenderer
     private const int MaximumMarkerCount = 512;
     private const float MarkerHalfSize = 0.18f;
     private const float MinimumHandleDiameter = 0.001f;
-    private const float PointHandleOpacity = 0.5f;
+    private const float PointHandleOpacity = 0.25f;
 
     private readonly LineGeometry3D _circleGeometry;
     private readonly LineGeometryModel3D _circleModel;

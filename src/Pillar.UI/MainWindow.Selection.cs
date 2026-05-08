@@ -27,6 +27,7 @@ public partial class MainWindow
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
             UpdateToolOptionsPanelVisibilityForWorkflowContext();
+            RefreshTransformScaleToolForSelection();
             return;
         }
 
@@ -38,6 +39,7 @@ public partial class MainWindow
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
             UpdateToolOptionsPanelVisibilityForWorkflowContext();
+            RefreshTransformScaleToolForSelection();
             return;
         }
 
@@ -47,6 +49,7 @@ public partial class MainWindow
             SynchronizeLayerPanelSelectionFromViewportSelection();
         }
         UpdateToolOptionsPanelVisibilityForWorkflowContext();
+        RefreshTransformScaleToolForSelection();
     }
 
     /// <summary>
