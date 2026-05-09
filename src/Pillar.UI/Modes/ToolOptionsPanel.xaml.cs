@@ -27,9 +27,9 @@ public partial class ToolOptionsPanel : UserControl
     public event EventHandler? RingSupportApplyRequested;
 
     /// <summary>
-    /// Raised when the user cancels the current Ring Support operation.
+    /// Raised when the user closes the current Ring Support panel without applying supports.
     /// </summary>
-    public event EventHandler? RingSupportCancelRequested;
+    public event EventHandler? RingSupportCloseRequested;
 
     /// <summary>
     /// Raised when one of the Transform Scale percentage fields changes.
@@ -122,7 +122,7 @@ public partial class ToolOptionsPanel : UserControl
     {
         RingSupportOptionsControl.OptionsChanged += RingSupportOptionsControl_OptionsChanged;
         RingSupportOptionsControl.ApplyRequested += RingSupportOptionsControl_ApplyRequested;
-        RingSupportOptionsControl.CancelRequested += RingSupportOptionsControl_CancelRequested;
+        RingSupportOptionsControl.CloseRequested += RingSupportOptionsControl_CloseRequested;
         ScaleOptionsControl.OptionsChanged += ScaleOptionsControl_OptionsChanged;
         ScaleOptionsControl.FinishRequested += ScaleOptionsControl_FinishRequested;
     }
@@ -175,13 +175,13 @@ public partial class ToolOptionsPanel : UserControl
     }
 
     /// <summary>
-    /// Forwards Ring Support cancel requests to shell code.
+    /// Forwards Ring Support close requests to shell code.
     /// </summary>
-    private void RingSupportOptionsControl_CancelRequested(object? sender, EventArgs e)
+    private void RingSupportOptionsControl_CloseRequested(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        RingSupportCancelRequested?.Invoke(this, EventArgs.Empty);
+        RingSupportCloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

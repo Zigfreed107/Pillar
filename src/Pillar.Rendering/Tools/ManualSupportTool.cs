@@ -3,6 +3,7 @@
 using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
 using Pillar.Rendering.Scene;
@@ -22,6 +23,7 @@ public class ManualSupportTool : ITool
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getRingSupportSpacing;
+    private readonly Func<SupportProfile> _createSupportProfile;
     private IToolOperation? _activeOperation;
 
     /// <summary>
@@ -33,7 +35,8 @@ public class ManualSupportTool : ITool
         SceneManager scene,
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
-        Func<float> getRingSupportSpacing)
+        Func<float> getRingSupportSpacing,
+        Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _projectionService = projectionService ?? throw new ArgumentNullException(nameof(projectionService));
@@ -41,6 +44,7 @@ public class ManualSupportTool : ITool
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
+        _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
     /// <summary>
@@ -84,6 +88,7 @@ public class ManualSupportTool : ITool
                 _scene,
                 _commandRunner,
                 _getSelectedModelEntityId,
+                _createSupportProfile,
                 RaiseStatusMessageRequested);
 
             return;
@@ -98,6 +103,7 @@ public class ManualSupportTool : ITool
                 _commandRunner,
                 _getSelectedModelEntityId,
                 _getRingSupportSpacing,
+                _createSupportProfile,
                 RaiseStatusMessageRequested,
                 RaisePrecisionSelectCursorRequested,
                 RaisePreviewCalculationStateChanged);

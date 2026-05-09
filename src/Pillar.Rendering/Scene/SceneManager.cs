@@ -41,6 +41,7 @@ public class SceneManager
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly SelectionManager _selectionManager;
+    private readonly int _supportSides;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly PhongMaterial _highlightMaterial = new PhongMaterial
     {
@@ -67,9 +68,18 @@ public class SceneManager
     /// Creates the scene manager and subscribes to document changes.
     /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document)
+        : this(viewport, document, 16)
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with an explicit support side count and subscribes to document changes.
+    /// </summary>
+    public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides)
     {
         _viewport = viewport;
         _document = document;
+        _supportSides = supportSides;
         _selectionManager = new SelectionManager(_document);
 
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
@@ -406,7 +416,7 @@ public class SceneManager
 
         if (entity is SupportEntity support)
         {
-            return SupportRenderer.Create(support, GetSupportLayerGroupColor(support.SupportLayerGroupId));
+            return SupportRenderer.Create(support, GetSupportLayerGroupColor(support.SupportLayerGroupId), _supportSides);
         }
 
         return null;

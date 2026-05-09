@@ -10,6 +10,30 @@ Support entities are concrete generated geometry inputs: each `SupportEntity` st
 
 `SupportLayerGroup` owns the relationship between an imported model and a group of supports. Ring supports also store `RingSupportSettings`, which are the three circumference points and spacing needed to regenerate the group.
 
+## Support Model
+
+`SupportProfile` describes the reusable dimensions for one support. It is intentionally renderer-agnostic and is cloned when it crosses ownership boundaries.
+
+The current support model has three conceptual sections:
+
+- Base: a truncated cone from the build plate upward. It stores `BaseBottomRadius` and `BaseHeight`. Its top radius is derived from the next section so the base connects cleanly without a visible seam.
+- Stem: a cone between the base and the head. It stores `StemBottomDiameter` and `StemTopDiameter`. If the remaining distance after base and head placement is zero or negative, no stem mesh is emitted, but the support still keeps stem settings in its profile.
+- Head: a truncated cone that attaches to the model. It stores `HeadHeight`, `HeadPenetrationDepth`, and `HeadTopDiameter`. Its bottom diameter is always derived from `StemTopDiameter`, so the stem and head meet without a diameter mismatch. `HeadTopDiameter` is measured at the model intersection point. The penetration section continues past the intersection into the model using that intersection diameter.
+
+`SupportMeshBuilder` converts a `SupportEntity` plus a support side count into triangle geometry. The builder clamps too-short supports so the base and head fit inside the available axis length instead of rejecting the entire support. This keeps the domain entity valid even when a short regenerated support cannot express every requested section at full height.
+
+The side count comes from the application `SupportSides` setting. `MainWindow` passes it into `SceneManager`, and the rendering layer passes it to `SupportMeshBuilder`. This keeps UI settings out of domain and geometry code.
+
+## Support Presets
+
+Support presets are stored by `SupportPresetService` in the UI layer. Each preset has a name and a `SupportProfile`. The service loads and saves presets as JSON in the user setting `SupportPresetsJson`, which keeps reusable user preferences outside individual project files.
+
+The compact `SupportPresetPanel` appears underneath the Tool Options Panel when Point Support or Ring Support is active. Its combo box selects the active preset used for newly created or edited supports. Its placeholder rectangle reserves space for a future support diagram. The Advanced button opens `SupportPresetEditorWindow`.
+
+`SupportPresetEditorWindow` is a floating WPF window. It lets the user select, create, or overwrite presets. Numeric fields are displayed with one decimal place for the base, stem, and head dimensions. Saving updates `SupportPresetService`, persists user settings, and selects the saved preset so the compact panel and support tools use it immediately.
+
+Support creation tools do not read WPF controls directly. `ManualSupportTool` receives a `Func<SupportProfile>` from `MainWindow`, and point/ring operations call it when they create supports. This keeps support tools testable and prevents UI state from leaking into geometry logic.
+
 ## Model Transform Regeneration
 
 Model transform edits are applied through `SetMeshUserTransformCommand`. Before the command executes, `SupportGroupTransformRegenerator.CreateRegenerations` builds replacement snapshots for every support group owned by the transformed model.

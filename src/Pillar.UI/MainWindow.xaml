@@ -65,25 +65,25 @@
                                   Click="ImportStlButton_Click" />
                     </MenuItem>
                     <MenuItem x:Name="UndoButton"
-                              Header="&#xE7A7;" 
-                              FontFamily="Segoe Fluent Icons" 
+                              Header="&#xE7A7;"
+                              FontFamily="Segoe Fluent Icons"
                               Click="UndoButton_Click"
                               ToolTip="Undo"/>
                     <MenuItem x:Name="RedoButton"
-                              Header="&#xE7A6;" 
-                              FontFamily="Segoe Fluent Icons" 
+                              Header="&#xE7A6;"
+                              FontFamily="Segoe Fluent Icons"
                               Click="RedoButton_Click"
                               ToolTip="Redo"/>
 
                 </Menu>
             </Grid>
         </Border>
-        
+
         <!--Status Bar-->
         <StatusBar DockPanel.Dock="Bottom">
             <TextBlock Text="{Binding StatusText}" />
         </StatusBar>
-        
+
         <!--Everything else inbetween-->
         <Grid Margin="6">
             <Border>
@@ -139,7 +139,7 @@
                           VerticalAlignment="Stretch"
                           IsHitTestVisible="True"
                           Panel.ZIndex="20">
-                        
+
                         <layers:LayerPanel x:Name="LayerPanelOverlay"
                                            Width="280"
                                            Height="280"
@@ -151,7 +151,7 @@
                                     HorizontalAlignment="Right"
                                     VerticalAlignment="Top"
                                     IsHitTestVisible="True">
-                             
+
                             <modes:ModePanel x:Name="WorkflowModePanelOverlay"
                                              Width="360"
                                              Height="Auto"
@@ -163,6 +163,13 @@
                                                     Margin="0,6,0,0"
                                                     Visibility="Collapsed"
                                                     IsHitTestVisible="True" />
+
+                            <modes:SupportPresetPanel x:Name="SupportPresetPanelOverlay"
+                                                      Width="360"
+                                                      Height="Auto"
+                                                      Margin="0,6,0,0"
+                                                      Visibility="Collapsed"
+                                                      IsHitTestVisible="True" />
                         </StackPanel>
                     </Grid>
 

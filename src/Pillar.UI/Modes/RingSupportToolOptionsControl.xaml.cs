@@ -29,9 +29,9 @@ public partial class RingSupportToolOptionsControl : UserControl
     public event EventHandler? ApplyRequested;
 
     /// <summary>
-    /// Raised when the user cancels the current Ring Support operation.
+    /// Raised when the user closes the current Ring Support panel without applying supports.
     /// </summary>
-    public event EventHandler? CancelRequested;
+    public event EventHandler? CloseRequested;
 
     /// <summary>
     /// Creates the Ring Support options control and its preview-refresh debounce timer.
@@ -130,14 +130,14 @@ public partial class RingSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
-    /// Requests that the owning shell cancel the current Ring Support operation and discard transient preview state.
+    /// Requests that the owning shell close the Ring Support panel and discard transient preview state.
     /// </summary>
-    private void CancelRingSupportButton_Click(object sender, RoutedEventArgs e)
+    private void CloseRingSupportButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
         _optionsChangedTimer.Stop();
-        CancelRequested?.Invoke(this, EventArgs.Empty);
+        CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

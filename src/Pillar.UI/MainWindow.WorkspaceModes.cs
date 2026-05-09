@@ -67,6 +67,41 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies the compact Support Preset panel selection to future support creation.
+    /// </summary>
+    private void SupportPresetPanelOverlay_PresetSelected(object? sender, SupportPresetSelectedEventArgs e)
+    {
+        _ = sender;
+        _supportPresetService.SelectPreset(e.Preset);
+        _viewModel.SetStatusText($"Selected support preset {e.Preset.Name}");
+    }
+
+    /// <summary>
+    /// Opens the floating support preset editor window.
+    /// </summary>
+    private void SupportPresetPanelOverlay_AdvancedRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        SupportPresetEditorWindow editorWindow = new SupportPresetEditorWindow(_supportPresetService)
+        {
+            Owner = this
+        };
+        editorWindow.Show();
+    }
+
+    /// <summary>
+    /// Keeps the compact Support Preset panel synchronized with editor-window selection changes.
+    /// </summary>
+    private void SupportPresetService_SelectedPresetChanged(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
+    }
+
+    /// <summary>
     /// Gets the status text that should be shown for a workspace mode activation.
     /// </summary>
     private string GetWorkspaceModeStatusText(WorkspaceModeDefinition mode)
@@ -164,13 +199,13 @@ public partial class MainWindow
             return;
         }
 
-        ExitRingSupportMode();
+        RestartRingSupportOperationWithPanelsVisible();
     }
 
     /// <summary>
-    /// Cancels the current Ring Support operation and exits the Ring Support tool.
+    /// Closes the Ring Support panel without applying supports.
     /// </summary>
-    private void ToolOptionsPanelOverlay_RingSupportCancelRequested(object? sender, System.EventArgs e)
+    private void ToolOptionsPanelOverlay_RingSupportCloseRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -198,6 +233,7 @@ public partial class MainWindow
 
         if (string.Equals(selectedToolName, TransformScaleToolName, StringComparison.Ordinal))
         {
+            SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
             ShowTransformScaleTool();
             return;
         }
@@ -205,6 +241,9 @@ public partial class MainWindow
         ClearTransformScaleToolState();
         ToolOptionsPanelOverlay.SetSelectedTool(selectedToolName);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        SupportPresetPanelOverlay.Visibility = IsSupportPresetTool(selectedToolName)
+            ? System.Windows.Visibility.Visible
+            : System.Windows.Visibility.Collapsed;
     }
 
     /// <summary>
@@ -214,6 +253,7 @@ public partial class MainWindow
     {
         ClearTransformScaleToolState();
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
     }
 
     /// <summary>
@@ -229,6 +269,17 @@ public partial class MainWindow
         _activeToolStatusText = statusText;
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Clears the accepted Ring Support preview while keeping Ring Support controls open for the next placement.
+    /// </summary>
+    private void RestartRingSupportOperationWithPanelsVisible()
+    {
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
+        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
     }
 
     /// <summary>
@@ -287,6 +338,7 @@ public partial class MainWindow
         ToolOptionsPanelOverlay.SetSelectedTool("Ring Support");
         ToolOptionsPanelOverlay.SetRingSupportSpacing(settings.Spacing);
         ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
         _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
     }
@@ -355,5 +407,14 @@ public partial class MainWindow
         {
             HideToolOptionsPanel();
         }
+    }
+
+    /// <summary>
+    /// Gets whether the named tool creates or edits support geometry and should show the Support Preset panel.
+    /// </summary>
+    private static bool IsSupportPresetTool(string selectedToolName)
+    {
+        return string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal)
+            || string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal);
     }
 }

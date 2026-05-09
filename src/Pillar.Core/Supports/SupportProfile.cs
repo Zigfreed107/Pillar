@@ -13,50 +13,79 @@ public sealed class SupportProfile
     /// Creates one validated support profile.
     /// </summary>
     public SupportProfile(
-        float tipDiameter,
-        float tipLength,
-        float bodyDiameter,
-        float baseDiameter,
-        float baseHeight)
+        float baseBottomRadius,
+        float baseHeight,
+        float stemBottomDiameter,
+        float stemTopDiameter,
+        float headHeight,
+        float headPenetrationDepth,
+        float headTopDiameter)
     {
-        TipDiameter = ValidatePositiveDimension(tipDiameter, nameof(tipDiameter));
-        TipLength = ValidatePositiveDimension(tipLength, nameof(tipLength));
-        BodyDiameter = ValidatePositiveDimension(bodyDiameter, nameof(bodyDiameter));
-        BaseDiameter = ValidatePositiveDimension(baseDiameter, nameof(baseDiameter));
+        BaseBottomRadius = ValidatePositiveDimension(baseBottomRadius, nameof(baseBottomRadius));
         BaseHeight = ValidatePositiveDimension(baseHeight, nameof(baseHeight));
+        StemBottomDiameter = ValidatePositiveDimension(stemBottomDiameter, nameof(stemBottomDiameter));
+        StemTopDiameter = ValidatePositiveDimension(stemTopDiameter, nameof(stemTopDiameter));
+        HeadHeight = ValidatePositiveDimension(headHeight, nameof(headHeight));
+        HeadPenetrationDepth = ValidatePositiveDimension(headPenetrationDepth, nameof(headPenetrationDepth));
+        HeadTopDiameter = ValidatePositiveDimension(headTopDiameter, nameof(headTopDiameter));
     }
 
     /// <summary>
-    /// Gets the diameter at the contact tip.
+    /// Gets the radius of the base footprint where it touches the build plate.
     /// </summary>
-    public float TipDiameter { get; }
+    public float BaseBottomRadius { get; }
 
     /// <summary>
-    /// Gets the axial length of the tapered tip segment.
-    /// </summary>
-    public float TipLength { get; }
-
-    /// <summary>
-    /// Gets the diameter of the straight body segment.
-    /// </summary>
-    public float BodyDiameter { get; }
-
-    /// <summary>
-    /// Gets the diameter of the base contact segment on the build plate.
-    /// </summary>
-    public float BaseDiameter { get; }
-
-    /// <summary>
-    /// Gets the axial height of the base segment.
+    /// Gets the axial height of the base section.
     /// </summary>
     public float BaseHeight { get; }
+
+    /// <summary>
+    /// Gets the stem diameter where the stem attaches to the base.
+    /// </summary>
+    public float StemBottomDiameter { get; }
+
+    /// <summary>
+    /// Gets the stem diameter where the stem attaches to the head.
+    /// </summary>
+    public float StemTopDiameter { get; }
+
+    /// <summary>
+    /// Gets the head diameter where the head attaches to the stem or directly to the base.
+    /// </summary>
+    public float HeadBottomDiameter
+    {
+        get { return StemTopDiameter; }
+    }
+
+    /// <summary>
+    /// Gets the desired head height from the model intersection down to the stem or base.
+    /// </summary>
+    public float HeadHeight { get; }
+
+    /// <summary>
+    /// Gets how far the head penetrates into the model past the intersection point.
+    /// </summary>
+    public float HeadPenetrationDepth { get; }
+
+    /// <summary>
+    /// Gets the head diameter at the model intersection point.
+    /// </summary>
+    public float HeadTopDiameter { get; }
 
     /// <summary>
     /// Creates a defensive copy of this profile for immutable ownership boundaries.
     /// </summary>
     public SupportProfile Clone()
     {
-        return new SupportProfile(TipDiameter, TipLength, BodyDiameter, BaseDiameter, BaseHeight);
+        return new SupportProfile(
+            BaseBottomRadius,
+            BaseHeight,
+            StemBottomDiameter,
+            StemTopDiameter,
+            HeadHeight,
+            HeadPenetrationDepth,
+            HeadTopDiameter);
     }
 
     /// <summary>

@@ -25,6 +25,7 @@ public sealed class PointSupportOperation : IToolOperation
     private readonly SceneManager _scene;
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
+    private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private Guid? _activeSupportLayerGroupId;
 
@@ -37,6 +38,7 @@ public sealed class PointSupportOperation : IToolOperation
         SceneManager scene,
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
+        Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -44,6 +46,7 @@ public sealed class PointSupportOperation : IToolOperation
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
+        _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
     }
 
@@ -95,7 +98,7 @@ public sealed class PointSupportOperation : IToolOperation
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
                 basePosition,
-                SupportDefaults.CreateProfile());
+                _createSupportProfile());
 
             _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
             _activeSupportLayerGroupId = resolvedSupportLayerGroup.Id;
@@ -107,7 +110,7 @@ public sealed class PointSupportOperation : IToolOperation
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
                 basePosition,
-                SupportDefaults.CreateProfile());
+                _createSupportProfile());
 
             _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));
         }

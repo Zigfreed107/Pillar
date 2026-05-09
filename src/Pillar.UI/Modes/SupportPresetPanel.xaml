@@ -1,0 +1,32 @@
+<!--
+    SupportPresetPanel.xaml
+    Provides the compact viewport overlay used by support tools to choose the active support preset.
+-->
+<UserControl x:Class="Pillar.UI.Modes.SupportPresetPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinWidth="240">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Support Preset" />
+
+            <ComboBox x:Name="PresetComboBox"
+                      Margin="0,10,0,0"
+                      DisplayMemberPath="Name"
+                      SelectionChanged="PresetComboBox_SelectionChanged" />
+
+            <Border Height="112"
+                    Margin="0,12,0,0"
+                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                    BorderThickness="1"
+                    Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}" />
+
+            <Button Margin="0,12,0,0"
+                    Padding="10,4"
+                    HorizontalAlignment="Right"
+                    Content="Advanced"
+                    Click="AdvancedButton_Click" />
+        </StackPanel>
+    </Border>
+</UserControl>

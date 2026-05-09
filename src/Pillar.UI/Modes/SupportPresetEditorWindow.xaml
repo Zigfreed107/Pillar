@@ -1,0 +1,186 @@
+<!--
+    SupportPresetEditorWindow.xaml
+    Defines the floating editor used to create and overwrite reusable support dimension presets.
+-->
+<Window x:Class="Pillar.UI.Modes.SupportPresetEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Pillar.UI.Controls"
+        Title="Support Preset Editor"
+        Width="440"
+        Height="620"
+        MinWidth="420"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="14">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock FontSize="18"
+                       FontWeight="SemiBold"
+                       Text="Support Preset Editor" />
+
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ComboBox x:Name="PresetComboBox"
+                          Grid.Column="0"
+                          IsEditable="True"
+                          DisplayMemberPath="Name"
+                          SelectionChanged="PresetComboBox_SelectionChanged" />
+
+                <Button Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Padding="12,4"
+                        Content="Save"
+                        Click="SaveButton_Click" />
+            </Grid>
+        </StackPanel>
+
+        <Button DockPanel.Dock="Bottom"
+                Margin="0,14,0,0"
+                Padding="12,5"
+                HorizontalAlignment="Right"
+                Content="Save &amp; Close"
+                Click="SaveAndCloseButton_Click" />
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      Margin="0,14,0,0">
+            <StackPanel>
+                <GroupBox Header="Base">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Bottom radius" />
+                        <controls:NumericUpDown x:Name="BaseBottomRadiusInput"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Height" />
+                        <controls:NumericUpDown x:Name="BaseHeightInput"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Stem"
+                          Margin="0,10,0,0">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Bottom diameter" />
+                        <controls:NumericUpDown x:Name="StemBottomDiameterInput"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Top diameter" />
+                        <controls:NumericUpDown x:Name="StemTopDiameterInput"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Head"
+                          Margin="0,10,0,0">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Height" />
+                        <controls:NumericUpDown x:Name="HeadHeightInput"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Penetration depth" />
+                        <controls:NumericUpDown x:Name="HeadPenetrationDepthInput"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Top diameter" />
+                        <controls:NumericUpDown x:Name="HeadTopDiameterInput"
+                                                Grid.Row="2"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+                    </Grid>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

@@ -13,44 +13,68 @@ namespace Pillar.Geometry.Supports;
 public static class SupportMeshBuilder
 {
     private const int DefaultRadialSegments = 16;
+    private const int MinimumRadialSegments = 6;
+    private const int MaximumRadialSegments = 96;
 
     /// <summary>
     /// Generates the current procedural mesh for one support entity.
     /// </summary>
     public static SupportMeshData Build(SupportEntity support)
     {
+        return Build(support, DefaultRadialSegments);
+    }
+
+    /// <summary>
+    /// Generates the current procedural mesh for one support entity using the requested cylindrical side count.
+    /// </summary>
+    public static SupportMeshData Build(SupportEntity support, int radialSegments)
+    {
         if (support == null)
         {
             throw new ArgumentNullException(nameof(support));
         }
 
+        int validatedRadialSegments = Math.Clamp(radialSegments, MinimumRadialSegments, MaximumRadialSegments);
         Vector3 axisVector = support.TipPosition - support.BasePosition;
         float totalLength = axisVector.Length();
         Vector3 axisDirection = Vector3.Normalize(axisVector);
 
-        float baseRadius = support.Profile.BaseDiameter * 0.5f;
-        float bodyRadius = support.Profile.BodyDiameter * 0.5f;
-        float tipRadius = support.Profile.TipDiameter * 0.5f;
-
-        Vector3 baseTop = support.BasePosition + (axisDirection * support.Profile.BaseHeight);
-        Vector3 tipBase = support.TipPosition - (axisDirection * support.Profile.TipLength);
-        float bodyLength = totalLength - support.Profile.BaseHeight - support.Profile.TipLength;
-
-        if (bodyLength <= 0.0f)
-        {
-            throw new InvalidOperationException("Support geometry requires a positive body length.");
-        }
+        float baseHeight = MathF.Min(support.Profile.BaseHeight, totalLength);
+        float distanceAboveBase = MathF.Max(0.0f, totalLength - baseHeight);
+        float headHeight = MathF.Min(support.Profile.HeadHeight, distanceAboveBase);
+        float stemHeight = MathF.Max(0.0f, distanceAboveBase - headHeight);
+        bool hasStem = stemHeight > 0.0001f;
 
         (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(axisDirection);
         List<Vector3> positions = new List<Vector3>();
         List<int> triangleIndices = new List<int>();
         List<Vector3> normals = new List<Vector3>();
+        Vector3 baseBottom = support.BasePosition;
+        Vector3 baseTop = baseBottom + (axisDirection * baseHeight);
+        Vector3 headBottom = support.TipPosition - (axisDirection * headHeight);
+        Vector3 penetrationTop = support.TipPosition + (axisDirection * support.Profile.HeadPenetrationDepth);
+        float baseBottomRadius = support.Profile.BaseBottomRadius;
+        float baseTopRadius = (hasStem ? support.Profile.StemBottomDiameter : support.Profile.HeadBottomDiameter) * 0.5f;
+        float stemBottomRadius = support.Profile.StemBottomDiameter * 0.5f;
+        float stemTopRadius = support.Profile.StemTopDiameter * 0.5f;
+        float headBottomRadius = support.Profile.HeadBottomDiameter * 0.5f;
+        float headTopRadius = support.Profile.HeadTopDiameter * 0.5f;
 
-        AddFrustum(positions, triangleIndices, normals, support.BasePosition, baseTop, baseRadius, bodyRadius, frame.U, frame.V, DefaultRadialSegments);
-        AddCylinder(positions, triangleIndices, normals, baseTop, tipBase, bodyRadius, frame.U, frame.V, DefaultRadialSegments);
-        AddFrustum(positions, triangleIndices, normals, tipBase, support.TipPosition, bodyRadius, tipRadius, frame.U, frame.V, DefaultRadialSegments);
-        AddCap(positions, triangleIndices, normals, support.BasePosition, baseRadius, -axisDirection, frame.U, frame.V, DefaultRadialSegments);
-        AddCap(positions, triangleIndices, normals, support.TipPosition, tipRadius, axisDirection, frame.U, frame.V, DefaultRadialSegments);
+        AddFrustum(positions, triangleIndices, normals, baseBottom, baseTop, baseBottomRadius, baseTopRadius, frame.U, frame.V, validatedRadialSegments);
+
+        if (hasStem)
+        {
+            AddFrustum(positions, triangleIndices, normals, baseTop, headBottom, stemBottomRadius, stemTopRadius, frame.U, frame.V, validatedRadialSegments);
+        }
+
+        if (headHeight > 0.0001f)
+        {
+            AddFrustum(positions, triangleIndices, normals, headBottom, support.TipPosition, headBottomRadius, headTopRadius, frame.U, frame.V, validatedRadialSegments);
+        }
+
+        AddCylinder(positions, triangleIndices, normals, support.TipPosition, penetrationTop, headTopRadius, frame.U, frame.V, validatedRadialSegments);
+        AddCap(positions, triangleIndices, normals, baseBottom, baseBottomRadius, -axisDirection, frame.U, frame.V, validatedRadialSegments);
+        AddCap(positions, triangleIndices, normals, penetrationTop, headTopRadius, axisDirection, frame.U, frame.V, validatedRadialSegments);
 
         return new SupportMeshData(positions, triangleIndices, normals);
     }

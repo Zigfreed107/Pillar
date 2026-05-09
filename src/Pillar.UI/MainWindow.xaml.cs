@@ -6,6 +6,7 @@ using Pillar.Core.Entities;
 using Pillar.Core.Import;
 using Pillar.Core.Persistence;
 using Pillar.Core.Snapping;
+using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
 using Pillar.Rendering.Scene;
@@ -40,6 +41,7 @@ public partial class MainWindow : Window
     private readonly SnapManager _snapManager;
     private readonly SelectionWindowOverlayController _selectionWindowOverlay;
     private readonly DocumentFileService _documentFileService;
+    private readonly SupportPresetService _supportPresetService;
     private readonly CadCommandRunner _commandRunner;
     private readonly LayerPanelViewModel _layerPanelViewModel;
     private readonly ViewportCameraService _viewportCameraService;
@@ -70,12 +72,13 @@ public partial class MainWindow : Window
         Viewport.EffectsManager = EffectsManager; // Needed since EffectsManager is initialised AFTER Main window is initialised. Data binding needs to be updated.
 
         _document = new CadDocument();
-        _scene = new SceneManager(Viewport, _document);
+        _scene = new SceneManager(Viewport, _document, Properties.Settings.Default.SupportSides);
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
         _toolManager = new ToolManager();
         _commandRunner = new CadCommandRunner(Properties.Settings.Default.UndoHistoryLimit);
+        _supportPresetService = new SupportPresetService();
         _selectTool = new SelectTool(Viewport, _document, _scene, _scene.SelectionManager);
         _lineTool = new LineTool(_document, _projection, _scene, _snapManager, _commandRunner);
         _layerPanelViewModel = new LayerPanelViewModel(_document);
@@ -85,7 +88,8 @@ public partial class MainWindow : Window
             _scene,
             _commandRunner,
             _layerPanelViewModel.GetSelectedModelEntityId,
-            GetRingSupportSpacingOrDefault);
+            GetRingSupportSpacingOrDefault,
+            GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
         _documentFileService = new DocumentFileService(
@@ -210,9 +214,14 @@ public partial class MainWindow : Window
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
         ToolOptionsPanelOverlay.RingSupportOptionsChanged += ToolOptionsPanelOverlay_RingSupportOptionsChanged;
         ToolOptionsPanelOverlay.RingSupportApplyRequested += ToolOptionsPanelOverlay_RingSupportApplyRequested;
-        ToolOptionsPanelOverlay.RingSupportCancelRequested += ToolOptionsPanelOverlay_RingSupportCancelRequested;
+        ToolOptionsPanelOverlay.RingSupportCloseRequested += ToolOptionsPanelOverlay_RingSupportCloseRequested;
         ToolOptionsPanelOverlay.ScaleOptionsChanged += ToolOptionsPanelOverlay_ScaleOptionsChanged;
         ToolOptionsPanelOverlay.ScaleFinishRequested += ToolOptionsPanelOverlay_ScaleFinishRequested;
+        SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
+        SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
+        SupportPresetPanelOverlay.PresetSelected += SupportPresetPanelOverlay_PresetSelected;
+        SupportPresetPanelOverlay.AdvancedRequested += SupportPresetPanelOverlay_AdvancedRequested;
+        _supportPresetService.SelectedPresetChanged += SupportPresetService_SelectedPresetChanged;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
@@ -266,6 +275,14 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Ring support spacing is invalid; using 5.00 mm.");
         return ToolOptionsPanel.DefaultRingSupportSpacing;
+    }
+
+    /// <summary>
+    /// Gets a fresh copy of the selected support preset profile for support creation tools.
+    /// </summary>
+    private SupportProfile GetSelectedSupportProfile()
+    {
+        return _supportPresetService.CreateSelectedProfile();
     }
 
     /// <summary>

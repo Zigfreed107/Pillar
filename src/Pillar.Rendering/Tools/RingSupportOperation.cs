@@ -32,6 +32,7 @@ public sealed class RingSupportOperation : IToolOperation
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
+    private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private readonly Action<bool> _precisionSelectCursorRequester;
     private readonly Action<bool> _previewCalculationStateReporter;
@@ -56,6 +57,7 @@ public sealed class RingSupportOperation : IToolOperation
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
+        Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter,
         Action<bool> precisionSelectCursorRequester,
         Action<bool> previewCalculationStateReporter)
@@ -66,6 +68,7 @@ public sealed class RingSupportOperation : IToolOperation
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
+        _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
         _precisionSelectCursorRequester = precisionSelectCursorRequester ?? throw new ArgumentNullException(nameof(precisionSelectCursorRequester));
         _previewCalculationStateReporter = previewCalculationStateReporter ?? throw new ArgumentNullException(nameof(previewCalculationStateReporter));
@@ -558,7 +561,7 @@ public sealed class RingSupportOperation : IToolOperation
             return new List<SupportEntity>();
         }
 
-        SupportProfile supportProfile = SupportDefaults.CreateProfile();
+        SupportProfile supportProfile = _createSupportProfile();
         int requestedSupportCount = RingSupportPattern.CalculateSupportCount(circle, settings.Spacing);
         List<SupportEntity> supportEntities = new List<SupportEntity>(requestedSupportCount);
         missedProjectionCount = 0;

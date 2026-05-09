@@ -20,7 +20,15 @@ public static class SupportRenderer
     /// </summary>
     public static GroupModel3D Create(SupportEntity support, SupportLayerColor color)
     {
-        SupportMeshData meshData = SupportMeshBuilder.Build(support);
+        return Create(support, color, 16);
+    }
+
+    /// <summary>
+    /// Creates one renderable support visual from a support entity using the configured side count.
+    /// </summary>
+    public static GroupModel3D Create(SupportEntity support, SupportLayerColor color, int supportSides)
+    {
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, supportSides);
         MeshGeometry3D geometry = new MeshGeometry3D
         {
             Positions = new Vector3Collection(meshData.Positions),

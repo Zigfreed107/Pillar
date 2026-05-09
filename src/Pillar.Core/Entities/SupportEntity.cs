@@ -72,10 +72,16 @@ public sealed class SupportEntity : CadEntity
     /// </summary>
     public override (Vector3 Min, Vector3 Max) GetBounds()
     {
-        float maximumRadius = MathF.Max(Profile.BaseDiameter, MathF.Max(Profile.BodyDiameter, Profile.TipDiameter)) * 0.5f;
+        float maximumRadius = MathF.Max(
+            Profile.BaseBottomRadius,
+            MathF.Max(
+                Profile.StemBottomDiameter,
+                MathF.Max(Profile.StemTopDiameter, MathF.Max(Profile.HeadBottomDiameter, Profile.HeadTopDiameter))) * 0.5f);
         Vector3 radiusPadding = new Vector3(maximumRadius, maximumRadius, maximumRadius);
-        Vector3 min = Vector3.Min(TipPosition, BasePosition) - radiusPadding;
+        Vector3 penetrationTip = TipPosition + (Vector3.Normalize(TipPosition - BasePosition) * Profile.HeadPenetrationDepth);
+        Vector3 min = Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition) - radiusPadding;
         Vector3 max = Vector3.Max(TipPosition, BasePosition) + radiusPadding;
+        max = Vector3.Max(max, penetrationTip + radiusPadding);
         return (min, max);
     }
 
@@ -96,9 +102,9 @@ public sealed class SupportEntity : CadEntity
             throw new ArgumentException("A support must have a non-zero finite length.");
         }
 
-        if (totalLength <= profile.BaseHeight + profile.TipLength)
+        if (totalLength <= 0.0f)
         {
-            throw new ArgumentException("A support must be longer than its base height plus tip length.");
+            throw new ArgumentException("A support must have a positive length.");
         }
     }
 }

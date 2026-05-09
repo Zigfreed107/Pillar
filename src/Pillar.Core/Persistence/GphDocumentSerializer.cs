@@ -18,7 +18,7 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 8;
+    private const int CurrentVersion = 9;
     private const int MinimumSupportedVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
@@ -489,11 +489,13 @@ public sealed class GphDocumentSerializer
     {
         return new GphSupportProfileDto
         {
-            TipDiameter = profile.TipDiameter,
-            TipLength = profile.TipLength,
-            BodyDiameter = profile.BodyDiameter,
-            BaseDiameter = profile.BaseDiameter,
-            BaseHeight = profile.BaseHeight
+            BaseBottomRadius = profile.BaseBottomRadius,
+            BaseHeight = profile.BaseHeight,
+            StemBottomDiameter = profile.StemBottomDiameter,
+            StemTopDiameter = profile.StemTopDiameter,
+            HeadHeight = profile.HeadHeight,
+            HeadPenetrationDepth = profile.HeadPenetrationDepth,
+            HeadTopDiameter = profile.HeadTopDiameter
         };
     }
 
@@ -577,11 +579,13 @@ public sealed class GphDocumentSerializer
     private static SupportProfile CreateSupportProfile(GphSupportProfileDto supportProfileDto)
     {
         return new SupportProfile(
-            supportProfileDto.TipDiameter,
-            supportProfileDto.TipLength,
-            supportProfileDto.BodyDiameter,
-            supportProfileDto.BaseDiameter,
-            supportProfileDto.BaseHeight);
+            supportProfileDto.BaseBottomRadius,
+            supportProfileDto.BaseHeight,
+            supportProfileDto.StemBottomDiameter,
+            supportProfileDto.StemTopDiameter,
+            supportProfileDto.HeadHeight,
+            supportProfileDto.HeadPenetrationDepth,
+            supportProfileDto.HeadTopDiameter);
     }
 
     /// <summary>
@@ -762,11 +766,13 @@ public sealed class GphDocumentSerializer
     /// </summary>
     private sealed class GphSupportProfileDto
     {
-        public float TipDiameter { get; set; }
-        public float TipLength { get; set; }
-        public float BodyDiameter { get; set; }
-        public float BaseDiameter { get; set; }
+        public float BaseBottomRadius { get; set; }
         public float BaseHeight { get; set; }
+        public float StemBottomDiameter { get; set; }
+        public float StemTopDiameter { get; set; }
+        public float HeadHeight { get; set; }
+        public float HeadPenetrationDepth { get; set; }
+        public float HeadTopDiameter { get; set; }
     }
 
     /// <summary>
