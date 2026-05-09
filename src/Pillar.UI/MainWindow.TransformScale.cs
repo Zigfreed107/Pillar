@@ -2,8 +2,11 @@
 // Hosts shell wiring for the Transform Scale tool while keeping transform math in Core and preview drawing in Rendering.
 using Pillar.Commands;
 using Pillar.Core.Entities;
+using Pillar.Core.Supports;
+using Pillar.Geometry.Supports;
 using Pillar.UI.Modes;
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Pillar.UI;
@@ -75,7 +78,19 @@ public partial class MainWindow
             return;
         }
 
-        _commandRunner.Execute(new SetMeshUserTransformCommand(selectedMesh, oldTransform, newTransform, "Scale Model"));
+        IReadOnlyList<SupportGroupRegeneration> supportRegenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            _document,
+            selectedMesh,
+            oldTransform,
+            newTransform);
+
+        _commandRunner.Execute(new SetMeshUserTransformCommand(
+            _document,
+            selectedMesh,
+            oldTransform,
+            newTransform,
+            supportRegenerations,
+            "Scale Model"));
         ShowScaleOriginPreview(selectedMesh);
         _viewModel.SetStatusText(CreateScaleStatusText(e.ScaleFactors));
     }

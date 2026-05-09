@@ -21,7 +21,19 @@ public static class MeshVerticalProjection
             throw new ArgumentNullException(nameof(mesh));
         }
 
-        Matrix4x4 worldTransform = mesh.WorldTransform;
+        return TryProjectToMesh(mesh, mesh.WorldTransform, guidePoint, out projectedPoint);
+    }
+
+    /// <summary>
+    /// Finds the nearest vertical projection using an explicit mesh transform, which lets callers preview or regenerate against a pending transform.
+    /// </summary>
+    public static bool TryProjectToMesh(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 guidePoint, out Vector3 projectedPoint)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
         float bestDistance = float.MaxValue;
         Vector3 bestPoint = Vector3.Zero;
         bool hasHit = false;

@@ -43,13 +43,22 @@ namespace Pillar.UI.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Coding\\Pillar\\Documentation\\Sample.gph")]
+        [global::System.Configuration.DefaultSettingValueAttribute("C:\\Coding\\Pillar\\SampleProjects\\Sample.gph")]
         public string LoadAtStartup {
             get {
                 return ((string)(this["LoadAtStartup"]));
             }
             set {
                 this["LoadAtStartup"] = value;
+            }
+        }
+        
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("16")]
+        public int SupportSides {
+            get {
+                return ((int)(this["SupportSides"]));
             }
         }
     }

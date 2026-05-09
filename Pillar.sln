@@ -19,15 +19,26 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Docu
 		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
 		2026_04_07 AI_Chat_Summary.txt = 2026_04_07 AI_Chat_Summary.txt
 		Agents.md = Agents.md
+		CurrentTask.md = CurrentTask.md
 		Mode, Tools, Operations, Commands.md = Mode, Tools, Operations, Commands.md
 		TODO.txt = TODO.txt
+		Support Functionality Task.md = Support Functionality Task.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaions", "Documentaions", "{B64C065D-C640-4395-862F-EFCC3FDF3090}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaion", "Documentaion", "{B64C065D-C640-4395-862F-EFCC3FDF3090}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\Gui-And-Workflow-Map.md = Documentation\Gui-And-Workflow-Map.md
+		Documentation\GUI.pptx = Documentation\GUI.pptx
 		Ring Support Tool behaviours.txt = Ring Support Tool behaviours.txt
+		Documentation\Ring Support Tool behaviours.txt = Documentation\Ring Support Tool behaviours.txt
+		Documentation\SupportFunctionality.md = Documentation\SupportFunctionality.md
 		Tool Behaviour Template.md = Tool Behaviour Template.md
+		Documentation\Tool Behaviour Template.md = Documentation\Tool Behaviour Template.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8B34A751-53CF-467E-BFB6-05E222CFD4F7}"
+	ProjectSection(SolutionItems) = preProject
+		SampleProjects\Sample.gph = SampleProjects\Sample.gph
 	EndProjectSection
 EndProject
 Global
