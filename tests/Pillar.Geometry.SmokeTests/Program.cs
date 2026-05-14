@@ -1,0 +1,358 @@
+// Program.cs
+// Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
+using Pillar.Core.Entities;
+using Pillar.Core.Supports;
+using Pillar.Geometry.Supports;
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+
+namespace Pillar.Geometry.SmokeTests;
+
+/// <summary>
+/// Provides a small executable validation harness for generated support meshes.
+/// </summary>
+public static class Program
+{
+    private const float TriangleAreaTolerance = 0.00000001f;
+    private const float CoordinateQuantizationScale = 100000.0f;
+
+    /// <summary>
+    /// Runs all smoke tests and returns a process exit code.
+    /// </summary>
+    public static int Main()
+    {
+        List<string> failures = new List<string>();
+
+        RunTest(failures, "Normal support mesh is closed", ValidateNormalSupportMesh);
+        RunTest(failures, "Short support mesh has no radius mismatch boundary", ValidateShortSupportMesh);
+        RunTest(failures, "Angled seam closes without a 2 PI endpoint", ValidateAngledSeamSupportMesh);
+
+        if (failures.Count > 0)
+        {
+            Console.Error.WriteLine("Support mesh smoke tests failed:");
+
+            for (int i = 0; i < failures.Count; i++)
+            {
+                Console.Error.WriteLine(failures[i]);
+            }
+
+            return 1;
+        }
+
+        Console.WriteLine("Support mesh smoke tests passed.");
+        return 0;
+    }
+
+    /// <summary>
+    /// Runs one named test and records any thrown validation error.
+    /// </summary>
+    private static void RunTest(List<string> failures, string name, Action test)
+    {
+        try
+        {
+            test();
+        }
+        catch (Exception ex)
+        {
+            failures.Add($"{name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Validates a full-height default support mesh.
+    /// </summary>
+    private static void ValidateNormalSupportMesh()
+    {
+        SupportEntity support = CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), SupportDefaults.CreateProfile());
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+    }
+
+    /// <summary>
+    /// Validates a support shorter than the default base height.
+    /// </summary>
+    private static void ValidateShortSupportMesh()
+    {
+        SupportEntity support = CreateSupport(new Vector3(4.0f, -2.0f, 0.0f), new Vector3(4.0f, -2.0f, 0.75f), SupportDefaults.CreateProfile());
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+    }
+
+    /// <summary>
+    /// Validates that the final radial side closes against the first side exactly enough for topology checks.
+    /// </summary>
+    private static void ValidateAngledSeamSupportMesh()
+    {
+        SupportEntity support = CreateSupport(new Vector3(-1.0f, 2.0f, 0.0f), new Vector3(1.25f, 3.75f, 9.0f), SupportDefaults.CreateProfile());
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+    }
+
+    /// <summary>
+    /// Creates one support entity with a fresh group identity.
+    /// </summary>
+    private static SupportEntity CreateSupport(Vector3 basePosition, Vector3 tipPosition, SupportProfile profile)
+    {
+        return new SupportEntity(Guid.NewGuid(), tipPosition, basePosition, profile);
+    }
+
+    /// <summary>
+    /// Validates basic manifold mesh rules expected by STL consumers.
+    /// </summary>
+    private static void ValidateClosedMesh(SupportMeshData meshData)
+    {
+        if (meshData.Positions.Count == 0)
+        {
+            throw new InvalidOperationException("The mesh did not contain positions.");
+        }
+
+        if (meshData.TriangleIndices.Count == 0 || meshData.TriangleIndices.Count % 3 != 0)
+        {
+            throw new InvalidOperationException("The mesh did not contain complete triangles.");
+        }
+
+        if (meshData.Normals.Count != meshData.Positions.Count)
+        {
+            throw new InvalidOperationException("The mesh normal count did not match the position count.");
+        }
+
+        Dictionary<EdgeKey, int> edgeUseCounts = new Dictionary<EdgeKey, int>();
+
+        for (int i = 0; i < meshData.TriangleIndices.Count; i += 3)
+        {
+            int indexA = meshData.TriangleIndices[i];
+            int indexB = meshData.TriangleIndices[i + 1];
+            int indexC = meshData.TriangleIndices[i + 2];
+            Vector3 a = GetPosition(meshData, indexA);
+            Vector3 b = GetPosition(meshData, indexB);
+            Vector3 c = GetPosition(meshData, indexC);
+
+            ValidateFinite(a);
+            ValidateFinite(b);
+            ValidateFinite(c);
+            ValidateTriangleArea(a, b, c);
+            AddEdge(edgeUseCounts, a, b);
+            AddEdge(edgeUseCounts, b, c);
+            AddEdge(edgeUseCounts, c, a);
+        }
+
+        foreach (KeyValuePair<EdgeKey, int> edgeUseCount in edgeUseCounts)
+        {
+            if (edgeUseCount.Value != 2)
+            {
+                throw new InvalidOperationException($"Expected every mesh edge to be used twice, but an edge was used {edgeUseCount.Value} time(s).");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets one indexed mesh position after validating the index.
+    /// </summary>
+    private static Vector3 GetPosition(SupportMeshData meshData, int index)
+    {
+        if (index < 0 || index >= meshData.Positions.Count)
+        {
+            throw new InvalidOperationException($"Triangle index {index} was outside the position buffer.");
+        }
+
+        return meshData.Positions[index];
+    }
+
+    /// <summary>
+    /// Validates that one mesh position can be serialized safely.
+    /// </summary>
+    private static void ValidateFinite(Vector3 position)
+    {
+        if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z))
+        {
+            throw new InvalidOperationException("The mesh contained a non-finite position.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that one triangle has measurable area.
+    /// </summary>
+    private static void ValidateTriangleArea(Vector3 a, Vector3 b, Vector3 c)
+    {
+        Vector3 normal = Vector3.Cross(b - a, c - a);
+
+        if (normal.LengthSquared() <= TriangleAreaTolerance)
+        {
+            throw new InvalidOperationException("The mesh contained a degenerate triangle.");
+        }
+    }
+
+    /// <summary>
+    /// Adds one undirected edge to the manifold edge-use counter.
+    /// </summary>
+    private static void AddEdge(Dictionary<EdgeKey, int> edgeUseCounts, Vector3 a, Vector3 b)
+    {
+        EdgeKey edgeKey = new EdgeKey(VertexKey.FromVector(a), VertexKey.FromVector(b));
+
+        if (edgeUseCounts.TryGetValue(edgeKey, out int useCount))
+        {
+            edgeUseCounts[edgeKey] = useCount + 1;
+        }
+        else
+        {
+            edgeUseCounts.Add(edgeKey, 1);
+        }
+    }
+
+    /// <summary>
+    /// Stores one quantized vertex coordinate for stable topology comparison.
+    /// </summary>
+    private readonly struct VertexKey : IComparable<VertexKey>, IEquatable<VertexKey>
+    {
+        /// <summary>
+        /// Creates one quantized vertex key.
+        /// </summary>
+        public VertexKey(long x, long y, long z)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+        }
+
+        /// <summary>
+        /// Gets the quantized X component.
+        /// </summary>
+        public long X { get; }
+
+        /// <summary>
+        /// Gets the quantized Y component.
+        /// </summary>
+        public long Y { get; }
+
+        /// <summary>
+        /// Gets the quantized Z component.
+        /// </summary>
+        public long Z { get; }
+
+        /// <summary>
+        /// Creates a vertex key from a floating-point position.
+        /// </summary>
+        public static VertexKey FromVector(Vector3 position)
+        {
+            return new VertexKey(
+                Quantize(position.X),
+                Quantize(position.Y),
+                Quantize(position.Z));
+        }
+
+        /// <summary>
+        /// Compares this key to another key in lexicographic coordinate order.
+        /// </summary>
+        public int CompareTo(VertexKey other)
+        {
+            int xComparison = X.CompareTo(other.X);
+
+            if (xComparison != 0)
+            {
+                return xComparison;
+            }
+
+            int yComparison = Y.CompareTo(other.Y);
+
+            if (yComparison != 0)
+            {
+                return yComparison;
+            }
+
+            return Z.CompareTo(other.Z);
+        }
+
+        /// <summary>
+        /// Checks whether two vertex keys describe the same quantized coordinate.
+        /// </summary>
+        public bool Equals(VertexKey other)
+        {
+            return X == other.X && Y == other.Y && Z == other.Z;
+        }
+
+        /// <summary>
+        /// Checks whether an object is the same vertex key.
+        /// </summary>
+        public override bool Equals(object? obj)
+        {
+            return obj is VertexKey other && Equals(other);
+        }
+
+        /// <summary>
+        /// Gets the hash code for dictionary lookups.
+        /// </summary>
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(X, Y, Z);
+        }
+
+        /// <summary>
+        /// Converts one component to a stable integer grid.
+        /// </summary>
+        private static long Quantize(float value)
+        {
+            return (long)MathF.Round(value * CoordinateQuantizationScale);
+        }
+    }
+
+    /// <summary>
+    /// Stores one undirected edge between two quantized vertices.
+    /// </summary>
+    private readonly struct EdgeKey : IEquatable<EdgeKey>
+    {
+        /// <summary>
+        /// Creates one edge key with deterministic endpoint ordering.
+        /// </summary>
+        public EdgeKey(VertexKey first, VertexKey second)
+        {
+            if (first.CompareTo(second) <= 0)
+            {
+                First = first;
+                Second = second;
+            }
+            else
+            {
+                First = second;
+                Second = first;
+            }
+        }
+
+        /// <summary>
+        /// Gets the first ordered endpoint.
+        /// </summary>
+        public VertexKey First { get; }
+
+        /// <summary>
+        /// Gets the second ordered endpoint.
+        /// </summary>
+        public VertexKey Second { get; }
+
+        /// <summary>
+        /// Checks whether two edge keys describe the same undirected edge.
+        /// </summary>
+        public bool Equals(EdgeKey other)
+        {
+            return First.Equals(other.First) && Second.Equals(other.Second);
+        }
+
+        /// <summary>
+        /// Checks whether an object is the same edge key.
+        /// </summary>
+        public override bool Equals(object? obj)
+        {
+            return obj is EdgeKey other && Equals(other);
+        }
+
+        /// <summary>
+        /// Gets the hash code for dictionary lookups.
+        /// </summary>
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(First, Second);
+        }
+    }
+}
