@@ -20,6 +20,11 @@ namespace Pillar.UI.Services;
 public sealed class ViewportCameraService : IDisposable
 {
     private const double MinimumSceneDiagonal = 0.001;
+    private const double MinimumNearPlaneDistance = 0.05;
+    private const double WorkingEnvelopeMultiplier = 3.0;
+    private const double OversizedModelExpansionMultiplier = 1.25;
+    private const double MinimumClipSpanMultiplier = 0.10;
+    private const double ZoomFarLimitRadiusMultiplier = 4.0;
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
     private readonly Func<Rect3D> _getFallbackBounds;
@@ -225,12 +230,12 @@ public sealed class ViewportCameraService : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds cached scene bounds from document entities and the shell-supplied background grid bounds.
+    /// Rebuilds cached working-envelope bounds from document entities and the shell-supplied background grid bounds.
     /// </summary>
     private void RebuildSceneBounds()
     {
-        bool hasBounds = false;
-        Rect3D rebuiltBounds = Rect3D.Empty;
+        bool hasEntityBounds = false;
+        Rect3D entityBoundsUnion = Rect3D.Empty;
 
         foreach (CadEntity entity in _document.Entities)
         {
@@ -241,28 +246,38 @@ public sealed class ViewportCameraService : IDisposable
                 continue;
             }
 
-            if (!hasBounds)
+            if (!hasEntityBounds)
             {
-                rebuiltBounds = entityBounds;
-                hasBounds = true;
+                entityBoundsUnion = entityBounds;
+                hasEntityBounds = true;
                 continue;
             }
 
-            rebuiltBounds.Union(entityBounds);
+            entityBoundsUnion.Union(entityBounds);
         }
 
+        bool hasBounds = false;
+        Rect3D rebuiltBounds = Rect3D.Empty;
         Rect3D fallbackBounds = _getFallbackBounds();
 
         if (IsUsableBounds(fallbackBounds))
         {
+            rebuiltBounds = fallbackBounds;
+            hasBounds = true;
+        }
+
+        if (hasEntityBounds)
+        {
+            Rect3D expandedEntityBounds = ExpandBoundsAboutCenter(entityBoundsUnion, OversizedModelExpansionMultiplier);
+
             if (!hasBounds)
             {
-                rebuiltBounds = fallbackBounds;
+                rebuiltBounds = expandedEntityBounds;
                 hasBounds = true;
             }
             else
             {
-                rebuiltBounds.Union(fallbackBounds);
+                rebuiltBounds.Union(expandedEntityBounds);
             }
         }
 
@@ -308,9 +323,9 @@ public sealed class ViewportCameraService : IDisposable
     }
 
     /// <summary>
-    /// Applies dynamic near and far clip planes derived from cached scene bounds and the current orthographic camera pose.
+    /// Applies stable near and far clip planes derived from the cached working envelope and current camera pose.
     /// </summary>
-    private void UpdateOrthographicClipPlanes(HelixOrthographicCamera camera, double sceneDiagonal)
+    private void UpdateOrthographicClipPlanes(HelixOrthographicCamera camera, double envelopeDiagonal)
     {
         Vector3D forward = camera.LookDirection;
 
@@ -321,52 +336,25 @@ public sealed class ViewportCameraService : IDisposable
 
         forward.Normalize();
 
-        double nearFloor = Math.Max(sceneDiagonal * 1e-5, 0.001);
-        double frontMargin = Math.Max(sceneDiagonal * 0.05, nearFloor * 10.0);
-        double backMargin = Math.Max(sceneDiagonal * 0.10, nearFloor * 20.0);
-        double nearestPositiveDepth = double.MaxValue;
-        double farthestPositiveDepth = 0.0;
-        bool hasPositiveDepth = false;
+        Point3D envelopeCenter = GetBoundsCenter(_cachedSceneBounds);
+        Vector3D toEnvelopeCenter = envelopeCenter - camera.Position;
+        double centerDepth = Vector3D.DotProduct(toEnvelopeCenter, forward);
+        double envelopeRadius = GetWorkingEnvelopeRadius(envelopeDiagonal);
+        double minimumClipSpan = Math.Max(envelopeRadius * MinimumClipSpanMultiplier, MinimumNearPlaneDistance * 10.0);
+        double newNearPlaneDistance = Math.Max(MinimumNearPlaneDistance, centerDepth - envelopeRadius);
+        double newFarPlaneDistance = Math.Max(newNearPlaneDistance + minimumClipSpan, centerDepth + envelopeRadius);
 
-        foreach (Point3D corner in EnumerateBoundsCorners(_cachedSceneBounds))
-        {
-            Vector3D toCorner = corner - camera.Position;
-            double depth = Vector3D.DotProduct(toCorner, forward);
-
-            if (depth <= 0.0)
-            {
-                continue;
-            }
-
-            hasPositiveDepth = true;
-            nearestPositiveDepth = Math.Min(nearestPositiveDepth, depth);
-            farthestPositiveDepth = Math.Max(farthestPositiveDepth, depth);
-        }
-
-        double newNearPlaneDistance;
-        double newFarPlaneDistance;
-
-        if (hasPositiveDepth)
-        {
-            newNearPlaneDistance = Math.Max(nearFloor, nearestPositiveDepth - frontMargin);
-            newFarPlaneDistance = Math.Max(newNearPlaneDistance + (nearFloor * 10.0), farthestPositiveDepth + backMargin);
-        }
-        else
-        {
-            newNearPlaneDistance = nearFloor;
-            newFarPlaneDistance = Math.Max(newNearPlaneDistance + backMargin, sceneDiagonal + backMargin);
-        }
-
-        AssignClipPlaneDistances(camera, newNearPlaneDistance, newFarPlaneDistance, nearFloor);
+        AssignClipPlaneDistances(camera, newNearPlaneDistance, newFarPlaneDistance, MinimumNearPlaneDistance);
     }
 
     /// <summary>
-    /// Applies conservative Helix zoom-distance limits that scale with the current scene size.
+    /// Applies conservative Helix zoom-distance limits that scale with the current working envelope.
     /// </summary>
-    private void UpdateZoomDistanceLimits(double sceneDiagonal)
+    private void UpdateZoomDistanceLimits(double envelopeDiagonal)
     {
-        double nearLimit = Math.Max(sceneDiagonal * 0.001, 0.01);
-        double farLimit = Math.Max(sceneDiagonal * 100.0, nearLimit * 10.0);
+        double envelopeRadius = GetWorkingEnvelopeRadius(envelopeDiagonal);
+        double nearLimit = Math.Max(envelopeDiagonal * 0.001, MinimumNearPlaneDistance);
+        double farLimit = Math.Max(envelopeRadius * ZoomFarLimitRadiusMultiplier, nearLimit * 10.0);
 
         AssignViewportDouble(refValue: _viewport.ZoomDistanceLimitNear, newValue: nearLimit, setter: value => _viewport.ZoomDistanceLimitNear = value);
         AssignViewportDouble(refValue: _viewport.ZoomDistanceLimitFar, newValue: farLimit, setter: value => _viewport.ZoomDistanceLimitFar = value);
@@ -464,25 +452,46 @@ public sealed class ViewportCameraService : IDisposable
     }
 
     /// <summary>
-    /// Enumerates the eight corners of one axis-aligned bounding box.
+    /// Gets the stable radius used for camera clipping and navigation limits.
     /// </summary>
-    private static IEnumerable<Point3D> EnumerateBoundsCorners(Rect3D bounds)
+    private static double GetWorkingEnvelopeRadius(double envelopeDiagonal)
     {
-        double minX = bounds.X;
-        double minY = bounds.Y;
-        double minZ = bounds.Z;
-        double maxX = bounds.X + bounds.SizeX;
-        double maxY = bounds.Y + bounds.SizeY;
-        double maxZ = bounds.Z + bounds.SizeZ;
+        return Math.Max((envelopeDiagonal * 0.5) * WorkingEnvelopeMultiplier, MinimumNearPlaneDistance * 10.0);
+    }
 
-        yield return new Point3D(minX, minY, minZ);
-        yield return new Point3D(minX, minY, maxZ);
-        yield return new Point3D(minX, maxY, minZ);
-        yield return new Point3D(minX, maxY, maxZ);
-        yield return new Point3D(maxX, minY, minZ);
-        yield return new Point3D(maxX, minY, maxZ);
-        yield return new Point3D(maxX, maxY, minZ);
-        yield return new Point3D(maxX, maxY, maxZ);
+    /// <summary>
+    /// Gets the center point of one working-envelope bounds.
+    /// </summary>
+    private static Point3D GetBoundsCenter(Rect3D bounds)
+    {
+        return new Point3D(
+            bounds.X + (bounds.SizeX / 2.0),
+            bounds.Y + (bounds.SizeY / 2.0),
+            bounds.Z + (bounds.SizeZ / 2.0));
+    }
+
+    /// <summary>
+    /// Expands bounds around their center so unusually large imports get breathing room without changing normal grid framing.
+    /// </summary>
+    private static Rect3D ExpandBoundsAboutCenter(Rect3D bounds, double multiplier)
+    {
+        if (multiplier <= 1.0)
+        {
+            return bounds;
+        }
+
+        Point3D center = GetBoundsCenter(bounds);
+        double expandedSizeX = Math.Max(bounds.SizeX * multiplier, MinimumSceneDiagonal);
+        double expandedSizeY = Math.Max(bounds.SizeY * multiplier, MinimumSceneDiagonal);
+        double expandedSizeZ = Math.Max(bounds.SizeZ * multiplier, MinimumSceneDiagonal);
+
+        return new Rect3D(
+            center.X - (expandedSizeX / 2.0),
+            center.Y - (expandedSizeY / 2.0),
+            center.Z - (expandedSizeZ / 2.0),
+            expandedSizeX,
+            expandedSizeY,
+            expandedSizeZ);
     }
 
     /// <summary>

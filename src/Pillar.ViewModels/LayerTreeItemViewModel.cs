@@ -66,6 +66,22 @@ public partial class LayerTreeItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether this row can export an imported model and its owned support groups.
+    /// </summary>
+    public bool CanExportModel
+    {
+        get { return Kind == LayerTreeItemKind.Model; }
+    }
+
+    /// <summary>
+    /// Gets whether this row can export only the supports in one support group.
+    /// </summary>
+    public bool CanExportSupportGroup
+    {
+        get { return Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
     /// Gets whether this row should show the support-group color button.
     /// </summary>
     public bool CanPickColor

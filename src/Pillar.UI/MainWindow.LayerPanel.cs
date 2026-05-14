@@ -3,6 +3,7 @@
 using Pillar.Commands;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Geometry.Export;
 using Pillar.UI.Layers;
 using Pillar.ViewModels;
 using Microsoft.Win32;
@@ -139,6 +140,119 @@ public partial class MainWindow
         _commandRunner.Execute(new RemoveModelWithSupportGroupsCommand(_document, selectedModel, supportLayerGroups));
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText($"Removed {selectedModel.Name}");
+    }
+
+    /// <summary>
+    /// Exports the requested model layer and all support entities owned by that model to binary STL.
+    /// </summary>
+    private void LayerPanel_ExportModelRequested(object? sender, LayerModelExportRequestedEventArgs e)
+    {
+        _ = sender;
+
+        MeshEntity? selectedModel = FindEntityById(e.ModelEntityId) as MeshEntity;
+
+        if (selectedModel == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            _viewModel.SetStatusText("Export failed; model was not found");
+            return;
+        }
+
+        SaveFileDialog dialog = new SaveFileDialog
+        {
+            Title = "Export Model STL",
+            Filter = "STL files (*.stl)|*.stl",
+            DefaultExt = ".stl",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = CreateDefaultStlExportFileName(selectedModel.Name, "model")
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            _viewModel.SetStatusText("Export cancelled");
+            return;
+        }
+
+        try
+        {
+            List<SupportEntity> supportEntities = GetSupportEntitiesForModel(selectedModel.Id);
+            StlExporter exporter = new StlExporter();
+
+            RunWithWaitCursor(() =>
+            {
+                exporter.ExportModelWithSupports(
+                    dialog.FileName,
+                    selectedModel,
+                    supportEntities,
+                    Properties.Settings.Default.SupportSides);
+            });
+
+            string fileName = Path.GetFileName(dialog.FileName);
+            _viewModel.SetStatusText($"Exported {fileName}");
+            _viewModel.SetToolPanelText($"Exported {fileName}");
+        }
+        catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is ArgumentException || ex is UnauthorizedAccessException)
+        {
+            _viewModel.SetStatusText("STL export failed");
+            MessageBox.Show(this, ex.Message, "STL Export Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Exports only the support entities that belong to the requested support group.
+    /// </summary>
+    private void LayerPanel_ExportSupportGroupRequested(object? sender, LayerSupportGroupExportRequestedEventArgs e)
+    {
+        _ = sender;
+
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(e.SupportLayerGroupId);
+
+        if (supportLayerGroup == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            _viewModel.SetStatusText("Export failed; support group was not found");
+            return;
+        }
+
+        SaveFileDialog dialog = new SaveFileDialog
+        {
+            Title = "Export Support Group STL",
+            Filter = "STL files (*.stl)|*.stl",
+            DefaultExt = ".stl",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = CreateDefaultStlExportFileName(supportLayerGroup.Name, "support-group")
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            _viewModel.SetStatusText("Export cancelled");
+            return;
+        }
+
+        try
+        {
+            IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+            StlExporter exporter = new StlExporter();
+
+            RunWithWaitCursor(() =>
+            {
+                exporter.ExportSupports(
+                    dialog.FileName,
+                    supportEntities,
+                    Properties.Settings.Default.SupportSides);
+            });
+
+            string fileName = Path.GetFileName(dialog.FileName);
+            _viewModel.SetStatusText($"Exported {fileName}");
+            _viewModel.SetToolPanelText($"Exported {fileName}");
+        }
+        catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is ArgumentException || ex is UnauthorizedAccessException)
+        {
+            _viewModel.SetStatusText("STL export failed");
+            MessageBox.Show(this, ex.Message, "STL Export Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     /// <summary>
@@ -310,5 +424,42 @@ public partial class MainWindow
         }
 
         return supportLayerGroups;
+    }
+
+    /// <summary>
+    /// Captures the support entities owned by all support groups under one imported model.
+    /// </summary>
+    private List<SupportEntity> GetSupportEntitiesForModel(Guid modelEntityId)
+    {
+        List<SupportEntity> supportEntities = new List<SupportEntity>();
+        List<SupportLayerGroup> supportLayerGroups = GetSupportLayerGroupsForModel(modelEntityId);
+
+        foreach (SupportLayerGroup supportLayerGroup in supportLayerGroups)
+        {
+            IReadOnlyList<SupportEntity> groupSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+
+            foreach (SupportEntity supportEntity in groupSupportEntities)
+            {
+                supportEntities.Add(supportEntity);
+            }
+        }
+
+        return supportEntities;
+    }
+
+    /// <summary>
+    /// Creates a filesystem-safe default STL filename from a layer display name.
+    /// </summary>
+    private static string CreateDefaultStlExportFileName(string displayName, string fallbackName)
+    {
+        string fileNameWithoutExtension = string.IsNullOrWhiteSpace(displayName) ? fallbackName : displayName.Trim();
+        char[] invalidFileNameChars = Path.GetInvalidFileNameChars();
+
+        foreach (char invalidFileNameChar in invalidFileNameChars)
+        {
+            fileNameWithoutExtension = fileNameWithoutExtension.Replace(invalidFileNameChar, '_');
+        }
+
+        return $"{fileNameWithoutExtension}.stl";
     }
 }

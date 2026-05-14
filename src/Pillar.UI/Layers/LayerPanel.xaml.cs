@@ -34,6 +34,16 @@ public partial class LayerPanel : UserControl
     public event EventHandler? RemoveModelRequested;
 
     /// <summary>
+    /// Raised when one imported model row should be exported with its owned support groups.
+    /// </summary>
+    public event EventHandler<LayerModelExportRequestedEventArgs>? ExportModelRequested;
+
+    /// <summary>
+    /// Raised when one support group row should be exported by itself.
+    /// </summary>
+    public event EventHandler<LayerSupportGroupExportRequestedEventArgs>? ExportSupportGroupRequested;
+
+    /// <summary>
     /// Raised when the selected model layer should receive a new support group.
     /// </summary>
     public event EventHandler? AddSupportGroupRequested;
@@ -119,6 +129,46 @@ public partial class LayerPanel : UserControl
         {
             layerPanelViewModel.SetSelectedLayer(e.NewValue as LayerTreeItemViewModel);
         }
+    }
+
+    /// <summary>
+    /// Publishes an export request for the model row that owns the context menu.
+    /// </summary>
+    private void ExportModelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _ = e;
+
+        if (sender is not MenuItem menuItem || menuItem.DataContext is not LayerTreeItemViewModel layer || !layer.CanExportModel)
+        {
+            return;
+        }
+
+        if (DataContext is LayerPanelViewModel layerPanelViewModel)
+        {
+            layerPanelViewModel.SetSelectedLayer(layer);
+        }
+
+        ExportModelRequested?.Invoke(this, new LayerModelExportRequestedEventArgs(layer.ModelEntityId));
+    }
+
+    /// <summary>
+    /// Publishes an export request for the support group row that owns the context menu.
+    /// </summary>
+    private void ExportSupportGroupMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _ = e;
+
+        if (sender is not MenuItem menuItem || menuItem.DataContext is not LayerTreeItemViewModel layer || !layer.CanExportSupportGroup)
+        {
+            return;
+        }
+
+        if (DataContext is LayerPanelViewModel layerPanelViewModel)
+        {
+            layerPanelViewModel.SetSelectedLayer(layer);
+        }
+
+        ExportSupportGroupRequested?.Invoke(this, new LayerSupportGroupExportRequestedEventArgs(layer.Id));
     }
 
     /// <summary>
@@ -259,6 +309,44 @@ public partial class LayerPanel : UserControl
             this,
             new LayerRenameRequestedEventArgs(layer.Id, layer.Kind, layer.Name, requestedName ?? string.Empty));
     }
+}
+
+/// <summary>
+/// Carries one support group export request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerSupportGroupExportRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates support group export request data.
+    /// </summary>
+    public LayerSupportGroupExportRequestedEventArgs(Guid supportLayerGroupId)
+    {
+        SupportLayerGroupId = supportLayerGroupId;
+    }
+
+    /// <summary>
+    /// Gets the support group id whose support entities should be exported.
+    /// </summary>
+    public Guid SupportLayerGroupId { get; }
+}
+
+/// <summary>
+/// Carries one model export request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerModelExportRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates model export request data.
+    /// </summary>
+    public LayerModelExportRequestedEventArgs(Guid modelEntityId)
+    {
+        ModelEntityId = modelEntityId;
+    }
+
+    /// <summary>
+    /// Gets the imported model entity id that should be exported.
+    /// </summary>
+    public Guid ModelEntityId { get; }
 }
 
 /// <summary>

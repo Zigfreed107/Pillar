@@ -224,6 +224,8 @@ public partial class MainWindow : Window
         _supportPresetService.SelectedPresetChanged += SupportPresetService_SelectedPresetChanged;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
         LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
+        LayerPanelOverlay.ExportModelRequested += LayerPanel_ExportModelRequested;
+        LayerPanelOverlay.ExportSupportGroupRequested += LayerPanel_ExportSupportGroupRequested;
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
         LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
         LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
