@@ -16,6 +16,7 @@ using System.ComponentModel;
 using System.Numerics;
 using System.Windows;
 using System.Windows.Media.Media3D;
+using MediaColor = System.Windows.Media.Color;
 
 namespace Pillar.Rendering.Scene;
 
@@ -26,6 +27,7 @@ public class SceneManager
 {
     private const string MeshHighlightPostEffect = "highlight";
     private const float FullyOpaqueSupportOpacity = 1.0f;
+    private static readonly MediaColor DefaultSelectionOutlineColor = MediaColor.FromRgb(255, 215, 0);
 
     private readonly Viewport3DX _viewport;
     private readonly CadDocument _document;
@@ -43,10 +45,11 @@ public class SceneManager
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
-    private readonly PhongMaterial _highlightMaterial = new PhongMaterial
-    {
-        DiffuseColor = new Color4(1.0f, 1.0f, 0.0f, 1.0f)
-    };
+    private readonly MediaColor _selectionOutlineColor;
+    private readonly PhongMaterial _highlightMaterial;
+    private bool _isFaceAngleHighlightEnabled;
+    private double _faceAngleThresholdDegrees = 45.0;
+    private Color4 _faceAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.65f);
 
     /// <summary>
     /// Gets the domain selection manager used by selection tools.
@@ -68,7 +71,7 @@ public class SceneManager
     /// Creates the scene manager and subscribes to document changes.
     /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document)
-        : this(viewport, document, 16)
+        : this(viewport, document, 16, DefaultSelectionOutlineColor)
     {
     }
 
@@ -76,15 +79,26 @@ public class SceneManager
     /// Creates the scene manager with an explicit support side count and subscribes to document changes.
     /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides)
+        : this(viewport, document, supportSides, DefaultSelectionOutlineColor)
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
+    /// </summary>
+    public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides, MediaColor selectionOutlineColor)
     {
         _viewport = viewport;
         _document = document;
         _supportSides = supportSides;
+        _selectionOutlineColor = selectionOutlineColor;
+        _highlightMaterial = CreateSelectionMaterial(_selectionOutlineColor);
         _selectionManager = new SelectionManager(_document);
 
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
         {
-            EffectName = MeshHighlightPostEffect
+            EffectName = MeshHighlightPostEffect,
+            Color = _selectionOutlineColor
         });
 
         _backgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot, BackgroundGridDefinition.Default);
@@ -215,6 +229,7 @@ public class SceneManager
             || string.Equals(e.PropertyName, nameof(MeshEntity.UserTransform), StringComparison.Ordinal))
         {
             MeshRenderer.ApplyTransform(visual, meshEntity);
+            ApplyFaceAngleHighlight(visual, meshEntity);
         }
     }
 
@@ -247,6 +262,10 @@ public class SceneManager
             }
 
             ApplyDefaultMaterial(visual);
+            if (entity is MeshEntity mesh)
+            {
+                ApplyFaceAngleHighlight(visual, mesh);
+            }
         }
     }
 
@@ -400,13 +419,31 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies the horizontal-face highlight settings to all rendered mesh visuals.
+    /// </summary>
+    public void ConfigureFaceAngleHighlight(bool isEnabled, double thresholdDegrees, Color4 highlightColor)
+    {
+        _isFaceAngleHighlightEnabled = isEnabled;
+        _faceAngleThresholdDegrees = thresholdDegrees;
+        _faceAngleHighlightColor = highlightColor;
+
+        foreach (KeyValuePair<CadEntity, GroupModel3D> visualPair in _entityToVisual)
+        {
+            if (visualPair.Key is MeshEntity mesh)
+            {
+                ApplyFaceAngleHighlight(visualPair.Value, mesh);
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates one renderable visual for one supported entity type.
     /// </summary>
     private GroupModel3D? CreateVisual(CadEntity entity)
     {
         if (entity is LineEntity line)
         {
-            return LineRenderer.Create(line);
+            return LineRenderer.Create(line, _selectionOutlineColor);
         }
 
         if (entity is MeshEntity mesh)
@@ -443,6 +480,10 @@ public class SceneManager
         _entityToVisual[entity] = visual;
         _visualToEntity[visual] = entity;
         ApplyDefaultMaterial(visual);
+        if (entity is MeshEntity mesh)
+        {
+            ApplyFaceAngleHighlight(visual, mesh);
+        }
     }
 
     /// <summary>
@@ -475,6 +516,8 @@ public class SceneManager
             if (visual is MeshGeometryModel3D mesh)
             {
                 mesh.Material = _defaultMeshMaterial;
+                mesh.IsSelected = false;
+                mesh.PostEffects = string.Empty;
             }
 
             return;
@@ -489,7 +532,7 @@ public class SceneManager
             return;
         }
 
-        MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+        MeshGeometryModel3D? meshModel = MeshRenderer.GetSelectableMeshModel(group);
 
         if (meshModel == null)
         {
@@ -497,6 +540,7 @@ public class SceneManager
         }
 
         meshModel.PostEffects = string.Empty;
+        meshModel.IsSelected = false;
 
         if (entity is SupportEntity supportEntity)
         {
@@ -517,6 +561,8 @@ public class SceneManager
             if (visual is MeshGeometryModel3D mesh)
             {
                 mesh.Material = _highlightMaterial;
+                mesh.IsSelected = true;
+                mesh.PostEffects = MeshHighlightPostEffect;
             }
 
             return;
@@ -530,10 +576,11 @@ public class SceneManager
             return;
         }
 
-        MeshGeometryModel3D? meshModel = MeshRenderer.GetMeshModel(group);
+        MeshGeometryModel3D? meshModel = MeshRenderer.GetSelectableMeshModel(group);
 
         if (meshModel != null)
         {
+            meshModel.IsSelected = true;
             meshModel.PostEffects = MeshHighlightPostEffect;
         }
     }
@@ -566,6 +613,26 @@ public class SceneManager
             {
                 meshModel.Material = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
             }
+        }
+    }
+
+    /// <summary>
+    /// Updates the face-angle overlay for one mesh visual using the current scene-level settings.
+    /// </summary>
+    private void ApplyFaceAngleHighlight(GroupModel3D visual, MeshEntity mesh)
+    {
+        MeshRenderer.ApplyFaceAngleHighlight(
+            visual,
+            mesh,
+            _isFaceAngleHighlightEnabled,
+            _faceAngleThresholdDegrees,
+            _faceAngleHighlightColor);
+
+        MeshGeometryModel3D? faceHighlightModel = MeshRenderer.GetFaceHighlightModel(visual);
+
+        if (faceHighlightModel != null)
+        {
+            _elementToVisual[faceHighlightModel] = visual;
         }
     }
 
@@ -611,6 +678,25 @@ public class SceneManager
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Creates the fallback material used when a selected mesh visual is not inside a grouped entity visual.
+    /// </summary>
+    private static PhongMaterial CreateSelectionMaterial(MediaColor selectionOutlineColor)
+    {
+        Color4 color = new Color4(
+            selectionOutlineColor.R / 255.0f,
+            selectionOutlineColor.G / 255.0f,
+            selectionOutlineColor.B / 255.0f,
+            selectionOutlineColor.A / 255.0f);
+
+        return new PhongMaterial
+        {
+            DiffuseColor = color,
+            SpecularColor = new Color4(0.18f, 0.18f, 0.18f, color.Alpha),
+            SpecularShininess = 24.0f
+        };
     }
 
     /// <summary>

@@ -21,6 +21,14 @@ public static class LineRenderer
     /// </summary>
     public static GroupModel3D Create(LineEntity line)
     {
+        return Create(line, Color.FromRgb(255, 215, 0));
+    }
+
+    /// <summary>
+    /// Creates a composite visual for a line entity with an explicit selection overlay color.
+    /// </summary>
+    public static GroupModel3D Create(LineEntity line, Color selectionOutlineColor)
+    {
         LineBuilder builder = new LineBuilder();
         builder.AddLine(
             new Vector3(line.Start.X, line.Start.Y, line.Start.Z),
@@ -42,7 +50,7 @@ public static class LineRenderer
         {
             Name = SelectionOverlayName,
             Geometry = geometry,
-            Color = Color.FromRgb(255, 215, 0),
+            Color = selectionOutlineColor,
             Thickness = 4.0,
             Smoothness = 1,
             DepthBias = 1000,
@@ -66,6 +74,12 @@ public static class LineRenderer
             return null;
         }
 
-        return line.Children[1];
+        if (line.Children[1] is LineGeometryModel3D selectionOverlay
+            && string.Equals(selectionOverlay.Name, SelectionOverlayName, System.StringComparison.Ordinal))
+        {
+            return selectionOverlay;
+        }
+
+        return null;
     }
 }

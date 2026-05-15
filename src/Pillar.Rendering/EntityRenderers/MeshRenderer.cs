@@ -5,6 +5,8 @@ using HelixToolkit;
 using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
+using Pillar.Geometry.Analysis;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Pillar.Rendering.EntityRenderers;
@@ -17,6 +19,9 @@ public static class MeshRenderer
     private static readonly Color4 DefaultDiffuseColor = new Color4(0.7f, 0.7f, 0.7f, 1.0f);
     private static readonly Color4 DefaultSpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f);
     private const float DefaultSpecularShininess = 24f;
+    private const int FaceHighlightDepthBias = -4;
+    private const int SelectableMeshChildIndex = 0;
+    private const int FaceHighlightChildIndex = 1;
 
     /// <summary>
     /// Creates one mesh visual that keeps geometry in local space and applies placement through a visual transform.
@@ -55,15 +60,91 @@ public static class MeshRenderer
     /// </summary>
     public static MeshGeometryModel3D? GetMeshModel(GroupModel3D visual)
     {
-        foreach (Element3D child in visual.Children)
+        return GetSelectableMeshModel(visual);
+    }
+
+    /// <summary>
+    /// Gets the base imported mesh child that owns selection and full-model post effects.
+    /// </summary>
+    public static MeshGeometryModel3D? GetSelectableMeshModel(GroupModel3D visual)
+    {
+        if (visual.Children.Count <= SelectableMeshChildIndex)
         {
-            if (child is MeshGeometryModel3D meshModel)
-            {
-                return meshModel;
-            }
+            return null;
         }
 
-        return null;
+        return visual.Children[SelectableMeshChildIndex] as MeshGeometryModel3D;
+    }
+
+    /// <summary>
+    /// Gets the optional visual-only face-highlight overlay from a grouped mesh visual.
+    /// </summary>
+    public static MeshGeometryModel3D? GetFaceHighlightModel(GroupModel3D visual)
+    {
+        if (visual.Children.Count <= FaceHighlightChildIndex)
+        {
+            return null;
+        }
+
+        return visual.Children[FaceHighlightChildIndex] as MeshGeometryModel3D;
+    }
+
+    /// <summary>
+    /// Creates or updates the visual overlay used to highlight faces near the horizontal build plate angle.
+    /// </summary>
+    public static void ApplyFaceAngleHighlight(
+        GroupModel3D visual,
+        MeshEntity mesh,
+        bool isEnabled,
+        double thresholdDegrees,
+        Color4 highlightColor)
+    {
+        if (visual == null)
+        {
+            throw new System.ArgumentNullException(nameof(visual));
+        }
+
+        if (mesh == null)
+        {
+            throw new System.ArgumentNullException(nameof(mesh));
+        }
+
+        MeshGeometryModel3D? highlightModel = GetFaceHighlightModel(visual);
+
+        if (!isEnabled)
+        {
+            if (highlightModel != null)
+            {
+                ClearFaceHighlightSelectionState(highlightModel);
+                highlightModel.Visibility = System.Windows.Visibility.Collapsed;
+            }
+
+            return;
+        }
+
+        if (highlightModel == null)
+        {
+            highlightModel = CreateFaceHighlightModel(highlightColor);
+            visual.Children.Add(highlightModel);
+        }
+
+        ClearFaceHighlightSelectionState(highlightModel);
+        IReadOnlyList<int> matchingTriangleIndices = HorizontalFaceAngleAnalyzer.CreateMatchingTriangleIndices(
+            mesh,
+            thresholdDegrees);
+
+        highlightModel.Material = CreateFaceHighlightMaterial(highlightColor);
+        highlightModel.Geometry = new MeshGeometry3D
+        {
+            Positions = new Vector3Collection(mesh.Vertices),
+            Indices = new IntCollection(matchingTriangleIndices),
+            Normals = mesh.Normals.Count == mesh.Vertices.Count
+                ? new Vector3Collection(mesh.Normals)
+                : null
+        };
+        highlightModel.Visibility = matchingTriangleIndices.Count == 0
+            ? System.Windows.Visibility.Collapsed
+            : System.Windows.Visibility.Visible;
     }
 
     /// <summary>
@@ -85,6 +166,46 @@ public static class MeshRenderer
             SpecularColor = DefaultSpecularColor,
             SpecularShininess = DefaultSpecularShininess
         };
+    }
+
+    /// <summary>
+    /// Creates the transparent red material used by the horizontal-face overlay.
+    /// </summary>
+    private static PhongMaterial CreateFaceHighlightMaterial(Color4 highlightColor)
+    {
+        return new PhongMaterial
+        {
+            DiffuseColor = highlightColor,
+            SpecularColor = new Color4(0.05f, 0.05f, 0.05f, highlightColor.Alpha),
+            SpecularShininess = DefaultSpecularShininess
+        };
+    }
+
+    /// <summary>
+    /// Creates the secondary mesh model that is rendered over selected source triangles.
+    /// </summary>
+    private static MeshGeometryModel3D CreateFaceHighlightModel(Color4 highlightColor)
+    {
+        MeshGeometryModel3D highlightModel = new MeshGeometryModel3D
+        {
+            Material = CreateFaceHighlightMaterial(highlightColor),
+            CullMode = SharpDX.Direct3D11.CullMode.Back,
+            DepthBias = FaceHighlightDepthBias,
+            IsHitTestVisible = false,
+            IsTransparent = highlightColor.Alpha < 1.0f
+        };
+
+        ClearFaceHighlightSelectionState(highlightModel);
+        return highlightModel;
+    }
+
+    /// <summary>
+    /// Keeps the visual-only face overlay out of the selection outline post-effect path.
+    /// </summary>
+    private static void ClearFaceHighlightSelectionState(MeshGeometryModel3D highlightModel)
+    {
+        highlightModel.IsSelected = false;
+        highlightModel.PostEffects = string.Empty;
     }
 
     /// <summary>

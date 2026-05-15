@@ -2,6 +2,7 @@
 // Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
 using Pillar.Core.Entities;
 using Pillar.Core.Supports;
+using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,10 @@ public static class Program
         RunTest(failures, "Normal support mesh is closed", ValidateNormalSupportMesh);
         RunTest(failures, "Short support mesh has no radius mismatch boundary", ValidateShortSupportMesh);
         RunTest(failures, "Angled seam closes without a 2 PI endpoint", ValidateAngledSeamSupportMesh);
+        RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
+        RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
+        RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
+        RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
         if (failures.Count > 0)
         {
@@ -93,11 +98,114 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that a downward face coplanar with the build plate is classified as a support candidate.
+    /// </summary>
+    private static void ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace()
+    {
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 1.0f, 0.0f),
+            new Vector3(1.0f, 0.0f, 0.0f),
+            Transform3DData.Identity);
+
+        IReadOnlyList<int> matchingTriangleIndices = HorizontalFaceAngleAnalyzer.CreateMatchingTriangleIndices(mesh, 1.0);
+
+        if (matchingTriangleIndices.Count != 3)
+        {
+            throw new InvalidOperationException("Expected the downward horizontal triangle to be included.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an upward face coplanar with the build plate is not classified as a support candidate.
+    /// </summary>
+    private static void ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace()
+    {
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 0.0f),
+            new Vector3(1.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 1.0f, 0.0f),
+            Transform3DData.Identity);
+
+        IReadOnlyList<int> matchingTriangleIndices = HorizontalFaceAngleAnalyzer.CreateMatchingTriangleIndices(mesh, 45.0);
+
+        if (matchingTriangleIndices.Count != 0)
+        {
+            throw new InvalidOperationException("Expected the upward horizontal triangle to be excluded.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a vertical wall is not classified as a shallow face at the default threshold.
+    /// </summary>
+    private static void ValidateHorizontalFaceAngleClassifierExcludesVerticalFace()
+    {
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 1.0f, 0.0f),
+            new Vector3(0.0f, 0.0f, 1.0f),
+            Transform3DData.Identity);
+
+        IReadOnlyList<int> matchingTriangleIndices = HorizontalFaceAngleAnalyzer.CreateMatchingTriangleIndices(mesh, 45.0);
+
+        if (matchingTriangleIndices.Count != 0)
+        {
+            throw new InvalidOperationException("Expected the vertical triangle to be excluded.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that model transforms affect face-angle classification just like they affect viewport rendering.
+    /// </summary>
+    private static void ValidateHorizontalFaceAngleClassifierUsesMeshTransform()
+    {
+        Transform3DData rotationTransform = new Transform3DData(
+            Vector3.Zero,
+            Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2.0f),
+            Vector3.One);
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 1.0f, 0.0f),
+            new Vector3(1.0f, 0.0f, 0.0f),
+            rotationTransform);
+
+        IReadOnlyList<int> matchingTriangleIndices = HorizontalFaceAngleAnalyzer.CreateMatchingTriangleIndices(mesh, 45.0);
+
+        if (matchingTriangleIndices.Count != 0)
+        {
+            throw new InvalidOperationException("Expected the rotated vertical triangle to be excluded.");
+        }
+    }
+
+    /// <summary>
     /// Creates one support entity with a fresh group identity.
     /// </summary>
     private static SupportEntity CreateSupport(Vector3 basePosition, Vector3 tipPosition, SupportProfile profile)
     {
         return new SupportEntity(Guid.NewGuid(), tipPosition, basePosition, profile);
+    }
+
+    /// <summary>
+    /// Creates a minimal mesh entity for classifier smoke tests.
+    /// </summary>
+    private static MeshEntity CreateSingleTriangleMesh(Vector3 first, Vector3 second, Vector3 third, Transform3DData userTransform)
+    {
+        return new MeshEntity(
+            "Classifier test mesh",
+            new List<Vector3>
+            {
+                first,
+                second,
+                third
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2
+            },
+            new List<Vector3>(),
+            userTransform: userTransform);
     }
 
     /// <summary>

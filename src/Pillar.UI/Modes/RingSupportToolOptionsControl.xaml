@@ -1,62 +1,69 @@
 <!--
     RingSupportToolOptionsControl.xaml
-    Defines the Ring Support tool options UI hosted by the shared Tool Options Panel.
+    Defines the self-contained Ring Support tool options overlay panel shown when the Ring Support operation is active.
 -->
 <UserControl x:Class="Pillar.UI.Modes.RingSupportToolOptionsControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="90" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="36" />
-        </Grid.ColumnDefinitions>
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Ring Support Options" />
 
-        <TextBlock Grid.Row="0"
-                   Grid.Column="0"
-                   Margin="0,4,8,0"
-                   Style="{StaticResource ModeOverlayLabelTextStyle}"
-                   Text="Spacing" />
-        <controls:NumericUpDown x:Name="RingSupportSpacingNumericUpDown"
-                                Grid.Row="0"
-                                Grid.Column="1"
-                                MinWidth="104"
-                                Minimum="0.25"
-                                Increment="0.25"
-                                DecimalPlaces="2"
-                                Value="3.00"
-                                ValueChanged="RingSupportSpacingNumericUpDown_ValueChanged" />
-        <TextBlock Grid.Row="0"
-                   Grid.Column="2"
-                   Margin="8,4,0,0"
-                   Style="{StaticResource ModeOverlayBodyTextStyle}"
-                   Text="mm" />
+            <Grid Margin="0,14,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="36" />
+                </Grid.ColumnDefinitions>
 
-        <Grid Grid.Row="1"
-              Grid.Column="0"
-              Grid.ColumnSpan="3"
-              Margin="0,14,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Margin="0,4,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Spacing" />
+                <controls:NumericUpDown x:Name="RingSupportSpacingNumericUpDown"
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        MinWidth="104"
+                                        Minimum="0.25"
+                                        Increment="0.25"
+                                        DecimalPlaces="2"
+                                        Value="3.00"
+                                        ValueChanged="RingSupportSpacingNumericUpDown_ValueChanged" />
+                <TextBlock Grid.Row="0"
+                           Grid.Column="2"
+                           Margin="8,4,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="mm" />
 
-            <Button Grid.Column="0"
-                    MinHeight="30"
-                    HorizontalAlignment="Stretch"
-                    Click="ApplyRingSupportButton_Click"
-                    Content="Apply" />
-            <Button Grid.Column="2"
-                    MinHeight="30"
-                    HorizontalAlignment="Stretch"
-                    Click="CloseRingSupportButton_Click"
-                    Content="Close" />
-        </Grid>
-    </Grid>
+                <Grid Grid.Row="1"
+                      Grid.Column="0"
+                      Grid.ColumnSpan="3"
+                      Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="ApplyRingSupportButton_Click"
+                            Content="Apply" />
+                    <Button Grid.Column="2"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="CloseRingSupportButton_Click"
+                            Content="Close" />
+                </Grid>
+            </Grid>
+        </StackPanel>
+    </Border>
 </UserControl>

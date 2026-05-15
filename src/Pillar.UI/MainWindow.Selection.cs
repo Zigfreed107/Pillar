@@ -26,7 +26,7 @@ public partial class MainWindow
             {
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
-            UpdateToolOptionsPanelVisibilityForWorkflowContext();
+            UpdateToolOptionsHostVisibilityForWorkflowContext();
             RefreshTransformScaleToolForSelection();
             return;
         }
@@ -38,7 +38,7 @@ public partial class MainWindow
             {
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
-            UpdateToolOptionsPanelVisibilityForWorkflowContext();
+            UpdateToolOptionsHostVisibilityForWorkflowContext();
             RefreshTransformScaleToolForSelection();
             return;
         }
@@ -48,7 +48,7 @@ public partial class MainWindow
         {
             SynchronizeLayerPanelSelectionFromViewportSelection();
         }
-        UpdateToolOptionsPanelVisibilityForWorkflowContext();
+        UpdateToolOptionsHostVisibilityForWorkflowContext();
         RefreshTransformScaleToolForSelection();
     }
 
@@ -126,12 +126,12 @@ public partial class MainWindow
 
         if (_isSynchronizingLayerAndViewportSelection)
         {
-            UpdateToolOptionsPanelVisibilityForWorkflowContext();
+            UpdateToolOptionsHostVisibilityForWorkflowContext();
             return;
         }
 
         SynchronizeViewportSelectionFromLayerPanel();
-        UpdateToolOptionsPanelVisibilityForWorkflowContext();
+        UpdateToolOptionsHostVisibilityForWorkflowContext();
     }
 
     /// <summary>

@@ -15,7 +15,19 @@
       <Value Profile="(Default)">16</Value>
     </Setting>
     <Setting Name="SupportPresetsJson" Type="System.String" Scope="User">
-      <Value Profile="(Default)"></Value>
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="FaceAngleHighlightEnabled" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="FaceAngleThresholdDegrees" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">45</Value>
+    </Setting>
+    <Setting Name="FaceAngleHighlightColor" Type="System.String" Scope="User">
+      <Value Profile="(Default)">#fc037b</Value>
+    </Setting>
+    <Setting Name="SelectionOutlineColor" Type="System.String" Scope="User">
+      <Value Profile="(Default)">#00ce19</Value>
     </Setting>
   </Settings>
 </SettingsFile>

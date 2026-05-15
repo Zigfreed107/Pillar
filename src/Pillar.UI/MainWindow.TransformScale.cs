@@ -32,7 +32,7 @@ public partial class MainWindow
         if (selectedMesh == null)
         {
             ClearTransformScaleToolState();
-            ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+            HideToolOptionsHostOnly();
             _viewModel.SetStatusText("Select one imported model before scaling.");
             return;
         }
@@ -41,10 +41,9 @@ public partial class MainWindow
         _activeTransformScaleImportSpaceOrigin = MeshScaleTransform.CalculateImportSpaceOrigin(selectedMesh);
         _isTransformScaleToolActive = true;
 
-        ToolOptionsPanelOverlay.SetSelectedTool(TransformScaleToolName);
-        ToolOptionsPanelOverlay.SetScaleOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
-        ToolOptionsPanelOverlay.SetScaleFactors(selectedMesh.UserTransform.Scale);
-        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        _scaleToolOptionsControl.SetOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
+        _scaleToolOptionsControl.SetScaleFactors(selectedMesh.UserTransform.Scale);
+        ShowToolOptionsControl(_scaleToolOptionsControl);
         ShowScaleOriginPreview(selectedMesh);
 
         _activeToolStatusText = "Transform scale tool active";
@@ -55,7 +54,7 @@ public partial class MainWindow
     /// <summary>
     /// Applies one scale edit from the options panel as an undoable mesh transform change.
     /// </summary>
-    private void ToolOptionsPanelOverlay_ScaleOptionsChanged(object? sender, ToolOptionsPanel.ScaleOptionsChangedEventArgs e)
+    private void ScaleToolOptionsControl_OptionsChanged(object? sender, ScaleToolOptionsChangedEventArgs e)
     {
         _ = sender;
 
@@ -98,11 +97,11 @@ public partial class MainWindow
     /// <summary>
     /// Closes Transform Scale options when the user presses Finish.
     /// </summary>
-    private void ToolOptionsPanelOverlay_ScaleFinishRequested(object? sender, EventArgs e)
+    private void ScaleToolOptionsControl_FinishRequested(object? sender, EventArgs e)
     {
         _ = sender;
         _ = e;
-        HideToolOptionsPanel();
+        HideToolOptionsOverlay();
         _viewModel.SetStatusText("Finished scaling model");
     }
 
@@ -120,7 +119,7 @@ public partial class MainWindow
 
         if (selectedMesh == null)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
             return;
         }
 
@@ -130,8 +129,8 @@ public partial class MainWindow
             return;
         }
 
-        ToolOptionsPanelOverlay.SetScaleOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
-        ToolOptionsPanelOverlay.SetScaleFactors(selectedMesh.UserTransform.Scale);
+        _scaleToolOptionsControl.SetOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
+        _scaleToolOptionsControl.SetScaleFactors(selectedMesh.UserTransform.Scale);
         ShowScaleOriginPreview(selectedMesh);
     }
 

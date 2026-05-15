@@ -45,6 +45,8 @@ public partial class MainWindow : Window
     private readonly CadCommandRunner _commandRunner;
     private readonly LayerPanelViewModel _layerPanelViewModel;
     private readonly ViewportCameraService _viewportCameraService;
+    private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
+    private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
     private WorkspaceModeId _activeModeId = WorkspaceModeId.Select;
     private string _activeToolStatusText = "Select tool active";
@@ -64,6 +66,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _selectionWindowOverlay = new SelectionWindowOverlayController(this, SelectionWindowOverlay);
+        _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
+        _scaleToolOptionsControl = new ScaleToolOptionsControl();
 
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
@@ -72,7 +76,7 @@ public partial class MainWindow : Window
         Viewport.EffectsManager = EffectsManager; // Needed since EffectsManager is initialised AFTER Main window is initialised. Data binding needs to be updated.
 
         _document = new CadDocument();
-        _scene = new SceneManager(Viewport, _document, Properties.Settings.Default.SupportSides);
+        _scene = new SceneManager(Viewport, _document, Properties.Settings.Default.SupportSides, ReadSelectionOutlineColor());
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
@@ -103,6 +107,7 @@ public partial class MainWindow : Window
 
         WireWorkspaceState();
         RegisterWorkspaceModes();
+        InitializeFaceAngleHighlightControls();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
         _manualSupportTool.PrecisionSelectCursorRequested += ManualSupportTool_PrecisionSelectCursorRequested;
@@ -212,11 +217,11 @@ public partial class MainWindow : Window
         _layerPanelViewModel.PropertyChanged += LayerPanelViewModel_PropertyChanged;
         WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
-        ToolOptionsPanelOverlay.RingSupportOptionsChanged += ToolOptionsPanelOverlay_RingSupportOptionsChanged;
-        ToolOptionsPanelOverlay.RingSupportApplyRequested += ToolOptionsPanelOverlay_RingSupportApplyRequested;
-        ToolOptionsPanelOverlay.RingSupportCloseRequested += ToolOptionsPanelOverlay_RingSupportCloseRequested;
-        ToolOptionsPanelOverlay.ScaleOptionsChanged += ToolOptionsPanelOverlay_ScaleOptionsChanged;
-        ToolOptionsPanelOverlay.ScaleFinishRequested += ToolOptionsPanelOverlay_ScaleFinishRequested;
+        _ringSupportToolOptionsControl.OptionsChanged += RingSupportToolOptionsControl_OptionsChanged;
+        _ringSupportToolOptionsControl.ApplyRequested += RingSupportToolOptionsControl_ApplyRequested;
+        _ringSupportToolOptionsControl.CloseRequested += RingSupportToolOptionsControl_CloseRequested;
+        _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
+        _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
         SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
         SupportPresetPanelOverlay.PresetSelected += SupportPresetPanelOverlay_PresetSelected;
@@ -266,17 +271,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Reads Ring Support spacing from the Tool Options Panel while keeping WPF controls out of rendering tools.
+    /// Reads Ring Support spacing from the active Ring Support options panel while keeping WPF controls out of rendering tools.
     /// </summary>
     private float GetRingSupportSpacingOrDefault()
     {
-        if (ToolOptionsPanelOverlay.TryGetRingSupportSpacing(out float spacing))
+        if (_ringSupportToolOptionsControl.TryGetRingSupportSpacing(out float spacing))
         {
             return spacing;
         }
 
         _viewModel.SetStatusText("Ring support spacing is invalid; using 5.00 mm.");
-        return ToolOptionsPanel.DefaultRingSupportSpacing;
+        return RingSupportToolOptionsControl.DefaultRingSupportSpacing;
     }
 
     /// <summary>

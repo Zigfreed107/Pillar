@@ -151,18 +151,18 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Shows the active-tool options mock-up for one selected ribbon tool.
+    /// Shows the active tool options overlay for one selected ribbon tool.
     /// </summary>
     private void WorkflowModePanelOverlay_ToolSelected(object? sender, ModePanel.ToolSelectedEventArgs e)
     {
         _ = sender;
-        ShowToolOptionsPanel(e.ToolName);
+        ShowToolOptionsForSelectedTool(e.ToolName);
     }
 
     /// <summary>
     /// Refreshes the Ring Support preview when its spacing option changes.
     /// </summary>
-    private void ToolOptionsPanelOverlay_RingSupportOptionsChanged(object? sender, System.EventArgs e)
+    private void RingSupportToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -179,7 +179,7 @@ public partial class MainWindow
     /// <summary>
     /// Applies the current Ring Support preview as a new support group.
     /// </summary>
-    private void ToolOptionsPanelOverlay_RingSupportApplyRequested(object? sender, System.EventArgs e)
+    private void RingSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -205,7 +205,7 @@ public partial class MainWindow
     /// <summary>
     /// Closes the Ring Support panel without applying supports.
     /// </summary>
-    private void ToolOptionsPanelOverlay_RingSupportCloseRequested(object? sender, System.EventArgs e)
+    private void RingSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -221,13 +221,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Updates and reveals the Tool Options Panel for the selected tool.
+    /// Updates and reveals the selected tool's self-contained options panel.
     /// </summary>
-    private void ShowToolOptionsPanel(string selectedToolName)
+    private void ShowToolOptionsForSelectedTool(string selectedToolName)
     {
         if (IsModePanelSelectionPromptVisible())
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
             return;
         }
 
@@ -239,20 +239,27 @@ public partial class MainWindow
         }
 
         ClearTransformScaleToolState();
-        ToolOptionsPanelOverlay.SetSelectedTool(selectedToolName);
-        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        if (string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal))
+        {
+            ShowToolOptionsControl(_ringSupportToolOptionsControl);
+        }
+        else
+        {
+            HideToolOptionsHostOnly();
+        }
+
         SupportPresetPanelOverlay.Visibility = IsSupportPresetTool(selectedToolName)
             ? System.Windows.Visibility.Visible
             : System.Windows.Visibility.Collapsed;
     }
 
     /// <summary>
-    /// Hides the Tool Options Panel when no tool is selected.
+    /// Hides the active tool options overlay when no tool with options is selected.
     /// </summary>
-    private void HideToolOptionsPanel()
+    private void HideToolOptionsOverlay()
     {
         ClearTransformScaleToolState();
-        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        HideToolOptionsHostOnly();
         SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
     }
 
@@ -261,7 +268,7 @@ public partial class MainWindow
     /// </summary>
     private void ExitRingSupportMode()
     {
-        HideToolOptionsPanel();
+        HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
 
@@ -278,7 +285,7 @@ public partial class MainWindow
     {
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring, true);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
-        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        ShowToolOptionsControl(_ringSupportToolOptionsControl);
         SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
     }
 
@@ -295,17 +302,17 @@ public partial class MainWindow
     /// <summary>
     /// Collapses tool options when the current workflow context cannot show mode tabs.
     /// </summary>
-    private void UpdateToolOptionsPanelVisibilityForWorkflowContext()
+    private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
         if (_layerPanelViewModel.HasSelectedSupportGroupLayer)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
             return;
         }
 
         if (IsModePanelSelectionPromptVisible())
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
         }
     }
 
@@ -320,7 +327,7 @@ public partial class MainWindow
 
         if (supportLayerGroup == null || supportLayerGroup.GeneratorKind != SupportGroupGeneratorKind.RingSupport)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
             _viewModel.SetStatusText("This support group does not have editable tool settings yet.");
             return;
         }
@@ -329,15 +336,14 @@ public partial class MainWindow
 
         if (settings == null)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
             _viewModel.SetStatusText("This support group is missing Ring Support settings.");
             return;
         }
 
         SetActiveMode(WorkspaceModeId.ManualSupport);
-        ToolOptionsPanelOverlay.SetSelectedTool("Ring Support");
-        ToolOptionsPanelOverlay.SetRingSupportSpacing(settings.Spacing);
-        ToolOptionsPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
+        ShowToolOptionsControl(_ringSupportToolOptionsControl);
         SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
         _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
@@ -360,7 +366,7 @@ public partial class MainWindow
 
         if (operationKind == ManualSupportOperationKind.None)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
         }
 
         string statusText = GetManualSupportStatusText(operationKind);
@@ -405,7 +411,7 @@ public partial class MainWindow
 
         if (modeId == WorkspaceModeId.Select)
         {
-            HideToolOptionsPanel();
+            HideToolOptionsOverlay();
         }
     }
 
@@ -416,5 +422,23 @@ public partial class MainWindow
     {
         return string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal)
             || string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Shows one self-contained tool options panel in the shell-owned overlay location.
+    /// </summary>
+    private void ShowToolOptionsControl(System.Windows.Controls.Control toolOptionsControl)
+    {
+        ToolOptionsHostOverlay.Content = toolOptionsControl;
+        ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Clears the active tool options panel without changing any non-tool overlay panels.
+    /// </summary>
+    private void HideToolOptionsHostOnly()
+    {
+        ToolOptionsHostOverlay.Content = null;
+        ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Collapsed;
     }
 }
