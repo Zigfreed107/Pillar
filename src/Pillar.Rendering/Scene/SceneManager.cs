@@ -34,6 +34,7 @@ public class SceneManager
     private readonly Dictionary<GroupModel3D, CadEntity> _visualToEntity = new Dictionary<GroupModel3D, CadEntity>();
     private readonly Dictionary<CadEntity, GroupModel3D> _entityToVisual = new Dictionary<CadEntity, GroupModel3D>();
     private readonly Dictionary<Element3D, GroupModel3D> _elementToVisual = new Dictionary<Element3D, GroupModel3D>();
+    private readonly Dictionary<Guid, float> _supportLayerGroupOpacityOverrides = new Dictionary<Guid, float>();
     private readonly GroupModel3D _entityRoot = new GroupModel3D();
     private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
     private readonly GroupModel3D _previewRoot = new GroupModel3D();
@@ -162,6 +163,7 @@ public class SceneManager
             foreach (SupportLayerGroup supportLayerGroup in e.OldItems)
             {
                 supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
+                _supportLayerGroupOpacityOverrides.Remove(supportLayerGroup.Id);
             }
         }
     }
@@ -356,6 +358,67 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Hit-tests support visuals and accepts only supports in the requested support layer group.
+    /// </summary>
+    public bool TryHitSupportEntity(Vector2 screenPosition, Guid supportLayerGroupId, out SupportEntity supportEntity)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is Element3D hitModel
+                && GetEntityFromVisual(hitModel) is SupportEntity hitSupportEntity
+                && hitSupportEntity.SupportLayerGroupId == supportLayerGroupId)
+            {
+                supportEntity = hitSupportEntity;
+                return true;
+            }
+        }
+
+        supportEntity = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Adds support entities from one support group that satisfy the supplied screen-space selection rectangle.
+    /// </summary>
+    public void FillSupportEntitiesSelectedByWindow(
+        Guid supportLayerGroupId,
+        Rect selectionRect,
+        bool selectsCrossingEntities,
+        List<CadEntity> selectedEntities)
+    {
+        if (selectedEntities == null)
+        {
+            throw new ArgumentNullException(nameof(selectedEntities));
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroupId);
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            SupportEntity supportEntity = supportEntities[i];
+            Rect projectedBounds;
+
+            if (!TryGetProjectedBounds(supportEntity, out projectedBounds))
+            {
+                continue;
+            }
+
+            if (selectsCrossingEntities && selectionRect.IntersectsWith(projectedBounds))
+            {
+                selectedEntities.Add(supportEntity);
+                continue;
+            }
+
+            if (!selectsCrossingEntities && selectionRect.Contains(projectedBounds))
+            {
+                selectedEntities.Add(supportEntity);
+            }
+        }
+    }
+
+    /// <summary>
     /// Hides all transient Ring Support preview geometry.
     /// </summary>
     public void HideRingSupportPreview()
@@ -399,7 +462,18 @@ public class SceneManager
             return;
         }
 
-        ApplySupportLayerGroupMaterial(supportLayerGroup, opacity);
+        float normalizedOpacity = global::System.Math.Clamp(opacity, 0.0f, 1.0f);
+
+        if (normalizedOpacity >= FullyOpaqueSupportOpacity)
+        {
+            _supportLayerGroupOpacityOverrides.Remove(supportLayerGroupId);
+        }
+        else
+        {
+            _supportLayerGroupOpacityOverrides[supportLayerGroupId] = normalizedOpacity;
+        }
+
+        ApplySupportLayerGroupMaterial(supportLayerGroup, normalizedOpacity);
     }
 
     /// <summary>
@@ -544,7 +618,9 @@ public class SceneManager
 
         if (entity is SupportEntity supportEntity)
         {
-            meshModel.Material = SupportRenderer.CreateMaterial(GetSupportLayerGroupColor(supportEntity.SupportLayerGroupId));
+            meshModel.Material = SupportRenderer.CreateMaterial(
+                GetSupportLayerGroupColor(supportEntity.SupportLayerGroupId),
+                GetSupportLayerGroupOpacity(supportEntity.SupportLayerGroupId));
             return;
         }
 
@@ -590,7 +666,7 @@ public class SceneManager
     /// </summary>
     private void ApplySupportLayerGroupColorToEntities(SupportLayerGroup supportLayerGroup)
     {
-        ApplySupportLayerGroupMaterial(supportLayerGroup, FullyOpaqueSupportOpacity);
+        ApplySupportLayerGroupMaterial(supportLayerGroup, GetSupportLayerGroupOpacity(supportLayerGroup.Id));
     }
 
     /// <summary>
@@ -649,6 +725,112 @@ public class SceneManager
         }
 
         return SupportLayerColorGenerator.CreateFromStableSeed(supportLayerGroupId);
+    }
+
+    /// <summary>
+    /// Projects an entity's 3D axis-aligned bounds to a conservative screen-space rectangle.
+    /// </summary>
+    private bool TryGetProjectedBounds(CadEntity entity, out Rect projectedBounds)
+    {
+        (Vector3 Min, Vector3 Max) bounds = entity.GetBounds();
+        bool hasProjectedPoint = false;
+        projectedBounds = Rect.Empty;
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Min.X, bounds.Min.Y, bounds.Min.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Max.X, bounds.Min.Y, bounds.Min.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Min.X, bounds.Max.Y, bounds.Min.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Max.X, bounds.Max.Y, bounds.Min.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Min.X, bounds.Min.Y, bounds.Max.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Max.X, bounds.Min.Y, bounds.Max.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Min.X, bounds.Max.Y, bounds.Max.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        if (!TryAppendProjectedBoundsPoint(new Vector3(bounds.Max.X, bounds.Max.Y, bounds.Max.Z), ref projectedBounds, ref hasProjectedPoint))
+        {
+            return false;
+        }
+
+        return hasProjectedPoint;
+    }
+
+    /// <summary>
+    /// Adds one projected bounds corner to the accumulated screen-space rectangle.
+    /// </summary>
+    private bool TryAppendProjectedBoundsPoint(Vector3 worldPoint, ref Rect projectedBounds, ref bool hasProjectedPoint)
+    {
+        Point screenPoint;
+
+        if (!TryProjectWorldPoint(worldPoint, out screenPoint))
+        {
+            return false;
+        }
+
+        if (!hasProjectedPoint)
+        {
+            projectedBounds = new Rect(screenPoint, screenPoint);
+            hasProjectedPoint = true;
+            return true;
+        }
+
+        projectedBounds.Union(screenPoint);
+        return true;
+    }
+
+    /// <summary>
+    /// Projects one world-space point into viewport pixel coordinates and rejects invalid results.
+    /// </summary>
+    private bool TryProjectWorldPoint(Vector3 worldPoint, out Point screenPoint)
+    {
+        screenPoint = _viewport.Project(new Point3D(worldPoint.X, worldPoint.Y, worldPoint.Z));
+
+        return IsFinite(screenPoint.X) && IsFinite(screenPoint.Y);
+    }
+
+    /// <summary>
+    /// Rejects NaN and infinity from projection math.
+    /// </summary>
+    private static bool IsFinite(double value)
+    {
+        return !double.IsNaN(value) && !double.IsInfinity(value);
+    }
+
+    /// <summary>
+    /// Gets the active opacity for one support layer group, including transient edit-mode overrides.
+    /// </summary>
+    private float GetSupportLayerGroupOpacity(Guid supportLayerGroupId)
+    {
+        if (_supportLayerGroupOpacityOverrides.TryGetValue(supportLayerGroupId, out float opacity))
+        {
+            return opacity;
+        }
+
+        return FullyOpaqueSupportOpacity;
     }
 
     /// <summary>

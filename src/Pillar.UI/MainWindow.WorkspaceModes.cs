@@ -199,7 +199,8 @@ public partial class MainWindow
             return;
         }
 
-        RestartRingSupportOperationWithPanelsVisible();
+        ShowToolOptionsControl(_ringSupportToolOptionsControl);
+        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
     }
 
     /// <summary>
@@ -218,6 +219,16 @@ public partial class MainWindow
 
         _manualSupportTool.Cancel();
         ExitRingSupportMode();
+    }
+
+    /// <summary>
+    /// Deletes selected supports from the active Ring Support edit using the same path as the Delete key.
+    /// </summary>
+    private void RingSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        DeleteSelectedSupportsInActiveEditGroup();
     }
 
     /// <summary>
@@ -261,6 +272,7 @@ public partial class MainWindow
         ClearTransformScaleToolState();
         HideToolOptionsHostOnly();
         SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        UpdateRingSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -287,6 +299,7 @@ public partial class MainWindow
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
         ShowToolOptionsControl(_ringSupportToolOptionsControl);
         SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        UpdateRingSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -304,8 +317,18 @@ public partial class MainWindow
     /// </summary>
     private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
+        if (IsSupportToolEditActive())
+        {
+            return;
+        }
+
         if (_layerPanelViewModel.HasSelectedSupportGroupLayer)
         {
+            if (IsSelectedSupportGroupBeingEdited())
+            {
+                return;
+            }
+
             HideToolOptionsOverlay();
             return;
         }
@@ -314,6 +337,28 @@ public partial class MainWindow
         {
             HideToolOptionsOverlay();
         }
+    }
+
+    /// <summary>
+    /// Gets whether a generated support tool owns the Tool Options panel until its explicit Close action exits editing.
+    /// </summary>
+    private bool IsSupportToolEditActive()
+    {
+        return _activeModeId == WorkspaceModeId.ManualSupport
+            && _manualSupportTool.ActiveEditingSupportLayerGroupId.HasValue;
+    }
+
+    /// <summary>
+    /// Gets whether the layer panel is selecting the same support group currently loaded in a support edit operation.
+    /// </summary>
+    private bool IsSelectedSupportGroupBeingEdited()
+    {
+        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+        Guid? activeEditingSupportLayerGroupId = _manualSupportTool.ActiveEditingSupportLayerGroupId;
+
+        return selectedSupportLayerGroupId.HasValue
+            && activeEditingSupportLayerGroupId.HasValue
+            && selectedSupportLayerGroupId.Value == activeEditingSupportLayerGroupId.Value;
     }
 
     /// <summary>
@@ -431,6 +476,7 @@ public partial class MainWindow
     {
         ToolOptionsHostOverlay.Content = toolOptionsControl;
         ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Visible;
+        UpdateRingSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -440,5 +486,17 @@ public partial class MainWindow
     {
         ToolOptionsHostOverlay.Content = null;
         ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        UpdateRingSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Keeps the Ring Support Delete button aligned with selected supports in the active edit group.
+    /// </summary>
+    private void UpdateRingSupportDeleteButtonState()
+    {
+        bool canDeleteSelectedSupports = ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl
+            && _manualSupportTool.HasSelectedSupportsInActiveEditGroup();
+
+        _ringSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(canDeleteSelectedSupports);
     }
 }

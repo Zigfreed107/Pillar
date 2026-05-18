@@ -14,17 +14,35 @@ using Pillar.Rendering.Scene;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Windows;
+using System.Windows.Input;
 
 namespace Pillar.Rendering.Tools;
 
 /// <summary>
 /// Places a new support layer group by distributing supports around a three-point ring and projecting them vertically onto the active mesh.
 /// </summary>
-public sealed class RingSupportOperation : IToolOperation
+public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroupOperation
 {
     private const string RingSupportLayerGroupBaseName = "Ring Supports";
     private const float EditingSupportGroupOpacity = 0.5f;
     private const float DefaultSupportGroupOpacity = 1.0f;
+    private const float DragThresholdPixels = 4.0f;
+    private const float DragThresholdSquared = DragThresholdPixels * DragThresholdPixels;
+
+    private enum WindowSelectionOperation
+    {
+        Replace,
+        Add,
+        Subtract
+    }
+
+    private enum ClickSelectionOperation
+    {
+        Replace,
+        Add,
+        Subtract
+    }
 
     private readonly CadDocument _document;
     private readonly ProjectionService _projectionService;
@@ -38,6 +56,7 @@ public sealed class RingSupportOperation : IToolOperation
     private readonly Action<bool> _previewCalculationStateReporter;
     private readonly List<Vector3> _guidePreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
     private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
+    private readonly List<CadEntity> _windowSelectionBuffer = new List<CadEntity>(64);
 
     private Guid? _targetModelEntityId;
     private Guid? _editingSupportLayerGroupId;
@@ -45,7 +64,10 @@ public sealed class RingSupportOperation : IToolOperation
     private Vector3? _secondPoint;
     private Vector3? _thirdPoint;
     private Vector3? _currentPreviewPoint;
+    private Vector2 _mouseDownPosition;
     private RingSupportPointHandleKind _activePointHandle = RingSupportPointHandleKind.None;
+    private bool _isMouseDown;
+    private bool _isDraggingSupportSelection;
 
     /// <summary>
     /// Creates the ring support operation.
@@ -74,6 +96,19 @@ public sealed class RingSupportOperation : IToolOperation
         _previewCalculationStateReporter = previewCalculationStateReporter ?? throw new ArgumentNullException(nameof(previewCalculationStateReporter));
         _precisionSelectCursorRequester(true);
     }
+
+    /// <summary>
+    /// Gets the Ring Support group currently loaded for editing, or null while creating a new ring.
+    /// </summary>
+    public Guid? EditingSupportLayerGroupId
+    {
+        get { return _editingSupportLayerGroupId; }
+    }
+
+    /// <summary>
+    /// Raised while the user drags a support selection rectangle in edit mode.
+    /// </summary>
+    public event Action<SelectionWindowOverlayState>? SelectionWindowChanged;
 
     /// <summary>
     /// Captures circumference points or starts an edit drag after all three points exist.
@@ -106,7 +141,7 @@ public sealed class RingSupportOperation : IToolOperation
                 return;
             }
 
-            _statusReporter("Ring support preview is ready. Adjust spacing or click Apply.");
+            StartSupportSelectionGesture(screenPosition);
             return;
         }
 
@@ -133,6 +168,12 @@ public sealed class RingSupportOperation : IToolOperation
                 UpdateDraggedPointHandle(screenPosition, dragMesh);
             }
 
+            return;
+        }
+
+        if (_isMouseDown && _thirdPoint.HasValue)
+        {
+            UpdateSupportSelectionWindow(screenPosition);
             return;
         }
 
@@ -172,7 +213,6 @@ public sealed class RingSupportOperation : IToolOperation
     /// </summary>
     public void OnMouseUp(Vector2 screenPosition)
     {
-        _ = screenPosition;
         bool wasDraggingPointHandle = _activePointHandle != RingSupportPointHandleKind.None;
         _activePointHandle = RingSupportPointHandleKind.None;
         UpdatePointHandlePreview();
@@ -180,6 +220,24 @@ public sealed class RingSupportOperation : IToolOperation
         if (wasDraggingPointHandle)
         {
             RefreshPreview();
+        }
+
+        if (_isMouseDown)
+        {
+            if (_isDraggingSupportSelection)
+            {
+                Rect selectionRect = CreateScreenRect(_mouseDownPosition, screenPosition);
+                bool selectsCrossingEntities = IsRightToLeftDrag(_mouseDownPosition, screenPosition);
+                WindowSelectionOperation operation = GetWindowSelectionOperation();
+
+                HideSelectionWindow();
+                ApplySupportWindowSelection(selectionRect, selectsCrossingEntities, operation);
+                ResetSupportSelectionGesture();
+                return;
+            }
+
+            ApplySupportClickSelection(screenPosition);
+            ResetSupportSelectionGesture();
         }
     }
 
@@ -196,6 +254,8 @@ public sealed class RingSupportOperation : IToolOperation
         _thirdPoint = null;
         _currentPreviewPoint = null;
         _activePointHandle = RingSupportPointHandleKind.None;
+        ResetSupportSelectionGesture();
+        HideSelectionWindow();
         _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
         _scene.HideRingSupportPreview();
@@ -480,6 +540,7 @@ public sealed class RingSupportOperation : IToolOperation
         }
 
         _commandRunner.Execute(new AddSupportsToNewGroupCommand(_document, supportLayerGroup, supportEntities, "Add Ring Supports"));
+        EnterSupportGroupEditState(supportLayerGroup, settings);
         _statusReporter(CreateCompletionMessage(supportEntities.Count, missedProjectionCount, invalidSupportCount));
         return true;
     }
@@ -538,8 +599,259 @@ public sealed class RingSupportOperation : IToolOperation
         _secondPoint = newSettings.SecondPoint;
         _thirdPoint = newSettings.ThirdPoint;
         _currentPreviewPoint = newSettings.ThirdPoint;
+        _activePointHandle = RingSupportPointHandleKind.None;
+        _precisionSelectCursorRequester(false);
         _statusReporter(CreateCompletionMessage(newSupportEntities.Count, missedProjectionCount, invalidSupportCount));
         return true;
+    }
+
+    /// <summary>
+    /// Keeps an applied generated support group loaded for immediate support selection and further editing.
+    /// </summary>
+    private void EnterSupportGroupEditState(SupportLayerGroup supportLayerGroup, RingSupportSettings settings)
+    {
+        _editingSupportLayerGroupId = supportLayerGroup.Id;
+        _targetModelEntityId = supportLayerGroup.ModelEntityId;
+        _firstPoint = settings.FirstPoint;
+        _secondPoint = settings.SecondPoint;
+        _thirdPoint = settings.ThirdPoint;
+        _currentPreviewPoint = settings.ThirdPoint;
+        _activePointHandle = RingSupportPointHandleKind.None;
+        _precisionSelectCursorRequester(false);
+        _scene.SetSupportLayerGroupOpacity(supportLayerGroup.Id, EditingSupportGroupOpacity);
+    }
+
+    /// <summary>
+    /// Selects one committed support from the group currently being edited.
+    /// </summary>
+    private void StartSupportSelectionGesture(Vector2 screenPosition)
+    {
+        if (!_editingSupportLayerGroupId.HasValue)
+        {
+            _statusReporter("Ring support preview is ready. Adjust spacing or click Apply.");
+            return;
+        }
+
+        _mouseDownPosition = screenPosition;
+        _isMouseDown = true;
+        _isDraggingSupportSelection = false;
+    }
+
+    /// <summary>
+    /// Updates the support selection rectangle once the mouse has moved far enough to count as a drag.
+    /// </summary>
+    private void UpdateSupportSelectionWindow(Vector2 screenPosition)
+    {
+        if (!_isMouseDown)
+        {
+            return;
+        }
+
+        if (!_isDraggingSupportSelection && Vector2.DistanceSquared(_mouseDownPosition, screenPosition) < DragThresholdSquared)
+        {
+            return;
+        }
+
+        _isDraggingSupportSelection = true;
+        PublishSelectionWindow(screenPosition);
+    }
+
+    /// <summary>
+    /// Applies a click selection to one support in the group currently being edited.
+    /// </summary>
+    private void ApplySupportClickSelection(Vector2 screenPosition)
+    {
+        if (!_editingSupportLayerGroupId.HasValue)
+        {
+            return;
+        }
+
+        SupportEntity supportEntity;
+        ClickSelectionOperation operation = GetClickSelectionOperation();
+
+        if (_scene.TryHitSupportEntity(screenPosition, _editingSupportLayerGroupId.Value, out supportEntity))
+        {
+            if (operation == ClickSelectionOperation.Subtract)
+            {
+                _scene.SelectionManager.RemoveFromSelection(supportEntity);
+                return;
+            }
+
+            if (operation == ClickSelectionOperation.Add)
+            {
+                _scene.SelectionManager.AddToSelection(supportEntity);
+                return;
+            }
+
+            _scene.SelectionManager.SelectSingle(supportEntity);
+            _statusReporter("Selected support. Press Delete to remove it from this edit.");
+            return;
+        }
+
+        if (operation == ClickSelectionOperation.Replace)
+        {
+            _scene.SelectionManager.ClearSelection();
+        }
+
+        _statusReporter("Ring support edit is active. Drag-select supports or click Apply.");
+    }
+
+    /// <summary>
+    /// Applies rectangular selection to supports in the group currently being edited.
+    /// </summary>
+    private void ApplySupportWindowSelection(
+        Rect selectionRect,
+        bool selectsCrossingEntities,
+        WindowSelectionOperation operation)
+    {
+        if (!_editingSupportLayerGroupId.HasValue)
+        {
+            return;
+        }
+
+        _windowSelectionBuffer.Clear();
+        _scene.FillSupportEntitiesSelectedByWindow(
+            _editingSupportLayerGroupId.Value,
+            selectionRect,
+            selectsCrossingEntities,
+            _windowSelectionBuffer);
+
+        if (operation == WindowSelectionOperation.Subtract)
+        {
+            _scene.SelectionManager.RemoveRangeFromSelection(_windowSelectionBuffer);
+            _statusReporter(CreateWindowSelectionMessage(_windowSelectionBuffer.Count));
+            return;
+        }
+
+        if (operation == WindowSelectionOperation.Add)
+        {
+            _scene.SelectionManager.AddRangeToSelection(_windowSelectionBuffer);
+            _statusReporter(CreateWindowSelectionMessage(_windowSelectionBuffer.Count));
+            return;
+        }
+
+        _scene.SelectionManager.SelectMany(_windowSelectionBuffer);
+        _statusReporter(CreateWindowSelectionMessage(_windowSelectionBuffer.Count));
+    }
+
+    /// <summary>
+    /// Publishes overlay geometry and the preview outline style for support edit drag selection.
+    /// </summary>
+    private void PublishSelectionWindow(Vector2 screenPosition)
+    {
+        Rect selectionRect = CreateScreenRect(_mouseDownPosition, screenPosition);
+        bool useSolidOutline = !IsRightToLeftDrag(_mouseDownPosition, screenPosition);
+
+        SelectionWindowChanged?.Invoke(new SelectionWindowOverlayState(
+            true,
+            selectionRect.Left,
+            selectionRect.Top,
+            selectionRect.Width,
+            selectionRect.Height,
+            useSolidOutline));
+    }
+
+    /// <summary>
+    /// Hides the transient support selection rectangle.
+    /// </summary>
+    private void HideSelectionWindow()
+    {
+        SelectionWindowChanged?.Invoke(new SelectionWindowOverlayState(false, 0.0, 0.0, 0.0, 0.0, false));
+    }
+
+    /// <summary>
+    /// Clears support selection gesture flags after a click, drag, or cancel.
+    /// </summary>
+    private void ResetSupportSelectionGesture()
+    {
+        _isMouseDown = false;
+        _isDraggingSupportSelection = false;
+    }
+
+    /// <summary>
+    /// Creates a positive-size rectangle from two viewport pixel positions.
+    /// </summary>
+    private static Rect CreateScreenRect(Vector2 startPosition, Vector2 endPosition)
+    {
+        double left = global::System.Math.Min(startPosition.X, endPosition.X);
+        double top = global::System.Math.Min(startPosition.Y, endPosition.Y);
+        double width = global::System.Math.Abs(endPosition.X - startPosition.X);
+        double height = global::System.Math.Abs(endPosition.Y - startPosition.Y);
+
+        return new Rect(left, top, width, height);
+    }
+
+    /// <summary>
+    /// Returns true when the drag direction should use crossing selection.
+    /// </summary>
+    private static bool IsRightToLeftDrag(Vector2 startPosition, Vector2 endPosition)
+    {
+        return endPosition.X < startPosition.X;
+    }
+
+    /// <summary>
+    /// Chooses how a support window selection should modify the current selection.
+    /// </summary>
+    private static WindowSelectionOperation GetWindowSelectionOperation()
+    {
+        if (IsControlModifierDown())
+        {
+            return WindowSelectionOperation.Subtract;
+        }
+
+        if (IsShiftModifierDown())
+        {
+            return WindowSelectionOperation.Add;
+        }
+
+        return WindowSelectionOperation.Replace;
+    }
+
+    /// <summary>
+    /// Chooses how a support click selection should modify the current selection.
+    /// </summary>
+    private static ClickSelectionOperation GetClickSelectionOperation()
+    {
+        if (IsControlModifierDown())
+        {
+            return ClickSelectionOperation.Subtract;
+        }
+
+        if (IsShiftModifierDown())
+        {
+            return ClickSelectionOperation.Add;
+        }
+
+        return ClickSelectionOperation.Replace;
+    }
+
+    /// <summary>
+    /// Reads the current CTRL modifier state for subtractive selection.
+    /// </summary>
+    private static bool IsControlModifierDown()
+    {
+        return (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+    }
+
+    /// <summary>
+    /// Reads the current SHIFT modifier state for additive selection.
+    /// </summary>
+    private static bool IsShiftModifierDown()
+    {
+        return (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+    }
+
+    /// <summary>
+    /// Builds support window-selection feedback.
+    /// </summary>
+    private static string CreateWindowSelectionMessage(int selectedCount)
+    {
+        if (selectedCount == 1)
+        {
+            return "Selected 1 support. Press Delete to remove it from this edit.";
+        }
+
+        return $"Selected {selectedCount} supports. Press Delete to remove them from this edit.";
     }
 
     /// <summary>

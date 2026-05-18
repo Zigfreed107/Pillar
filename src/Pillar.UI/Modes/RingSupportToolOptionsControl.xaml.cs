@@ -34,6 +34,11 @@ public partial class RingSupportToolOptionsControl : UserControl
     public event EventHandler? CloseRequested;
 
     /// <summary>
+    /// Raised when the user asks to delete selected supports from the active Ring Support edit.
+    /// </summary>
+    public event EventHandler? DeleteRequested;
+
+    /// <summary>
     /// Creates the Ring Support options control and its preview-refresh debounce timer.
     /// </summary>
     public RingSupportToolOptionsControl()
@@ -92,6 +97,14 @@ public partial class RingSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Enables or disables the Delete button based on active support selection.
+    /// </summary>
+    public void SetDeleteSelectedSupportsEnabled(bool isEnabled)
+    {
+        DeleteSelectedSupportsButton.IsEnabled = isEnabled;
+    }
+
+    /// <summary>
     /// Schedules an option-driven preview refresh after the user pauses editing.
     /// </summary>
     private void RingSupportSpacingNumericUpDown_ValueChanged(object? sender, EventArgs e)
@@ -138,6 +151,17 @@ public partial class RingSupportToolOptionsControl : UserControl
         _ = e;
         _optionsChangedTimer.Stop();
         CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Requests deletion of the selected supports in the active Ring Support edit.
+    /// </summary>
+    private void DeleteSelectedSupportsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _optionsChangedTimer.Stop();
+        DeleteRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

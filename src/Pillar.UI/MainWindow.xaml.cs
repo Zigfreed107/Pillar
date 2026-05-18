@@ -109,6 +109,7 @@ public partial class MainWindow : Window
         RegisterWorkspaceModes();
         InitializeFaceAngleHighlightControls();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
+        _manualSupportTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
         _manualSupportTool.PrecisionSelectCursorRequested += ManualSupportTool_PrecisionSelectCursorRequested;
         _manualSupportTool.PreviewCalculationStateChanged += ManualSupportTool_PreviewCalculationStateChanged;
@@ -134,6 +135,7 @@ public partial class MainWindow : Window
         _ = sender;
         _ = e;
         SetPrecisionSelectCursor(false);
+        _manualSupportTool.SelectionWindowChanged -= _selectionWindowOverlay.Update;
         _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
         _manualSupportTool.PreviewCalculationStateChanged -= ManualSupportTool_PreviewCalculationStateChanged;
         ClearPreviewCalculationCursor();
@@ -220,6 +222,7 @@ public partial class MainWindow : Window
         _ringSupportToolOptionsControl.OptionsChanged += RingSupportToolOptionsControl_OptionsChanged;
         _ringSupportToolOptionsControl.ApplyRequested += RingSupportToolOptionsControl_ApplyRequested;
         _ringSupportToolOptionsControl.CloseRequested += RingSupportToolOptionsControl_CloseRequested;
+        _ringSupportToolOptionsControl.DeleteRequested += RingSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);

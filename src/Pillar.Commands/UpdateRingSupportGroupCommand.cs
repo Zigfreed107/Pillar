@@ -39,8 +39,8 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
         _oldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
         _newSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
 
-        ValidateSupportOwnership(_oldSupportEntities, _supportLayerGroup.Id, nameof(oldSupportEntities));
-        ValidateSupportOwnership(_newSupportEntities, _supportLayerGroup.Id, nameof(newSupportEntities));
+        ValidateSupportOwnership(_oldSupportEntities, _supportLayerGroup.Id, nameof(oldSupportEntities), false);
+        ValidateSupportOwnership(_newSupportEntities, _supportLayerGroup.Id, nameof(newSupportEntities), true);
     }
 
     /// <summary>
@@ -103,9 +103,13 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
     /// <summary>
     /// Verifies every generated support belongs to the group being updated.
     /// </summary>
-    private static void ValidateSupportOwnership(IReadOnlyList<SupportEntity> supportEntities, Guid supportLayerGroupId, string parameterName)
+    private static void ValidateSupportOwnership(
+        IReadOnlyList<SupportEntity> supportEntities,
+        Guid supportLayerGroupId,
+        string parameterName,
+        bool requireAtLeastOneSupport)
     {
-        if (supportEntities.Count == 0)
+        if (requireAtLeastOneSupport && supportEntities.Count == 0)
         {
             throw new ArgumentException("At least one generated support is required.", parameterName);
         }

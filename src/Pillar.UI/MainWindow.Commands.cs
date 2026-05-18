@@ -66,6 +66,20 @@ public partial class MainWindow
             return;
         }
 
+        if (e.Key == Key.Delete)
+        {
+            if (IsKeyboardFocusInsideEditableControl())
+            {
+                return;
+            }
+
+            if (DeleteSelectedSupportsInActiveEditGroup())
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key != Key.Escape)
         {
             return;
@@ -90,6 +104,21 @@ public partial class MainWindow
     private void RedoButton_Click(object sender, RoutedEventArgs e)
     {
         RedoLastCommand();
+    }
+
+    /// <summary>
+    /// Deletes selected supports from the active support edit group using the shared tool command path.
+    /// </summary>
+    private bool DeleteSelectedSupportsInActiveEditGroup()
+    {
+        if (!_manualSupportTool.DeleteSelectedSupportsInActiveEditGroup())
+        {
+            return false;
+        }
+
+        _layerPanelViewModel.RefreshFromDocument();
+        UpdateRingSupportDeleteButtonState();
+        return true;
     }
 
     /// <summary>

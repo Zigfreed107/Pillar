@@ -18,6 +18,7 @@ public partial class MainWindow
         _ = addedIds;
         _ = removedIds;
         _layerPanelViewModel.SetSelectedModelCount(GetSelectedMeshEntityCount());
+        UpdateRingSupportDeleteButtonState();
 
         if (_scene.SelectionManager.SelectedCount == 1)
         {
@@ -181,6 +182,11 @@ public partial class MainWindow
         {
             if (_scene.SelectionManager.SelectedCount != 1)
             {
+                if (TrySelectActiveEditingSupportGroupLayer())
+                {
+                    return;
+                }
+
                 _layerPanelViewModel.ClearSelectedLayer();
                 return;
             }
@@ -189,6 +195,11 @@ public partial class MainWindow
 
             if (!selectedId.HasValue)
             {
+                if (TrySelectActiveEditingSupportGroupLayer())
+                {
+                    return;
+                }
+
                 _layerPanelViewModel.ClearSelectedLayer();
                 return;
             }
@@ -213,5 +224,21 @@ public partial class MainWindow
         {
             _isSynchronizingLayerAndViewportSelection = false;
         }
+    }
+
+    /// <summary>
+    /// Keeps the active support group as the workflow context while a generated support edit is active.
+    /// </summary>
+    private bool TrySelectActiveEditingSupportGroupLayer()
+    {
+        Guid? activeEditingSupportLayerGroupId = _manualSupportTool.ActiveEditingSupportLayerGroupId;
+
+        if (!activeEditingSupportLayerGroupId.HasValue)
+        {
+            return false;
+        }
+
+        _layerPanelViewModel.SelectSupportGroupLayer(activeEditingSupportLayerGroupId.Value);
+        return true;
     }
 }
