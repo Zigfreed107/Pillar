@@ -1,0 +1,27 @@
+<!--
+    ToolSessionOptionsControl.xaml
+    Provides a reusable minimal options panel for active tool sessions that do not yet need dedicated controls.
+-->
+<UserControl x:Class="Pillar.UI.Modes.ToolSessionOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock x:Name="SessionTitleTextBlock"
+                       Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Tool Options" />
+
+            <TextBlock x:Name="SessionDescriptionTextBlock"
+                       Margin="0,10,0,0"
+                       Style="{StaticResource ModeOverlayBodyTextStyle}"
+                       TextWrapping="Wrap"
+                       Text="This tool is active." />
+
+            <Button Margin="0,16,0,0"
+                    MinHeight="30"
+                    HorizontalAlignment="Stretch"
+                    Click="FinishButton_Click"
+                    Content="Finish" />
+        </StackPanel>
+    </Border>
+</UserControl>

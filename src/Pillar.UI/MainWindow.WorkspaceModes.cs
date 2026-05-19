@@ -199,8 +199,7 @@ public partial class MainWindow
             return;
         }
 
-        ShowToolOptionsControl(_ringSupportToolOptionsControl);
-        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
     }
 
     /// <summary>
@@ -242,26 +241,62 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, "Translate", StringComparison.Ordinal))
+        {
+            ClearTransformScaleToolState();
+            ShowPlaceholderToolOptions(
+                "Translate Options",
+                "Translate tool is active. Dedicated movement controls will be added here.",
+                ToolSessionPanelSet.None,
+                () => FinishPlaceholderToolSession("Finished translate tool"));
+            return;
+        }
+
+        if (string.Equals(selectedToolName, "Rotate", StringComparison.Ordinal))
+        {
+            ClearTransformScaleToolState();
+            ShowPlaceholderToolOptions(
+                "Rotate Options",
+                "Rotate tool is active. Dedicated orientation controls will be added here.",
+                ToolSessionPanelSet.None,
+                () => FinishPlaceholderToolSession("Finished rotate tool"));
+            return;
+        }
+
         if (string.Equals(selectedToolName, TransformScaleToolName, StringComparison.Ordinal))
         {
-            SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
             ShowTransformScaleTool();
             return;
         }
 
         ClearTransformScaleToolState();
-        if (string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal))
+        if (string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal))
         {
-            ShowToolOptionsControl(_ringSupportToolOptionsControl);
-        }
-        else
-        {
-            HideToolOptionsHostOnly();
+            ShowPlaceholderToolOptions(
+                "Point Support Options",
+                "Point Support is active. Click the selected model to place individual supports.",
+                ToolSessionPanelSet.SupportPresets,
+                () => FinishManualSupportPlaceholderToolSession("Finished point support tool"));
+            return;
         }
 
-        SupportPresetPanelOverlay.Visibility = IsSupportPresetTool(selectedToolName)
-            ? System.Windows.Visibility.Visible
-            : System.Windows.Visibility.Collapsed;
+        if (string.Equals(selectedToolName, "Line Support", StringComparison.Ordinal))
+        {
+            ShowPlaceholderToolOptions(
+                "Line Support Options",
+                "Line Support is active. Dedicated line-support controls will be added here.",
+                ToolSessionPanelSet.None,
+                () => FinishManualSupportPlaceholderToolSession("Finished line support tool"));
+            return;
+        }
+
+        if (string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal))
+        {
+            ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            return;
+        }
+
+        HideToolOptionsOverlay();
     }
 
     /// <summary>
@@ -270,8 +305,8 @@ public partial class MainWindow
     private void HideToolOptionsOverlay()
     {
         ClearTransformScaleToolState();
-        HideToolOptionsHostOnly();
-        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        _activePlaceholderToolFinishAction = null;
+        _toolSessionOverlayCoordinator.EndSession();
         UpdateRingSupportDeleteButtonState();
     }
 
@@ -297,8 +332,7 @@ public partial class MainWindow
     {
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring, true);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
-        ShowToolOptionsControl(_ringSupportToolOptionsControl);
-        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
         UpdateRingSupportDeleteButtonState();
     }
 
@@ -388,8 +422,7 @@ public partial class MainWindow
 
         SetActiveMode(WorkspaceModeId.ManualSupport);
         _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
-        ShowToolOptionsControl(_ringSupportToolOptionsControl);
-        SupportPresetPanelOverlay.Visibility = System.Windows.Visibility.Visible;
+        ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
         _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
     }
@@ -461,21 +494,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Gets whether the named tool creates or edits support geometry and should show the Support Preset panel.
-    /// </summary>
-    private static bool IsSupportPresetTool(string selectedToolName)
-    {
-        return string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal)
-            || string.Equals(selectedToolName, "Ring Support", StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// Shows one self-contained tool options panel in the shell-owned overlay location.
     /// </summary>
-    private void ShowToolOptionsControl(System.Windows.Controls.Control toolOptionsControl)
+    private void ShowToolOptionsControl(System.Windows.Controls.Control toolOptionsControl, ToolSessionPanelSet panels)
     {
-        ToolOptionsHostOverlay.Content = toolOptionsControl;
-        ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Visible;
+        _activePlaceholderToolFinishAction = null;
+        _toolSessionOverlayCoordinator.BeginSession(toolOptionsControl, panels);
         UpdateRingSupportDeleteButtonState();
     }
 
@@ -484,9 +508,63 @@ public partial class MainWindow
     /// </summary>
     private void HideToolOptionsHostOnly()
     {
-        ToolOptionsHostOverlay.Content = null;
-        ToolOptionsHostOverlay.Visibility = System.Windows.Visibility.Collapsed;
+        _toolSessionOverlayCoordinator.HideOptionsHostOnly();
         UpdateRingSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Shows the reusable Finish-only options panel for tools that do not yet have dedicated settings.
+    /// </summary>
+    private void ShowPlaceholderToolOptions(string title, string description, ToolSessionPanelSet panels, Action finishAction)
+    {
+        _activePlaceholderToolFinishAction = finishAction ?? throw new ArgumentNullException(nameof(finishAction));
+        _toolSessionOptionsControl.SetSessionText(title, description);
+        _toolSessionOverlayCoordinator.BeginSession(_toolSessionOptionsControl, panels);
+        UpdateRingSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Runs the active placeholder tool's finish behavior.
+    /// </summary>
+    private void ToolSessionOptionsControl_FinishRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        Action? finishAction = _activePlaceholderToolFinishAction;
+        _activePlaceholderToolFinishAction = null;
+
+        if (finishAction == null)
+        {
+            HideToolOptionsOverlay();
+            return;
+        }
+
+        finishAction();
+    }
+
+    /// <summary>
+    /// Finishes a placeholder transform-style tool session.
+    /// </summary>
+    private void FinishPlaceholderToolSession(string statusText)
+    {
+        HideToolOptionsOverlay();
+        _activeToolStatusText = statusText;
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Finishes a placeholder Manual Support operation and returns Manual Support mode to operation selection.
+    /// </summary>
+    private void FinishManualSupportPlaceholderToolSession(string statusText)
+    {
+        HideToolOptionsOverlay();
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+        _activeToolStatusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(_activeToolStatusText);
     }
 
     /// <summary>

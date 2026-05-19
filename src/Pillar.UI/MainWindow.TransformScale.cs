@@ -43,7 +43,7 @@ public partial class MainWindow
 
         _scaleToolOptionsControl.SetOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
         _scaleToolOptionsControl.SetScaleFactors(selectedMesh.UserTransform.Scale);
-        ShowToolOptionsControl(_scaleToolOptionsControl);
+        ShowToolOptionsControl(_scaleToolOptionsControl, ToolSessionPanelSet.None);
         ShowScaleOriginPreview(selectedMesh);
 
         _activeToolStatusText = "Transform scale tool active";

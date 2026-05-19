@@ -47,7 +47,10 @@ public partial class MainWindow : Window
     private readonly ViewportCameraService _viewportCameraService;
     private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
+    private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
+    private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
     private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
+    private Action? _activePlaceholderToolFinishAction;
     private WorkspaceModeId _activeModeId = WorkspaceModeId.Select;
     private string _activeToolStatusText = "Select tool active";
     private bool _hasFramedStartupView;
@@ -68,6 +71,11 @@ public partial class MainWindow : Window
         _selectionWindowOverlay = new SelectionWindowOverlayController(this, SelectionWindowOverlay);
         _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
+        _toolSessionOptionsControl = new ToolSessionOptionsControl();
+        _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
+            WorkflowModePanelOverlay,
+            ToolOptionsHostOverlay,
+            SupportPresetPanelOverlay);
 
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
@@ -225,6 +233,7 @@ public partial class MainWindow : Window
         _ringSupportToolOptionsControl.DeleteRequested += RingSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
+        _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
         SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
         SupportPresetPanelOverlay.PresetSelected += SupportPresetPanelOverlay_PresetSelected;
