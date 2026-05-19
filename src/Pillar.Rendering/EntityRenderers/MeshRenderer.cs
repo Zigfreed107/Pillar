@@ -162,6 +162,7 @@ public static class MeshRenderer
     {
         return new PhongMaterial
         {
+            AmbientColor = DefaultDiffuseColor,
             DiffuseColor = DefaultDiffuseColor,
             SpecularColor = DefaultSpecularColor,
             SpecularShininess = DefaultSpecularShininess
@@ -175,6 +176,7 @@ public static class MeshRenderer
     {
         return new PhongMaterial
         {
+            AmbientColor = highlightColor,
             DiffuseColor = highlightColor,
             SpecularColor = new Color4(0.05f, 0.05f, 0.05f, highlightColor.Alpha),
             SpecularShininess = DefaultSpecularShininess

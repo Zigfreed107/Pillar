@@ -875,6 +875,7 @@ public class SceneManager
 
         return new PhongMaterial
         {
+            AmbientColor = color,
             DiffuseColor = color,
             SpecularColor = new Color4(0.18f, 0.18f, 0.18f, color.Alpha),
             SpecularShininess = 24.0f

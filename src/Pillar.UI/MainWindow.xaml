@@ -135,7 +135,7 @@
                                     ShowCoordinateSystem="True"
                                     ShowViewCube="True"
                                     ZoomAroundMouseDownPoint="False"
-                                    MSAA="Maximum">
+                                    MSAA="Maximum" EnableSSAO="True" SSAOQuality="High" SSAOIntensity=".5">
 
                         <hx:Viewport3DX.Camera>
                             <hx:OrthographicCamera Position="10,10,10"

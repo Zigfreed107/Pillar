@@ -13,9 +13,9 @@
         <SolidColorBrush x:Key="ModeOverlayTitleBrush" Color="#FF1F2933" />
         <SolidColorBrush x:Key="ModeOverlayBodyBrush" Color="#FF3E4C59" />
         <SolidColorBrush x:Key="ModeOverlayLabelBrush" Color="#FF007ACC" />
-        <Color x:Key="ViewportAmbientLightColor">#949494</Color>
-        <Color x:Key="ViewportKeyLightColor">#e3e3e3</Color>
-        <Color x:Key="ViewportFillLightColor">#b5b5b5</Color>
+        <Color x:Key="ViewportAmbientLightColor">#646464</Color>
+        <Color x:Key="ViewportKeyLightColor">#afafaf</Color>
+        <Color x:Key="ViewportFillLightColor">#7d7d7d</Color>
 
         <Style x:Key="ModeOverlayTitleTextStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14" />

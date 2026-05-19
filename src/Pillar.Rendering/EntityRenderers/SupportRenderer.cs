@@ -74,10 +74,12 @@ public static class SupportRenderer
         float green = color.Green / 255.0f;
         float blue = color.Blue / 255.0f;
         float alpha = global::System.Math.Clamp(opacity, 0.0f, 1.0f);
+        Color4 diffuseColor = new Color4(red, green, blue, alpha);
 
         return new PhongMaterial
         {
-            DiffuseColor = new Color4(red, green, blue, alpha),
+            AmbientColor = diffuseColor,
+            DiffuseColor = diffuseColor,
             SpecularColor = new Color4(0.18f, 0.18f, 0.18f, alpha),
             SpecularShininess = 24.0f
         };
