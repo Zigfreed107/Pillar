@@ -1,4 +1,4 @@
-// SupportPresetEditorWindow.xaml.cs
+﻿// SupportPresetEditorWindow.xaml.cs
 // Implements the floating support preset editor and persists changes through SupportPresetService.
 using Pillar.Core.Supports;
 using Pillar.UI.Services;
@@ -58,6 +58,7 @@ public partial class SupportPresetEditorWindow : Window
         HeadHeightInput.Value = profile.HeadHeight;
         HeadPenetrationDepthInput.Value = profile.HeadPenetrationDepth;
         HeadTopDiameterInput.Value = profile.HeadTopDiameter;
+        MaxHeadAngleFromVerticalInput.Value = profile.MaxHeadAngleFromVerticalDegrees;
     }
 
     /// <summary>
@@ -72,7 +73,8 @@ public partial class SupportPresetEditorWindow : Window
             (float)StemTopDiameterInput.Value,
             (float)HeadHeightInput.Value,
             (float)HeadPenetrationDepthInput.Value,
-            (float)HeadTopDiameterInput.Value);
+            (float)HeadTopDiameterInput.Value,
+            (float)MaxHeadAngleFromVerticalInput.Value);
     }
 
     /// <summary>

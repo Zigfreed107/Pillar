@@ -1,4 +1,4 @@
-// PointSupportOperation.cs
+﻿// PointSupportOperation.cs
 // Creates one point support per click by converting a viewport mesh hit into a support entity and command.
 using Pillar.Commands;
 using Pillar.Core.Document;
@@ -88,8 +88,10 @@ public sealed class PointSupportOperation : IToolOperation
         }
 
         SupportLayerGroup resolvedSupportLayerGroup;
+        SupportProfile supportProfile = _createSupportProfile();
         Vector3 tipPosition = meshSurfaceHit.HitPosition;
-        Vector3 basePosition = new Vector3(tipPosition.X, tipPosition.Y, 0.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(meshSurfaceHit.SurfaceNormal, supportProfile);
+        Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(tipPosition, headDirection, supportProfile);
 
         if (supportLayerGroup == null)
         {
@@ -98,7 +100,8 @@ public sealed class PointSupportOperation : IToolOperation
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
                 basePosition,
-                _createSupportProfile());
+                headDirection,
+                supportProfile);
 
             _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
             _activeSupportLayerGroupId = resolvedSupportLayerGroup.Id;
@@ -110,7 +113,8 @@ public sealed class PointSupportOperation : IToolOperation
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
                 basePosition,
-                _createSupportProfile());
+                headDirection,
+                supportProfile);
 
             _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));
         }

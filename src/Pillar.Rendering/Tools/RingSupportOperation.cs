@@ -1,4 +1,4 @@
-// RingSupportOperation.cs
+﻿// RingSupportOperation.cs
 // Creates a ring of individual support entities from three circumference picks while keeping preview state transient.
 using Pillar.Commands;
 using Pillar.Core.Document;
@@ -884,22 +884,24 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
             Vector3 guidePoint = _guidePreviewPoints[i];
-            Vector3 projectedPoint;
+            MeshProjectionHit projectionHit;
 
-            if (!MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectedPoint))
+            if (!MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectionHit))
             {
                 missedProjectionCount++;
                 continue;
             }
 
-            Vector3 basePosition = new Vector3(projectedPoint.X, projectedPoint.Y, 0.0f);
+            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
+            Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(projectionHit.Point, headDirection, supportProfile);
 
             try
             {
                 supportEntities.Add(new SupportEntity(
                     supportLayerGroupId,
-                    projectedPoint,
+                    projectionHit.Point,
                     basePosition,
+                    headDirection,
                     supportProfile));
             }
             catch (ArgumentException)

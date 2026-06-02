@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     SupportPresetEditorWindow.xaml
     Defines the floating editor used to create and overwrite reusable support dimension presets.
 -->
@@ -8,7 +8,7 @@
         xmlns:controls="clr-namespace:Pillar.UI.Controls"
         Title="Support Preset Editor"
         Width="440"
-        Height="620"
+        Height="660"
         MinWidth="420"
         MinHeight="560"
         WindowStartupLocation="CenterOwner">
@@ -138,6 +138,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0"
@@ -173,11 +174,24 @@
                         <controls:NumericUpDown x:Name="HeadTopDiameterInput"
                                                 Grid.Row="2"
                                                 Grid.Column="1"
-                                                Margin="8,0,0,0"
+                                                Margin="8,0,0,6"
                                                 Minimum="0.1"
                                                 Maximum="1000"
                                                 Increment="0.1"
                                                 DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Max head angle from vertical" />
+                        <controls:NumericUpDown x:Name="MaxHeadAngleFromVerticalInput"
+                                                Grid.Row="3"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0"
+                                                Maximum="90"
+                                                Increment="1"
+                                                DecimalPlaces="0" />
                     </Grid>
                 </GroupBox>
             </StackPanel>

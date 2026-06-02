@@ -1,4 +1,4 @@
-// SupportGroupTransformRegenerator.cs
+﻿// SupportGroupTransformRegenerator.cs
 // Regenerates model-owned support groups after mesh transforms without coupling support behavior to WPF or Helix rendering.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
@@ -140,9 +140,14 @@ public static class SupportGroupTransformRegenerator
                 oldSupportEntity.TipPosition,
                 oldInverseWorldTransform,
                 newWorldTransform);
-            Vector3 newBasePosition = new Vector3(newTipPosition.X, newTipPosition.Y, 0.0f);
+            Vector3 transformedHeadDirection = TransformWorldDirectionBetweenModelTransforms(
+                oldSupportEntity.HeadDirection,
+                oldInverseWorldTransform,
+                newWorldTransform);
+            Vector3 newHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(transformedHeadDirection, oldSupportEntity.Profile);
+            Vector3 newBasePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(newTipPosition, newHeadDirection, oldSupportEntity.Profile);
 
-            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, newTipPosition, newBasePosition, oldSupportEntity.Profile);
+            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, newTipPosition, newBasePosition, newHeadDirection, oldSupportEntity.Profile);
         }
 
         return newSupportEntities;
@@ -174,15 +179,16 @@ public static class SupportGroupTransformRegenerator
         for (int i = 0; i < guidePoints.Count; i++)
         {
             Vector3 guidePoint = guidePoints[i];
-            Vector3 projectedPoint;
+            MeshProjectionHit projectionHit;
 
-            if (!MeshVerticalProjection.TryProjectToMesh(mesh, newWorldTransform, guidePoint, out projectedPoint))
+            if (!MeshVerticalProjection.TryProjectToMesh(mesh, newWorldTransform, guidePoint, out projectionHit))
             {
                 continue;
             }
 
-            Vector3 basePosition = new Vector3(projectedPoint.X, projectedPoint.Y, 0.0f);
-            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, projectedPoint, basePosition, supportProfile);
+            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
+            Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(projectionHit.Point, headDirection, supportProfile);
+            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, projectionHit.Point, basePosition, headDirection, supportProfile);
         }
 
         return newSupportEntities;
@@ -229,6 +235,25 @@ public static class SupportGroupTransformRegenerator
     }
 
     /// <summary>
+    /// Carries one world-space support direction through the old model-local space and back out through the new transform.
+    /// </summary>
+    private static Vector3 TransformWorldDirectionBetweenModelTransforms(
+        Vector3 worldDirection,
+        Matrix4x4 oldInverseWorldTransform,
+        Matrix4x4 newWorldTransform)
+    {
+        Vector3 modelLocalDirection = Vector3.TransformNormal(worldDirection, oldInverseWorldTransform);
+        Vector3 newWorldDirection = Vector3.TransformNormal(modelLocalDirection, newWorldTransform);
+
+        if (newWorldDirection.LengthSquared() <= 0.000001f)
+        {
+            return Vector3.UnitZ;
+        }
+
+        return Vector3.Normalize(newWorldDirection);
+    }
+
+    /// <summary>
     /// Keeps ring construction points on the horizontal plane defined by the first transformed point.
     /// </summary>
     private static Vector3 NormalizePointToRingPlane(Vector3 firstPoint, Vector3 point)
@@ -257,11 +282,12 @@ public static class SupportGroupTransformRegenerator
         Guid supportLayerGroupId,
         Vector3 tipPosition,
         Vector3 basePosition,
+        Vector3 headDirection,
         SupportProfile supportProfile)
     {
         try
         {
-            supportEntities.Add(new SupportEntity(supportLayerGroupId, tipPosition, basePosition, supportProfile));
+            supportEntities.Add(new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, supportProfile));
         }
         catch (ArgumentException)
         {

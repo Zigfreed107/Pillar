@@ -1,4 +1,4 @@
-// ProjectionService.cs
+﻿// ProjectionService.cs
 // Provides viewport projection and hit-testing helpers for rendering-layer interaction tools without leaking WPF shell logic.
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
@@ -17,10 +17,11 @@ public readonly struct MeshSurfaceHit
     /// <summary>
     /// Creates one immutable mesh-surface hit payload.
     /// </summary>
-    public MeshSurfaceHit(Element3D hitModel, Vector3 hitPosition)
+    public MeshSurfaceHit(Element3D hitModel, Vector3 hitPosition, Vector3 surfaceNormal)
     {
         HitModel = hitModel;
         HitPosition = hitPosition;
+        SurfaceNormal = surfaceNormal;
     }
 
     /// <summary>
@@ -32,6 +33,11 @@ public readonly struct MeshSurfaceHit
     /// Gets the world-space hit position.
     /// </summary>
     public Vector3 HitPosition { get; }
+
+    /// <summary>
+    /// Gets the world-space surface normal reported by the viewport hit test.
+    /// </summary>
+    public Vector3 SurfaceNormal { get; }
 }
 
 /// <summary>
@@ -134,7 +140,8 @@ public class ProjectionService
 
                 hit = new MeshSurfaceHit(
                     hitModel,
-                    new Vector3(hits[i].PointHit.X, hits[i].PointHit.Y, hits[i].PointHit.Z));
+                    new Vector3(hits[i].PointHit.X, hits[i].PointHit.Y, hits[i].PointHit.Z),
+                    new Vector3(hits[i].NormalAtHit.X, hits[i].NormalAtHit.Y, hits[i].NormalAtHit.Z));
 
                 return true;
             }

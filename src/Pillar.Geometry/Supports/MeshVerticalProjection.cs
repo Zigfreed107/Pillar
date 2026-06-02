@@ -1,10 +1,35 @@
-// MeshVerticalProjection.cs
+﻿// MeshVerticalProjection.cs
 // Projects guide points onto mesh triangles along the build Z axis without depending on rendering objects.
 using Pillar.Core.Entities;
 using System;
 using System.Numerics;
 
 namespace Pillar.Geometry.Supports;
+
+/// <summary>
+/// Describes one vertical projection hit on a transformed mesh.
+/// </summary>
+public readonly struct MeshProjectionHit
+{
+    /// <summary>
+    /// Creates one projection hit with a world-space point and triangle normal.
+    /// </summary>
+    public MeshProjectionHit(Vector3 point, Vector3 normal)
+    {
+        Point = point;
+        Normal = normal;
+    }
+
+    /// <summary>
+    /// Gets the world-space point on the mesh triangle.
+    /// </summary>
+    public Vector3 Point { get; }
+
+    /// <summary>
+    /// Gets the world-space triangle normal at the projected point.
+    /// </summary>
+    public Vector3 Normal { get; }
+}
 
 /// <summary>
 /// Projects world-space guide points vertically onto transformed mesh triangles.
@@ -29,6 +54,36 @@ public static class MeshVerticalProjection
     /// </summary>
     public static bool TryProjectToMesh(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 guidePoint, out Vector3 projectedPoint)
     {
+        MeshProjectionHit hit;
+
+        if (TryProjectToMesh(mesh, worldTransform, guidePoint, out hit))
+        {
+            projectedPoint = hit.Point;
+            return true;
+        }
+
+        projectedPoint = Vector3.Zero;
+        return false;
+    }
+
+    /// <summary>
+    /// Finds the nearest vertical projection hit and returns its world-space triangle normal.
+    /// </summary>
+    public static bool TryProjectToMesh(MeshEntity mesh, Vector3 guidePoint, out MeshProjectionHit hit)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        return TryProjectToMesh(mesh, mesh.WorldTransform, guidePoint, out hit);
+    }
+
+    /// <summary>
+    /// Finds the nearest vertical projection hit with an explicit mesh transform and triangle normal.
+    /// </summary>
+    public static bool TryProjectToMesh(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 guidePoint, out MeshProjectionHit hit)
+    {
         if (mesh == null)
         {
             throw new ArgumentNullException(nameof(mesh));
@@ -36,6 +91,7 @@ public static class MeshVerticalProjection
 
         float bestDistance = float.MaxValue;
         Vector3 bestPoint = Vector3.Zero;
+        Vector3 bestNormal = Vector3.UnitZ;
         bool hasHit = false;
 
         for (int i = 0; i < mesh.TriangleIndices.Count; i += 3)
@@ -55,12 +111,28 @@ public static class MeshVerticalProjection
             {
                 bestDistance = distance;
                 bestPoint = new Vector3(guidePoint.X, guidePoint.Y, z);
+                bestNormal = CalculateTriangleNormal(a, b, c);
                 hasHit = true;
             }
         }
 
-        projectedPoint = bestPoint;
+        hit = new MeshProjectionHit(bestPoint, bestNormal);
         return hasHit;
+    }
+
+    /// <summary>
+    /// Calculates a stable world-space triangle normal for a projected support contact.
+    /// </summary>
+    private static Vector3 CalculateTriangleNormal(Vector3 a, Vector3 b, Vector3 c)
+    {
+        Vector3 normal = Vector3.Cross(b - a, c - a);
+
+        if (normal.LengthSquared() <= 0.00000001f)
+        {
+            return Vector3.UnitZ;
+        }
+
+        return Vector3.Normalize(normal);
     }
 
     /// <summary>

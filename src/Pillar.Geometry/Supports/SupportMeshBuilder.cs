@@ -1,6 +1,7 @@
-// SupportMeshBuilder.cs
+﻿// SupportMeshBuilder.cs
 // Generates procedural triangle geometry for support entities without introducing rendering dependencies.
 using Pillar.Core.Entities;
+using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -36,63 +37,95 @@ public static class SupportMeshBuilder
         }
 
         int validatedRadialSegments = Math.Clamp(radialSegments, MinimumRadialSegments, MaximumRadialSegments);
-        Vector3 axisVector = support.TipPosition - support.BasePosition;
-        float totalLength = axisVector.Length();
-        Vector3 axisDirection = Vector3.Normalize(axisVector);
-
-        (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(axisDirection);
         List<Vector3> positions = new List<Vector3>();
         List<int> triangleIndices = new List<int>();
         List<Vector3> normals = new List<Vector3>();
-        List<SectionStation> stations = CreateSectionStations(support, totalLength);
+        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
+        float headLength = CalculateUsableHeadLength(support.TipPosition, support.BasePosition.Z, headDirection, support.Profile.HeadHeight);
+        Vector3 headBottomPosition = support.TipPosition - (headDirection * headLength);
+        Vector3 stemBasePosition = new Vector3(headBottomPosition.X, headBottomPosition.Y, support.BasePosition.Z);
+        float verticalLength = MathF.Max(0.0f, headBottomPosition.Z - stemBasePosition.Z);
 
-        for (int stationIndex = 0; stationIndex < stations.Count - 1; stationIndex++)
+        if (verticalLength > AxialTolerance)
         {
-            SectionStation startStation = stations[stationIndex];
-            SectionStation endStation = stations[stationIndex + 1];
+            (Vector3 U, Vector3 V) verticalFrame = CreatePerpendicularFrame(Vector3.UnitZ);
+            List<SectionStation> stemStations = CreateVerticalSectionStations(support.Profile, verticalLength);
 
-            AddFrustum(
-                positions,
-                triangleIndices,
-                normals,
-                support.BasePosition + (axisDirection * startStation.DistanceFromBase),
-                support.BasePosition + (axisDirection * endStation.DistanceFromBase),
-                startStation.Radius,
-                endStation.Radius,
-                frame.U,
-                frame.V,
-                validatedRadialSegments);
+            for (int stationIndex = 0; stationIndex < stemStations.Count - 1; stationIndex++)
+            {
+                SectionStation startStation = stemStations[stationIndex];
+                SectionStation endStation = stemStations[stationIndex + 1];
+
+                AddFrustum(
+                    positions,
+                    triangleIndices,
+                    normals,
+                    stemBasePosition + (Vector3.UnitZ * startStation.DistanceFromBase),
+                    stemBasePosition + (Vector3.UnitZ * endStation.DistanceFromBase),
+                    startStation.Radius,
+                    endStation.Radius,
+                    verticalFrame.U,
+                    verticalFrame.V,
+                    validatedRadialSegments);
+            }
+
+            SectionStation baseStation = stemStations[0];
+            SectionStation topStation = stemStations[stemStations.Count - 1];
+            AddCap(positions, triangleIndices, normals, stemBasePosition, baseStation.Radius, -Vector3.UnitZ, verticalFrame.U, verticalFrame.V, validatedRadialSegments);
+            AddCap(positions, triangleIndices, normals, stemBasePosition + (Vector3.UnitZ * topStation.DistanceFromBase), topStation.Radius, Vector3.UnitZ, verticalFrame.U, verticalFrame.V, validatedRadialSegments);
         }
 
-        SectionStation baseStation = stations[0];
-        SectionStation topStation = stations[stations.Count - 1];
-        AddCap(positions, triangleIndices, normals, support.BasePosition, baseStation.Radius, -axisDirection, frame.U, frame.V, validatedRadialSegments);
-        AddCap(positions, triangleIndices, normals, support.BasePosition + (axisDirection * topStation.DistanceFromBase), topStation.Radius, axisDirection, frame.U, frame.V, validatedRadialSegments);
+        AddClosedHead(
+            positions,
+            triangleIndices,
+            normals,
+            headBottomPosition,
+            support.TipPosition,
+            headDirection,
+            support.Profile,
+            validatedRadialSegments);
+
+        AddJointBall(
+            positions,
+            triangleIndices,
+            normals,
+            headBottomPosition,
+            support.Profile,
+            validatedRadialSegments);
 
         return new SupportMeshData(positions, triangleIndices, normals);
     }
 
     /// <summary>
-    /// Creates an ordered support profile chain from the build plate to the penetration tip.
+    /// Calculates the head length that can fit above the build plate for the current head direction.
     /// </summary>
-    private static List<SectionStation> CreateSectionStations(SupportEntity support, float totalLength)
+    private static float CalculateUsableHeadLength(Vector3 tipPosition, float baseZ, Vector3 headDirection, float requestedHeadLength)
     {
-        float baseBottomRadius = support.Profile.BaseBottomRadius;
-        float stemBottomRadius = support.Profile.StemBottomDiameter * 0.5f;
-        float stemTopRadius = support.Profile.StemTopDiameter * 0.5f;
-        float headBottomRadius = support.Profile.HeadBottomDiameter * 0.5f;
-        float headTopRadius = support.Profile.HeadTopDiameter * 0.5f;
-        float baseHeight = MathF.Min(support.Profile.BaseHeight, totalLength);
+        if (headDirection.Z <= AxialTolerance)
+        {
+            return requestedHeadLength;
+        }
+
+        float maximumLengthByHeight = MathF.Max(0.0f, (tipPosition.Z - baseZ) / headDirection.Z);
+        return MathF.Min(requestedHeadLength, maximumLengthByHeight);
+    }
+
+    /// <summary>
+    /// Creates an ordered vertical base-and-stem profile chain from the build plate to the angled head joint.
+    /// </summary>
+    private static List<SectionStation> CreateVerticalSectionStations(SupportProfile profile, float totalLength)
+    {
+        float baseBottomRadius = profile.BaseBottomRadius;
+        float stemBottomRadius = profile.StemBottomDiameter * 0.5f;
+        float stemTopRadius = profile.StemTopDiameter * 0.5f;
+        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
+        float baseHeight = MathF.Min(profile.BaseHeight, totalLength);
         float distanceAboveBase = MathF.Max(0.0f, totalLength - baseHeight);
-        float headHeight = MathF.Min(support.Profile.HeadHeight, distanceAboveBase);
-        float stemHeight = MathF.Max(0.0f, distanceAboveBase - headHeight);
+        float stemHeight = distanceAboveBase;
         bool hasStem = stemHeight > AxialTolerance;
-        bool hasHead = headHeight > AxialTolerance;
         float baseTopRadius = hasStem
             ? stemBottomRadius
-            : hasHead
-                ? headBottomRadius
-                : headTopRadius;
+            : headBottomRadius;
 
         List<SectionStation> stations = new List<SectionStation>();
         AddStation(stations, 0.0f, baseBottomRadius);
@@ -103,13 +136,76 @@ public static class SupportMeshBuilder
             AddStation(stations, baseHeight + stemHeight, stemTopRadius);
         }
 
-        if (hasHead)
+        return stations;
+    }
+
+    /// <summary>
+    /// Adds the angled head as a closed mesh from the joint through the model contact and penetration tip.
+    /// </summary>
+    private static void AddClosedHead(
+        List<Vector3> positions,
+        List<int> triangleIndices,
+        List<Vector3> normals,
+        Vector3 headBottomPosition,
+        Vector3 tipPosition,
+        Vector3 headDirection,
+        SupportProfile profile,
+        int radialSegments)
+    {
+        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
+        float headTopRadius = profile.HeadTopDiameter * 0.5f;
+        Vector3 penetrationTip = tipPosition + (headDirection * profile.HeadPenetrationDepth);
+        (Vector3 U, Vector3 V) headFrame = CreatePerpendicularFrame(headDirection);
+
+        if (Vector3.Distance(headBottomPosition, tipPosition) > AxialTolerance)
         {
-            AddStation(stations, totalLength, headTopRadius);
+            AddFrustum(
+                positions,
+                triangleIndices,
+                normals,
+                headBottomPosition,
+                tipPosition,
+                headBottomRadius,
+                headTopRadius,
+                headFrame.U,
+                headFrame.V,
+                radialSegments);
         }
 
-        AddStation(stations, totalLength + support.Profile.HeadPenetrationDepth, headTopRadius);
-        return stations;
+        if (Vector3.Distance(tipPosition, penetrationTip) > AxialTolerance)
+        {
+            AddFrustum(
+                positions,
+                triangleIndices,
+                normals,
+                tipPosition,
+                penetrationTip,
+                headTopRadius,
+                headTopRadius,
+                headFrame.U,
+                headFrame.V,
+                radialSegments);
+        }
+
+        AddCap(positions, triangleIndices, normals, headBottomPosition, headBottomRadius, -headDirection, headFrame.U, headFrame.V, radialSegments);
+        AddCap(positions, triangleIndices, normals, penetrationTip, headTopRadius, headDirection, headFrame.U, headFrame.V, radialSegments);
+    }
+
+    /// <summary>
+    /// Adds the smooth ball joint that visually bridges the shifted stem and angled head.
+    /// </summary>
+    private static void AddJointBall(
+        List<Vector3> positions,
+        List<int> triangleIndices,
+        List<Vector3> normals,
+        Vector3 center,
+        SupportProfile profile,
+        int radialSegments)
+    {
+        float stemTopRadius = profile.StemTopDiameter * 0.5f;
+        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
+        float ballRadius = MathF.Max(stemTopRadius, headBottomRadius);
+        AddSphere(positions, triangleIndices, normals, center, ballRadius, radialSegments);
     }
 
     /// <summary>
@@ -231,6 +327,61 @@ public static class SupportMeshBuilder
         }
 
         return ringPositions;
+    }
+
+    /// <summary>
+    /// Adds a closed UV sphere using the same radial side count as the support body.
+    /// </summary>
+    private static void AddSphere(
+        List<Vector3> positions,
+        List<int> triangleIndices,
+        List<Vector3> normals,
+        Vector3 center,
+        float radius,
+        int radialSegments)
+    {
+        int verticalSegments = Math.Max(4, radialSegments / 2);
+        (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(Vector3.UnitZ);
+        Vector3 top = center + (Vector3.UnitZ * radius);
+        Vector3 bottom = center - (Vector3.UnitZ * radius);
+        Vector3[][] rings = new Vector3[verticalSegments - 1][];
+
+        for (int stackIndex = 1; stackIndex < verticalSegments; stackIndex++)
+        {
+            float phi = (float)(Math.PI * stackIndex / verticalSegments);
+            float ringRadius = MathF.Sin(phi) * radius;
+            float zOffset = MathF.Cos(phi) * radius;
+            rings[stackIndex - 1] = CreateRingPositions(center + (Vector3.UnitZ * zOffset), ringRadius, frame.U, frame.V, radialSegments);
+        }
+
+        Vector3[] firstRing = rings[0];
+
+        for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
+        {
+            int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
+            AddTriangle(positions, triangleIndices, normals, top, firstRing[segmentIndex], firstRing[nextSegmentIndex]);
+        }
+
+        for (int stackIndex = 0; stackIndex < rings.Length - 1; stackIndex++)
+        {
+            Vector3[] upperRing = rings[stackIndex];
+            Vector3[] lowerRing = rings[stackIndex + 1];
+
+            for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
+            {
+                int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
+                AddTriangle(positions, triangleIndices, normals, upperRing[segmentIndex], lowerRing[segmentIndex], lowerRing[nextSegmentIndex]);
+                AddTriangle(positions, triangleIndices, normals, upperRing[segmentIndex], lowerRing[nextSegmentIndex], upperRing[nextSegmentIndex]);
+            }
+        }
+
+        Vector3[] lastRing = rings[rings.Length - 1];
+
+        for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
+        {
+            int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
+            AddTriangle(positions, triangleIndices, normals, bottom, lastRing[nextSegmentIndex], lastRing[segmentIndex]);
+        }
     }
 
     /// <summary>

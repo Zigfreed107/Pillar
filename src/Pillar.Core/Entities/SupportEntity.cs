@@ -1,4 +1,4 @@
-// SupportEntity.cs
+﻿// SupportEntity.cs
 // Defines the renderer-agnostic domain data for one procedural resin-print support owned by a support layer group.
 using Pillar.Core.Supports;
 using System;
@@ -15,6 +15,14 @@ public sealed class SupportEntity : CadEntity
     /// Creates one validated support entity with the default support display name.
     /// </summary>
     public SupportEntity(Guid supportLayerGroupId, Vector3 tipPosition, Vector3 basePosition, SupportProfile profile)
+        : this(supportLayerGroupId, tipPosition, basePosition, Vector3.UnitZ, profile)
+    {
+    }
+
+    /// <summary>
+    /// Creates one validated support entity with a stored head direction.
+    /// </summary>
+    public SupportEntity(Guid supportLayerGroupId, Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, SupportProfile profile)
         : base("Support")
     {
         if (supportLayerGroupId == Guid.Empty)
@@ -23,7 +31,8 @@ public sealed class SupportEntity : CadEntity
         }
 
         Profile = profile?.Clone() ?? throw new ArgumentNullException(nameof(profile));
-        ValidateGeometry(tipPosition, basePosition, Profile);
+        HeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, Profile);
+        ValidateGeometry(tipPosition, basePosition, HeadDirection, Profile);
 
         SupportLayerGroupId = supportLayerGroupId;
         TipPosition = tipPosition;
@@ -46,6 +55,11 @@ public sealed class SupportEntity : CadEntity
     public Vector3 BasePosition { get; }
 
     /// <summary>
+    /// Gets the normalized direction from the head joint toward the model contact point.
+    /// </summary>
+    public Vector3 HeadDirection { get; }
+
+    /// <summary>
     /// Gets the geometric dimensions for this support.
     /// </summary>
     public SupportProfile Profile { get; }
@@ -59,9 +73,10 @@ public sealed class SupportEntity : CadEntity
         Guid supportLayerGroupId,
         Vector3 tipPosition,
         Vector3 basePosition,
+        Vector3 headDirection,
         SupportProfile profile)
     {
-        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, profile);
+        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, profile);
         support.Id = id;
         support.Name = string.IsNullOrWhiteSpace(name) ? "Support" : name.Trim();
         return support;
@@ -78,17 +93,19 @@ public sealed class SupportEntity : CadEntity
                 Profile.StemBottomDiameter,
                 MathF.Max(Profile.StemTopDiameter, MathF.Max(Profile.HeadBottomDiameter, Profile.HeadTopDiameter))) * 0.5f);
         Vector3 radiusPadding = new Vector3(maximumRadius, maximumRadius, maximumRadius);
-        Vector3 penetrationTip = TipPosition + (Vector3.Normalize(TipPosition - BasePosition) * Profile.HeadPenetrationDepth);
-        Vector3 min = Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition) - radiusPadding;
+        Vector3 headBottom = TipPosition - (HeadDirection * Profile.HeadHeight);
+        Vector3 penetrationTip = TipPosition + (HeadDirection * Profile.HeadPenetrationDepth);
+        Vector3 min = Vector3.Min(Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition), headBottom) - radiusPadding;
         Vector3 max = Vector3.Max(TipPosition, BasePosition) + radiusPadding;
         max = Vector3.Max(max, penetrationTip + radiusPadding);
+        max = Vector3.Max(max, headBottom + radiusPadding);
         return (min, max);
     }
 
     /// <summary>
     /// Validates the support axis and profile before the entity reaches document storage.
     /// </summary>
-    private static void ValidateGeometry(Vector3 tipPosition, Vector3 basePosition, SupportProfile profile)
+    private static void ValidateGeometry(Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, SupportProfile profile)
     {
         if (basePosition.Z > tipPosition.Z)
         {
@@ -105,6 +122,16 @@ public sealed class SupportEntity : CadEntity
         if (totalLength <= 0.0f)
         {
             throw new ArgumentException("A support must have a positive length.");
+        }
+
+        if (!float.IsFinite(headDirection.X) || !float.IsFinite(headDirection.Y) || !float.IsFinite(headDirection.Z))
+        {
+            throw new ArgumentException("A support head direction must be finite.");
+        }
+
+        if (headDirection.LengthSquared() <= 0.0f)
+        {
+            throw new ArgumentException("A support head direction must be non-zero.");
         }
     }
 }

@@ -1,4 +1,4 @@
-// GphDocumentSerializer.cs
+﻿// GphDocumentSerializer.cs
 // Saves and loads Graphite CAD documents using a self-contained JSON-based .gph file format.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
@@ -18,8 +18,8 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 9;
-    private const int MinimumSupportedVersion = 1;
+    private const int CurrentVersion = 10;
+    private const int MinimumSupportedVersion = 10;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
@@ -208,6 +208,7 @@ public sealed class GphDocumentSerializer
                 SupportLayerGroupId = support.SupportLayerGroupId,
                 TipPosition = CreateVectorDto(support.TipPosition),
                 BasePosition = CreateVectorDto(support.BasePosition),
+                HeadDirection = CreateVectorDto(support.HeadDirection),
                 SupportProfile = CreateSupportProfileDto(support.Profile)
             };
         }
@@ -450,9 +451,9 @@ public sealed class GphDocumentSerializer
             throw new InvalidDataException("A saved support entity references a support layer group that is not in the project.");
         }
 
-        if (entityDto.TipPosition == null || entityDto.BasePosition == null)
+        if (entityDto.TipPosition == null || entityDto.BasePosition == null || entityDto.HeadDirection == null)
         {
-            throw new InvalidDataException("A saved support entity is missing its tip or base position.");
+            throw new InvalidDataException("A saved support entity is missing its tip, base, or head direction.");
         }
 
         if (entityDto.SupportProfile == null)
@@ -466,6 +467,7 @@ public sealed class GphDocumentSerializer
             entityDto.SupportLayerGroupId.Value,
             CreateVector(entityDto.TipPosition),
             CreateVector(entityDto.BasePosition),
+            CreateVector(entityDto.HeadDirection),
             CreateSupportProfile(entityDto.SupportProfile));
     }
 
@@ -495,7 +497,8 @@ public sealed class GphDocumentSerializer
             StemTopDiameter = profile.StemTopDiameter,
             HeadHeight = profile.HeadHeight,
             HeadPenetrationDepth = profile.HeadPenetrationDepth,
-            HeadTopDiameter = profile.HeadTopDiameter
+            HeadTopDiameter = profile.HeadTopDiameter,
+            MaxHeadAngleFromVerticalDegrees = profile.MaxHeadAngleFromVerticalDegrees
         };
     }
 
@@ -585,7 +588,8 @@ public sealed class GphDocumentSerializer
             supportProfileDto.StemTopDiameter,
             supportProfileDto.HeadHeight,
             supportProfileDto.HeadPenetrationDepth,
-            supportProfileDto.HeadTopDiameter);
+            supportProfileDto.HeadTopDiameter,
+            supportProfileDto.MaxHeadAngleFromVerticalDegrees);
     }
 
     /// <summary>
@@ -727,6 +731,7 @@ public sealed class GphDocumentSerializer
         public Guid? SupportLayerGroupId { get; set; }
         public GphVector3Dto? TipPosition { get; set; }
         public GphVector3Dto? BasePosition { get; set; }
+        public GphVector3Dto? HeadDirection { get; set; }
         public GphSupportProfileDto? SupportProfile { get; set; }
     }
 
@@ -773,6 +778,7 @@ public sealed class GphDocumentSerializer
         public float HeadHeight { get; set; }
         public float HeadPenetrationDepth { get; set; }
         public float HeadTopDiameter { get; set; }
+        public float MaxHeadAngleFromVerticalDegrees { get; set; }
     }
 
     /// <summary>

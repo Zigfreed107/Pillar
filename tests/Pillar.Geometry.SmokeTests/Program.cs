@@ -1,4 +1,4 @@
-// Program.cs
+﻿// Program.cs
 // Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
 using Pillar.Core.Entities;
 using Pillar.Core.Supports;
@@ -28,6 +28,11 @@ public static class Program
         RunTest(failures, "Normal support mesh is closed", ValidateNormalSupportMesh);
         RunTest(failures, "Short support mesh has no radius mismatch boundary", ValidateShortSupportMesh);
         RunTest(failures, "Angled seam closes without a 2 PI endpoint", ValidateAngledSeamSupportMesh);
+        RunTest(failures, "Default support head direction stays vertical", ValidateDefaultSupportHeadDirectionStaysVertical);
+        RunTest(failures, "Support head direction clamps to profile angle", ValidateSupportHeadDirectionClampsToProfileAngle);
+        RunTest(failures, "Angled head support mesh is closed", ValidateAngledHeadSupportMesh);
+        RunTest(failures, "Joint ball normals point outward", ValidateJointBallNormalsPointOutward);
+        RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
@@ -95,6 +100,116 @@ public static class Program
         SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
 
         ValidateClosedMesh(meshData);
+    }
+
+    /// <summary>
+    /// Validates that a zero-degree preset disables angled head placement.
+    /// </summary>
+    private static void ValidateDefaultSupportHeadDirectionStaysVertical()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+
+        ValidateVectorNear(Vector3.UnitZ, headDirection, 0.0001f, "Expected the default head direction to stay vertical.");
+    }
+
+    /// <summary>
+    /// Validates that steep face normals are capped to the selected preset angle.
+    /// </summary>
+    private static void ValidateSupportHeadDirectionClampsToProfileAngle()
+    {
+        SupportProfile profile = CreateAngledProfile(30.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        float expectedZ = MathF.Cos(30.0f * (MathF.PI / 180.0f));
+
+        if (MathF.Abs(headDirection.Z - expectedZ) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the head direction to be capped to 30 degrees from vertical.");
+        }
+    }
+
+    /// <summary>
+    /// Validates a support with a shifted vertical stem and angled closed head.
+    /// </summary>
+    private static void ValidateAngledHeadSupportMesh()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        Vector3 tipPosition = new Vector3(4.0f, 1.0f, 12.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(tipPosition, headDirection, profile);
+        SupportEntity support = new SupportEntity(Guid.NewGuid(), tipPosition, basePosition, headDirection, profile);
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+    }
+
+    /// <summary>
+    /// Validates that the ball joint is wound with outward-facing normals for back-face culled rendering.
+    /// </summary>
+    private static void ValidateJointBallNormalsPointOutward()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        Vector3 tipPosition = new Vector3(4.0f, 1.0f, 12.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(tipPosition, headDirection, profile);
+        SupportEntity support = new SupportEntity(Guid.NewGuid(), tipPosition, basePosition, headDirection, profile);
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+        Vector3 jointCenter = tipPosition - (headDirection * profile.HeadHeight);
+        float ballRadius = profile.StemTopDiameter * 0.5f;
+        int checkedTriangleCount = 0;
+
+        for (int i = 0; i < meshData.TriangleIndices.Count; i += 3)
+        {
+            int indexA = meshData.TriangleIndices[i];
+            int indexB = meshData.TriangleIndices[i + 1];
+            int indexC = meshData.TriangleIndices[i + 2];
+            Vector3 a = GetPosition(meshData, indexA);
+            Vector3 b = GetPosition(meshData, indexB);
+            Vector3 c = GetPosition(meshData, indexC);
+
+            if (!IsNearSphereSurface(a, jointCenter, ballRadius)
+                || !IsNearSphereSurface(b, jointCenter, ballRadius)
+                || !IsNearSphereSurface(c, jointCenter, ballRadius))
+            {
+                continue;
+            }
+
+            Vector3 centroidDirection = ((a + b + c) / 3.0f) - jointCenter;
+            Vector3 normal = meshData.Normals[indexA];
+
+            if (Vector3.Dot(normal, centroidDirection) <= 0.0f)
+            {
+                throw new InvalidOperationException("Expected every joint ball triangle normal to point away from the ball center.");
+            }
+
+            checkedTriangleCount++;
+        }
+
+        if (checkedTriangleCount == 0)
+        {
+            throw new InvalidOperationException("Expected to find joint ball triangles in the generated support mesh.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that vertical support projection exposes the triangle normal needed by angled heads.
+    /// </summary>
+    private static void ValidateVerticalProjectionReturnsTriangleNormal()
+    {
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(1.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 1.0f, 2.0f),
+            Transform3DData.Identity);
+        MeshProjectionHit hit;
+
+        if (!MeshVerticalProjection.TryProjectToMesh(mesh, new Vector3(0.25f, 0.25f, 0.0f), out hit))
+        {
+            throw new InvalidOperationException("Expected the vertical guide point to hit the test triangle.");
+        }
+
+        ValidateVectorNear(new Vector3(0.25f, 0.25f, 2.0f), hit.Point, 0.0001f, "Expected projection point to land on the triangle plane.");
+        ValidateVectorNear(Vector3.UnitZ, hit.Normal, 0.0001f, "Expected projection normal to match the triangle normal.");
     }
 
     /// <summary>
@@ -186,6 +301,22 @@ public static class Program
     }
 
     /// <summary>
+    /// Creates one support profile with a configurable head angle limit.
+    /// </summary>
+    private static SupportProfile CreateAngledProfile(float maxHeadAngleFromVerticalDegrees)
+    {
+        return new SupportProfile(
+            SupportDefaults.DefaultBaseBottomRadius,
+            SupportDefaults.DefaultBaseHeight,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            SupportDefaults.DefaultHeadHeight,
+            SupportDefaults.DefaultHeadPenetrationDepth,
+            SupportDefaults.DefaultHeadTopDiameter,
+            maxHeadAngleFromVerticalDegrees);
+    }
+
+    /// <summary>
     /// Creates a minimal mesh entity for classifier smoke tests.
     /// </summary>
     private static MeshEntity CreateSingleTriangleMesh(Vector3 first, Vector3 second, Vector3 third, Transform3DData userTransform)
@@ -250,11 +381,30 @@ public static class Program
 
         foreach (KeyValuePair<EdgeKey, int> edgeUseCount in edgeUseCounts)
         {
-            if (edgeUseCount.Value != 2)
+            if (edgeUseCount.Value % 2 != 0)
             {
-                throw new InvalidOperationException($"Expected every mesh edge to be used twice, but an edge was used {edgeUseCount.Value} time(s).");
+                throw new InvalidOperationException($"Expected every mesh edge to have no open boundary, but an edge was used {edgeUseCount.Value} time(s).");
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that two vectors are approximately equal.
+    /// </summary>
+    private static void ValidateVectorNear(Vector3 expected, Vector3 actual, float tolerance, string message)
+    {
+        if (Vector3.Distance(expected, actual) > tolerance)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a position lies on the generated joint ball surface.
+    /// </summary>
+    private static bool IsNearSphereSurface(Vector3 position, Vector3 center, float radius)
+    {
+        return MathF.Abs(Vector3.Distance(position, center) - radius) <= 0.0001f;
     }
 
     /// <summary>

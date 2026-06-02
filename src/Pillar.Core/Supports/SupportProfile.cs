@@ -1,4 +1,4 @@
-// SupportProfile.cs
+﻿// SupportProfile.cs
 // Defines the editable geometric dimensions that describe one procedural resin-print support in the domain layer.
 using System;
 
@@ -19,7 +19,8 @@ public sealed class SupportProfile
         float stemTopDiameter,
         float headHeight,
         float headPenetrationDepth,
-        float headTopDiameter)
+        float headTopDiameter,
+        float maxHeadAngleFromVerticalDegrees)
     {
         BaseBottomRadius = ValidatePositiveDimension(baseBottomRadius, nameof(baseBottomRadius));
         BaseHeight = ValidatePositiveDimension(baseHeight, nameof(baseHeight));
@@ -28,6 +29,7 @@ public sealed class SupportProfile
         HeadHeight = ValidatePositiveDimension(headHeight, nameof(headHeight));
         HeadPenetrationDepth = ValidatePositiveDimension(headPenetrationDepth, nameof(headPenetrationDepth));
         HeadTopDiameter = ValidatePositiveDimension(headTopDiameter, nameof(headTopDiameter));
+        MaxHeadAngleFromVerticalDegrees = ValidateAngle(maxHeadAngleFromVerticalDegrees, nameof(maxHeadAngleFromVerticalDegrees));
     }
 
     /// <summary>
@@ -74,6 +76,11 @@ public sealed class SupportProfile
     public float HeadTopDiameter { get; }
 
     /// <summary>
+    /// Gets the maximum angle the head may lean away from vertical in degrees.
+    /// </summary>
+    public float MaxHeadAngleFromVerticalDegrees { get; }
+
+    /// <summary>
     /// Creates a defensive copy of this profile for immutable ownership boundaries.
     /// </summary>
     public SupportProfile Clone()
@@ -85,7 +92,8 @@ public sealed class SupportProfile
             StemTopDiameter,
             HeadHeight,
             HeadPenetrationDepth,
-            HeadTopDiameter);
+            HeadTopDiameter,
+            MaxHeadAngleFromVerticalDegrees);
     }
 
     /// <summary>
@@ -96,6 +104,19 @@ public sealed class SupportProfile
         if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0.0f)
         {
             throw new ArgumentOutOfRangeException(parameterName, "Support dimensions must be finite positive values.");
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Rejects invalid head angle limits before support placement uses them.
+    /// </summary>
+    private static float ValidateAngle(float value, string parameterName)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0.0f || value > 90.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Support head angle must be between 0 and 90 degrees.");
         }
 
         return value;
