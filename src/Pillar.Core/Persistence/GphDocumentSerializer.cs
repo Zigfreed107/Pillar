@@ -1,4 +1,4 @@
-﻿// GphDocumentSerializer.cs
+// GphDocumentSerializer.cs
 // Saves and loads Graphite CAD documents using a self-contained JSON-based .gph file format.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
@@ -18,8 +18,8 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 10;
-    private const int MinimumSupportedVersion = 10;
+    private const int CurrentVersion = 11;
+    private const int MinimumSupportedVersion = 11;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
@@ -209,6 +209,8 @@ public sealed class GphDocumentSerializer
                 TipPosition = CreateVectorDto(support.TipPosition),
                 BasePosition = CreateVectorDto(support.BasePosition),
                 HeadDirection = CreateVectorDto(support.HeadDirection),
+                BranchLength = support.BranchLength,
+                BranchDirection = CreateVectorDto(support.BranchDirection),
                 SupportProfile = CreateSupportProfileDto(support.Profile)
             };
         }
@@ -451,9 +453,9 @@ public sealed class GphDocumentSerializer
             throw new InvalidDataException("A saved support entity references a support layer group that is not in the project.");
         }
 
-        if (entityDto.TipPosition == null || entityDto.BasePosition == null || entityDto.HeadDirection == null)
+        if (entityDto.TipPosition == null || entityDto.BasePosition == null || entityDto.HeadDirection == null || entityDto.BranchDirection == null)
         {
-            throw new InvalidDataException("A saved support entity is missing its tip, base, or head direction.");
+            throw new InvalidDataException("A saved support entity is missing its tip, base, head direction, or branch direction.");
         }
 
         if (entityDto.SupportProfile == null)
@@ -468,6 +470,8 @@ public sealed class GphDocumentSerializer
             CreateVector(entityDto.TipPosition),
             CreateVector(entityDto.BasePosition),
             CreateVector(entityDto.HeadDirection),
+            entityDto.BranchLength,
+            CreateVector(entityDto.BranchDirection),
             CreateSupportProfile(entityDto.SupportProfile));
     }
 
@@ -495,6 +499,8 @@ public sealed class GphDocumentSerializer
             BaseHeight = profile.BaseHeight,
             StemBottomDiameter = profile.StemBottomDiameter,
             StemTopDiameter = profile.StemTopDiameter,
+            MaximumBranchLength = profile.MaximumBranchLength,
+            ModelClearance = profile.ModelClearance,
             HeadHeight = profile.HeadHeight,
             HeadPenetrationDepth = profile.HeadPenetrationDepth,
             HeadTopDiameter = profile.HeadTopDiameter,
@@ -586,6 +592,8 @@ public sealed class GphDocumentSerializer
             supportProfileDto.BaseHeight,
             supportProfileDto.StemBottomDiameter,
             supportProfileDto.StemTopDiameter,
+            supportProfileDto.MaximumBranchLength,
+            supportProfileDto.ModelClearance,
             supportProfileDto.HeadHeight,
             supportProfileDto.HeadPenetrationDepth,
             supportProfileDto.HeadTopDiameter,
@@ -732,6 +740,8 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? TipPosition { get; set; }
         public GphVector3Dto? BasePosition { get; set; }
         public GphVector3Dto? HeadDirection { get; set; }
+        public float BranchLength { get; set; }
+        public GphVector3Dto? BranchDirection { get; set; }
         public GphSupportProfileDto? SupportProfile { get; set; }
     }
 
@@ -775,6 +785,8 @@ public sealed class GphDocumentSerializer
         public float BaseHeight { get; set; }
         public float StemBottomDiameter { get; set; }
         public float StemTopDiameter { get; set; }
+        public float MaximumBranchLength { get; set; }
+        public float ModelClearance { get; set; }
         public float HeadHeight { get; set; }
         public float HeadPenetrationDepth { get; set; }
         public float HeadTopDiameter { get; set; }

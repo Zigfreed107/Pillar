@@ -11,6 +11,8 @@ public static class SupportDefaults
     public const float DefaultBaseHeight = 1.50f;
     public const float DefaultStemBottomDiameter = 1.00f;
     public const float DefaultStemTopDiameter = 0.75f;
+    public const float DefaultMaximumBranchLength = 0.0f;
+    public const float DefaultModelClearance = 3.0f;
     public const float DefaultHeadHeight = 5.20f;
     public const float DefaultHeadPenetrationDepth = 0.30f;
     public const float DefaultHeadTopDiameter = 0.35f;
@@ -26,6 +28,8 @@ public static class SupportDefaults
             baseHeight: DefaultBaseHeight,
             stemBottomDiameter: DefaultStemBottomDiameter,
             stemTopDiameter: DefaultStemTopDiameter,
+            maximumBranchLength: DefaultMaximumBranchLength,
+            modelClearance: DefaultModelClearance,
             headHeight: DefaultHeadHeight,
             headPenetrationDepth: DefaultHeadPenetrationDepth,
             headTopDiameter: DefaultHeadTopDiameter,

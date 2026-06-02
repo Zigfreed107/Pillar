@@ -17,6 +17,8 @@ public sealed class SupportProfile
         float baseHeight,
         float stemBottomDiameter,
         float stemTopDiameter,
+        float maximumBranchLength,
+        float modelClearance,
         float headHeight,
         float headPenetrationDepth,
         float headTopDiameter,
@@ -26,6 +28,8 @@ public sealed class SupportProfile
         BaseHeight = ValidatePositiveDimension(baseHeight, nameof(baseHeight));
         StemBottomDiameter = ValidatePositiveDimension(stemBottomDiameter, nameof(stemBottomDiameter));
         StemTopDiameter = ValidatePositiveDimension(stemTopDiameter, nameof(stemTopDiameter));
+        MaximumBranchLength = ValidateNonNegativeDimension(maximumBranchLength, nameof(maximumBranchLength));
+        ModelClearance = ValidateNonNegativeDimension(modelClearance, nameof(modelClearance));
         HeadHeight = ValidatePositiveDimension(headHeight, nameof(headHeight));
         HeadPenetrationDepth = ValidatePositiveDimension(headPenetrationDepth, nameof(headPenetrationDepth));
         HeadTopDiameter = ValidatePositiveDimension(headTopDiameter, nameof(headTopDiameter));
@@ -61,6 +65,16 @@ public sealed class SupportProfile
     }
 
     /// <summary>
+    /// Gets the maximum length of the optional branch section between stem and head.
+    /// </summary>
+    public float MaximumBranchLength { get; }
+
+    /// <summary>
+    /// Gets the requested clearance between the model and vertical stem section.
+    /// </summary>
+    public float ModelClearance { get; }
+
+    /// <summary>
     /// Gets the desired head height from the model intersection down to the stem or base.
     /// </summary>
     public float HeadHeight { get; }
@@ -90,6 +104,8 @@ public sealed class SupportProfile
             BaseHeight,
             StemBottomDiameter,
             StemTopDiameter,
+            MaximumBranchLength,
+            ModelClearance,
             HeadHeight,
             HeadPenetrationDepth,
             HeadTopDiameter,
@@ -104,6 +120,19 @@ public sealed class SupportProfile
         if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0.0f)
         {
             throw new ArgumentOutOfRangeException(parameterName, "Support dimensions must be finite positive values.");
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Rejects negative, NaN, and infinity dimensions before they reach geometry code.
+    /// </summary>
+    private static float ValidateNonNegativeDimension(float value, string parameterName)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Support dimensions must be finite non-negative values.");
         }
 
         return value;

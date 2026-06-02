@@ -1,4 +1,4 @@
-﻿// SupportEntity.cs
+// SupportEntity.cs
 // Defines the renderer-agnostic domain data for one procedural resin-print support owned by a support layer group.
 using Pillar.Core.Supports;
 using System;
@@ -23,6 +23,21 @@ public sealed class SupportEntity : CadEntity
     /// Creates one validated support entity with a stored head direction.
     /// </summary>
     public SupportEntity(Guid supportLayerGroupId, Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, SupportProfile profile)
+        : this(supportLayerGroupId, tipPosition, basePosition, headDirection, 0.0f, Vector3.UnitZ, profile)
+    {
+    }
+
+    /// <summary>
+    /// Creates one validated support entity with stored head and branch directions.
+    /// </summary>
+    public SupportEntity(
+        Guid supportLayerGroupId,
+        Vector3 tipPosition,
+        Vector3 basePosition,
+        Vector3 headDirection,
+        float branchLength,
+        Vector3 branchDirection,
+        SupportProfile profile)
         : base("Support")
     {
         if (supportLayerGroupId == Guid.Empty)
@@ -32,7 +47,9 @@ public sealed class SupportEntity : CadEntity
 
         Profile = profile?.Clone() ?? throw new ArgumentNullException(nameof(profile));
         HeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, Profile);
-        ValidateGeometry(tipPosition, basePosition, HeadDirection, Profile);
+        BranchLength = ValidateBranchLength(branchLength, nameof(branchLength));
+        BranchDirection = NormalizeOrDefault(branchDirection, Vector3.UnitZ);
+        ValidateGeometry(tipPosition, basePosition, HeadDirection, BranchDirection, Profile);
 
         SupportLayerGroupId = supportLayerGroupId;
         TipPosition = tipPosition;
@@ -60,6 +77,16 @@ public sealed class SupportEntity : CadEntity
     public Vector3 HeadDirection { get; }
 
     /// <summary>
+    /// Gets the optional branch cylinder length between the stem joint and head joint.
+    /// </summary>
+    public float BranchLength { get; }
+
+    /// <summary>
+    /// Gets the normalized direction from the stem joint toward the head joint.
+    /// </summary>
+    public Vector3 BranchDirection { get; }
+
+    /// <summary>
     /// Gets the geometric dimensions for this support.
     /// </summary>
     public SupportProfile Profile { get; }
@@ -74,9 +101,11 @@ public sealed class SupportEntity : CadEntity
         Vector3 tipPosition,
         Vector3 basePosition,
         Vector3 headDirection,
+        float branchLength,
+        Vector3 branchDirection,
         SupportProfile profile)
     {
-        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, profile);
+        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, profile);
         support.Id = id;
         support.Name = string.IsNullOrWhiteSpace(name) ? "Support" : name.Trim();
         return support;
@@ -94,9 +123,12 @@ public sealed class SupportEntity : CadEntity
                 MathF.Max(Profile.StemTopDiameter, MathF.Max(Profile.HeadBottomDiameter, Profile.HeadTopDiameter))) * 0.5f);
         Vector3 radiusPadding = new Vector3(maximumRadius, maximumRadius, maximumRadius);
         Vector3 headBottom = TipPosition - (HeadDirection * Profile.HeadHeight);
+        Vector3 stemTop = BranchLength > 0.0f
+            ? headBottom - (BranchDirection * BranchLength)
+            : headBottom;
         Vector3 penetrationTip = TipPosition + (HeadDirection * Profile.HeadPenetrationDepth);
-        Vector3 min = Vector3.Min(Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition), headBottom) - radiusPadding;
-        Vector3 max = Vector3.Max(TipPosition, BasePosition) + radiusPadding;
+        Vector3 min = Vector3.Min(Vector3.Min(Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition), headBottom), stemTop) - radiusPadding;
+        Vector3 max = Vector3.Max(Vector3.Max(TipPosition, BasePosition), stemTop) + radiusPadding;
         max = Vector3.Max(max, penetrationTip + radiusPadding);
         max = Vector3.Max(max, headBottom + radiusPadding);
         return (min, max);
@@ -105,7 +137,7 @@ public sealed class SupportEntity : CadEntity
     /// <summary>
     /// Validates the support axis and profile before the entity reaches document storage.
     /// </summary>
-    private static void ValidateGeometry(Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, SupportProfile profile)
+    private static void ValidateGeometry(Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, Vector3 branchDirection, SupportProfile profile)
     {
         if (basePosition.Z > tipPosition.Z)
         {
@@ -133,5 +165,46 @@ public sealed class SupportEntity : CadEntity
         {
             throw new ArgumentException("A support head direction must be non-zero.");
         }
+
+        if (!float.IsFinite(branchDirection.X) || !float.IsFinite(branchDirection.Y) || !float.IsFinite(branchDirection.Z))
+        {
+            throw new ArgumentException("A support branch direction must be finite.");
+        }
+
+        if (branchDirection.LengthSquared() <= 0.0f)
+        {
+            throw new ArgumentException("A support branch direction must be non-zero.");
+        }
+    }
+
+    /// <summary>
+    /// Rejects invalid branch lengths before they reach geometry code.
+    /// </summary>
+    private static float ValidateBranchLength(float value, string parameterName)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Support branch length must be finite and non-negative.");
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Normalizes a direction, returning a stable fallback for invalid or zero vectors.
+    /// </summary>
+    private static Vector3 NormalizeOrDefault(Vector3 direction, Vector3 fallback)
+    {
+        if (!float.IsFinite(direction.X) || !float.IsFinite(direction.Y) || !float.IsFinite(direction.Z))
+        {
+            return fallback;
+        }
+
+        if (direction.LengthSquared() <= 0.000001f)
+        {
+            return fallback;
+        }
+
+        return Vector3.Normalize(direction);
     }
 }

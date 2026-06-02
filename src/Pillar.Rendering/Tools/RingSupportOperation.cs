@@ -1,4 +1,4 @@
-﻿// RingSupportOperation.cs
+// RingSupportOperation.cs
 // Creates a ring of individual support entities from three circumference picks while keeping preview state transient.
 using Pillar.Commands;
 using Pillar.Core.Document;
@@ -893,15 +893,23 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             }
 
             Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
-            Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(projectionHit.Point, headDirection, supportProfile);
+            SupportBranchPlan branchPlan;
+
+            if (!SupportBranchPlanner.TryCreateBranchPlan(selectedMesh, projectionHit.Point, headDirection, supportProfile, out branchPlan))
+            {
+                invalidSupportCount++;
+                continue;
+            }
 
             try
             {
                 supportEntities.Add(new SupportEntity(
                     supportLayerGroupId,
                     projectionHit.Point,
-                    basePosition,
+                    branchPlan.BasePosition,
                     headDirection,
+                    branchPlan.BranchLength,
+                    branchPlan.BranchDirection,
                     supportProfile));
             }
             catch (ArgumentException)

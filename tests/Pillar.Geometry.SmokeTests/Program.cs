@@ -1,4 +1,4 @@
-﻿// Program.cs
+// Program.cs
 // Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
 using Pillar.Core.Entities;
 using Pillar.Core.Supports;
@@ -32,6 +32,11 @@ public static class Program
         RunTest(failures, "Support head direction clamps to profile angle", ValidateSupportHeadDirectionClampsToProfileAngle);
         RunTest(failures, "Angled head support mesh is closed", ValidateAngledHeadSupportMesh);
         RunTest(failures, "Joint ball normals point outward", ValidateJointBallNormalsPointOutward);
+        RunTest(failures, "Default branch setting creates no branch", ValidateDefaultBranchSettingCreatesNoBranch);
+        RunTest(failures, "Branch profile fields validate non-negative values", ValidateBranchProfileFieldsValidateNonNegativeValues);
+        RunTest(failures, "Branch support mesh is closed with outward balls", ValidateBranchSupportMeshIsClosedWithOutwardBalls);
+        RunTest(failures, "Branch is omitted when stem is already clear", ValidateBranchIsOmittedWhenStemIsAlreadyClear);
+        RunTest(failures, "Support is skipped when branch cannot clear model", ValidateSupportIsSkippedWhenBranchCannotClearModel);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -192,6 +197,100 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that the shipped default profile keeps branch generation disabled.
+    /// </summary>
+    private static void ValidateDefaultBranchSettingCreatesNoBranch()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateBlockingWallMesh(-10.0f, 10.0f, Transform3DData.Identity);
+        Vector3 tipPosition = new Vector3(0.0f, 0.0f, 10.0f);
+        SupportBranchPlan branchPlan;
+
+        if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, tipPosition, Vector3.UnitZ, profile, out branchPlan))
+        {
+            throw new InvalidOperationException("Expected default branch settings to preserve support creation.");
+        }
+
+        if (branchPlan.BranchLength != 0.0f)
+        {
+            throw new InvalidOperationException("Expected the default profile to create no branch.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that branch dimensions reject negative input before geometry generation.
+    /// </summary>
+    private static void ValidateBranchProfileFieldsValidateNonNegativeValues()
+    {
+        ValidateProfileThrowsForBranchValues(-0.1f, SupportDefaults.DefaultModelClearance, "maximum branch length");
+        ValidateProfileThrowsForBranchValues(SupportDefaults.DefaultMaximumBranchLength, -0.1f, "model clearance");
+    }
+
+    /// <summary>
+    /// Validates that an explicit branch support remains manifold and has outward-facing joint balls.
+    /// </summary>
+    private static void ValidateBranchSupportMeshIsClosedWithOutwardBalls()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f);
+        Vector3 tipPosition = new Vector3(4.0f, 1.0f, 12.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        Vector3 headJointPosition = tipPosition - (headDirection * profile.HeadHeight);
+        Vector3 branchDirection = SupportBranchPlanner.CreateMaximumAngleBranchDirection(headDirection, profile);
+        float branchLength = 2.0f;
+        Vector3 stemJointPosition = headJointPosition - (branchDirection * branchLength);
+        Vector3 basePosition = new Vector3(stemJointPosition.X, stemJointPosition.Y, 0.0f);
+        SupportEntity support = new SupportEntity(Guid.NewGuid(), tipPosition, basePosition, headDirection, branchLength, branchDirection, profile);
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+        ValidateBallNormalsPointOutward(meshData, stemJointPosition, profile.StemTopDiameter * 0.5f);
+        ValidateBallNormalsPointOutward(meshData, headJointPosition, profile.StemTopDiameter * 0.5f);
+    }
+
+    /// <summary>
+    /// Validates that no branch is emitted when the vertical stem already satisfies clearance.
+    /// </summary>
+    private static void ValidateBranchIsOmittedWhenStemIsAlreadyClear()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 0.5f);
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(20.0f, 20.0f, 5.0f),
+            new Vector3(21.0f, 20.0f, 5.0f),
+            new Vector3(20.0f, 21.0f, 5.0f),
+            Transform3DData.Identity);
+        Vector3 tipPosition = new Vector3(0.0f, 0.0f, 10.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        SupportBranchPlan branchPlan;
+
+        if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, tipPosition, headDirection, profile, out branchPlan))
+        {
+            throw new InvalidOperationException("Expected a clear stem path to keep the support.");
+        }
+
+        if (branchPlan.BranchLength != 0.0f)
+        {
+            throw new InvalidOperationException("Expected the planner to omit the branch when length zero is clear.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that supports are skipped when every candidate vertical stem intersects clearance.
+    /// </summary>
+    private static void ValidateSupportIsSkippedWhenBranchCannotClearModel()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f);
+        MeshEntity mesh = CreateBlockingWallMesh(-10.0f, 1.0f, Transform3DData.Identity);
+        Vector3 tipPosition = new Vector3(0.0f, 0.0f, 10.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        SupportBranchPlan branchPlan;
+
+        if (SupportBranchPlanner.TryCreateBranchPlan(mesh, tipPosition, headDirection, profile, out branchPlan))
+        {
+            throw new InvalidOperationException("Expected the planner to skip a support that cannot clear the model.");
+        }
+    }
+
+    /// <summary>
     /// Validates that vertical support projection exposes the triangle normal needed by angled heads.
     /// </summary>
     private static void ValidateVerticalProjectionReturnsTriangleNormal()
@@ -310,10 +409,48 @@ public static class Program
             SupportDefaults.DefaultBaseHeight,
             SupportDefaults.DefaultStemBottomDiameter,
             SupportDefaults.DefaultStemTopDiameter,
+            SupportDefaults.DefaultMaximumBranchLength,
+            SupportDefaults.DefaultModelClearance,
             SupportDefaults.DefaultHeadHeight,
             SupportDefaults.DefaultHeadPenetrationDepth,
             SupportDefaults.DefaultHeadTopDiameter,
             maxHeadAngleFromVerticalDegrees);
+    }
+
+    /// <summary>
+    /// Creates one support profile with configurable branch settings.
+    /// </summary>
+    private static SupportProfile CreateBranchProfile(float maxHeadAngleFromVerticalDegrees, float maximumBranchLength, float modelClearance)
+    {
+        return new SupportProfile(
+            SupportDefaults.DefaultBaseBottomRadius,
+            SupportDefaults.DefaultBaseHeight,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            maximumBranchLength,
+            modelClearance,
+            SupportDefaults.DefaultHeadHeight,
+            SupportDefaults.DefaultHeadPenetrationDepth,
+            SupportDefaults.DefaultHeadTopDiameter,
+            maxHeadAngleFromVerticalDegrees);
+    }
+
+    /// <summary>
+    /// Validates that invalid branch profile values throw the expected exception.
+    /// </summary>
+    private static void ValidateProfileThrowsForBranchValues(float maximumBranchLength, float modelClearance, string fieldName)
+    {
+        try
+        {
+            SupportProfile profile = CreateBranchProfile(45.0f, maximumBranchLength, modelClearance);
+            _ = profile;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Expected negative {fieldName} to be rejected.");
     }
 
     /// <summary>
@@ -334,6 +471,33 @@ public static class Program
                 0,
                 1,
                 2
+            },
+            new List<Vector3>(),
+            userTransform: userTransform);
+    }
+
+    /// <summary>
+    /// Creates a vertical wall near the candidate stem path for branch clearance tests.
+    /// </summary>
+    private static MeshEntity CreateBlockingWallMesh(float minimumX, float maximumX, Transform3DData userTransform)
+    {
+        return new MeshEntity(
+            "Branch clearance wall",
+            new List<Vector3>
+            {
+                new Vector3(minimumX, -0.1f, 0.0f),
+                new Vector3(maximumX, -0.1f, 0.0f),
+                new Vector3(maximumX, -0.1f, 14.0f),
+                new Vector3(minimumX, -0.1f, 14.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
             },
             new List<Vector3>(),
             userTransform: userTransform);
@@ -405,6 +569,46 @@ public static class Program
     private static bool IsNearSphereSurface(Vector3 position, Vector3 center, float radius)
     {
         return MathF.Abs(Vector3.Distance(position, center) - radius) <= 0.0001f;
+    }
+
+    /// <summary>
+    /// Validates that every triangle found on a generated ball has an outward normal.
+    /// </summary>
+    private static void ValidateBallNormalsPointOutward(SupportMeshData meshData, Vector3 center, float radius)
+    {
+        int checkedTriangleCount = 0;
+
+        for (int i = 0; i < meshData.TriangleIndices.Count; i += 3)
+        {
+            int indexA = meshData.TriangleIndices[i];
+            int indexB = meshData.TriangleIndices[i + 1];
+            int indexC = meshData.TriangleIndices[i + 2];
+            Vector3 a = GetPosition(meshData, indexA);
+            Vector3 b = GetPosition(meshData, indexB);
+            Vector3 c = GetPosition(meshData, indexC);
+
+            if (!IsNearSphereSurface(a, center, radius)
+                || !IsNearSphereSurface(b, center, radius)
+                || !IsNearSphereSurface(c, center, radius))
+            {
+                continue;
+            }
+
+            Vector3 centroidDirection = ((a + b + c) / 3.0f) - center;
+            Vector3 normal = meshData.Normals[indexA];
+
+            if (Vector3.Dot(normal, centroidDirection) <= 0.0f)
+            {
+                throw new InvalidOperationException("Expected every joint ball triangle normal to point away from the ball center.");
+            }
+
+            checkedTriangleCount++;
+        }
+
+        if (checkedTriangleCount == 0)
+        {
+            throw new InvalidOperationException("Expected to find joint ball triangles in the generated support mesh.");
+        }
     }
 
     /// <summary>

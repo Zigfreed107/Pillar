@@ -1,4 +1,4 @@
-﻿// SupportMeshBuilder.cs
+// SupportMeshBuilder.cs
 // Generates procedural triangle geometry for support entities without introducing rendering dependencies.
 using Pillar.Core.Entities;
 using Pillar.Core.Supports;
@@ -42,9 +42,16 @@ public static class SupportMeshBuilder
         List<Vector3> normals = new List<Vector3>();
         Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
         float headLength = CalculateUsableHeadLength(support.TipPosition, support.BasePosition.Z, headDirection, support.Profile.HeadHeight);
-        Vector3 headBottomPosition = support.TipPosition - (headDirection * headLength);
-        Vector3 stemBasePosition = new Vector3(headBottomPosition.X, headBottomPosition.Y, support.BasePosition.Z);
-        float verticalLength = MathF.Max(0.0f, headBottomPosition.Z - stemBasePosition.Z);
+        Vector3 headJointPosition = support.TipPosition - (headDirection * headLength);
+        bool hasBranch = support.BranchLength > AxialTolerance;
+        Vector3 branchDirection = hasBranch
+            ? Vector3.Normalize(support.BranchDirection)
+            : Vector3.UnitZ;
+        Vector3 stemJointPosition = hasBranch
+            ? headJointPosition - (branchDirection * support.BranchLength)
+            : headJointPosition;
+        Vector3 stemBasePosition = new Vector3(stemJointPosition.X, stemJointPosition.Y, support.BasePosition.Z);
+        float verticalLength = MathF.Max(0.0f, stemJointPosition.Z - stemBasePosition.Z);
 
         if (verticalLength > AxialTolerance)
         {
@@ -79,19 +86,50 @@ public static class SupportMeshBuilder
             positions,
             triangleIndices,
             normals,
-            headBottomPosition,
+            headJointPosition,
             support.TipPosition,
             headDirection,
             support.Profile,
             validatedRadialSegments);
 
-        AddJointBall(
-            positions,
-            triangleIndices,
-            normals,
-            headBottomPosition,
-            support.Profile,
-            validatedRadialSegments);
+        if (hasBranch)
+        {
+            AddClosedBranch(
+                positions,
+                triangleIndices,
+                normals,
+                stemJointPosition,
+                headJointPosition,
+                branchDirection,
+                support.Profile,
+                validatedRadialSegments);
+
+            AddJointBall(
+                positions,
+                triangleIndices,
+                normals,
+                stemJointPosition,
+                support.Profile,
+                validatedRadialSegments);
+
+            AddJointBall(
+                positions,
+                triangleIndices,
+                normals,
+                headJointPosition,
+                support.Profile,
+                validatedRadialSegments);
+        }
+        else
+        {
+            AddJointBall(
+                positions,
+                triangleIndices,
+                normals,
+                headJointPosition,
+                support.Profile,
+                validatedRadialSegments);
+        }
 
         return new SupportMeshData(positions, triangleIndices, normals);
     }
@@ -189,6 +227,38 @@ public static class SupportMeshBuilder
 
         AddCap(positions, triangleIndices, normals, headBottomPosition, headBottomRadius, -headDirection, headFrame.U, headFrame.V, radialSegments);
         AddCap(positions, triangleIndices, normals, penetrationTip, headTopRadius, headDirection, headFrame.U, headFrame.V, radialSegments);
+    }
+
+    /// <summary>
+    /// Adds the optional branch cylinder as a closed mesh between the vertical stem and angled head.
+    /// </summary>
+    private static void AddClosedBranch(
+        List<Vector3> positions,
+        List<int> triangleIndices,
+        List<Vector3> normals,
+        Vector3 stemJointPosition,
+        Vector3 headJointPosition,
+        Vector3 branchDirection,
+        SupportProfile profile,
+        int radialSegments)
+    {
+        float branchRadius = profile.StemTopDiameter * 0.5f;
+        (Vector3 U, Vector3 V) branchFrame = CreatePerpendicularFrame(branchDirection);
+
+        AddFrustum(
+            positions,
+            triangleIndices,
+            normals,
+            stemJointPosition,
+            headJointPosition,
+            branchRadius,
+            branchRadius,
+            branchFrame.U,
+            branchFrame.V,
+            radialSegments);
+
+        AddCap(positions, triangleIndices, normals, stemJointPosition, branchRadius, -branchDirection, branchFrame.U, branchFrame.V, radialSegments);
+        AddCap(positions, triangleIndices, normals, headJointPosition, branchRadius, branchDirection, branchFrame.U, branchFrame.V, radialSegments);
     }
 
     /// <summary>

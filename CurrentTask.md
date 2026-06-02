@@ -1,23 +1,26 @@
 # Current Task
-I want to expand on the functionality of supports. Supports are currently completely vertical, with the tip joining to the model vertically. I want to add an option to allow the tip of the support to join to the model at an angle, which will allow for better support of overhangs. This will be an optional feature that can be enabled or disabled by the user.
+When supports are added, they should avoid passing through the model they are attached to. 
 
-## User Interface:
-In the Support Preset Editor, in the Head section:
-- add a numeric box with the label "max head angle from vertical".
-	- It can accept values from 0 (vertical) to 90 (horizontal).
-- Ensure this parameter is added to the default settings for supports.
+## User Interface
+In the Support Presets Window:
+- Add a section called "Branch" between the Stem and the Head sections.
+- Add a numeric input with label "Maximum branch length".
+	- This input must be greater or equal to zero.
+- Add a numeric input with label "Model Clearance".
+	- This input must be greater or equal to zero. 
+	- The default is 3.
 
+# Logic
+- Between the Head and the Stem, a new cylinder shape called the "Branch" needs to be added. 
+	- The Branch has the same diameter as the top of the Stem.
+	- The Branch should have the same number of polar segmants as the Stem and head meshes.
+	- A ball(sphere) mesh drawn between the Head and the Stem should now be created between the Branch and Stem.
+	- A ball(sphere) mesh should be created between the Head and the Branch. It should have the same diameter as the Branch.
+	- The Branch mesh should be closed at the top and bottom since we can't guarentee it will merge nicely with the balls, and it is important the mesh is closed for slicing when printing.
+	- The Branch length (length of the cylinder) should extend until the Stem no longer intersects the model the support is attached to by the Model Clearance distance specified in the Support Presets Window.
+	- There is a maximum length the Branch can extend. This is set in the Support Presets Window with the "Maximum branch length" parameter. If the support cannot be created at this maximum height, then the support should not be created.
+	- Try to keep the code that calculates the Branch length as efficient and fast as possible. This is important because it will be called many times during the support generation process.
+	- If without the Branch the support does not intersect the model (within the Model Clearance distance), then the Branch should not be created. This is to avoid creating unnecessary geometry when it is not needed. Only one ball should be created between the Head and the Stem in this case.
 
-## Logic
-- Supports now allow the head to be angled perpendicular to the face they intercept. 
-- The head can never be more than the max head angle from verical as specified in the support preset. If the angle perpendicular to the intercepted face would require the head to be at a greater angle than this, then the head will need to be created at the max head angle.
-- A ball mesh should be placed between the top of the Stem and bottom of the Head, so that the connection remains smooth.
-- The top of the Stem and bottom of the Head meshes should be closed, since we can no longer guarentee the join.
-
-
-# Final Notes
-- Do not worry about backward compatibility with previous saves or projects - we are still building the software.
-- Review SupportFunctionality.md for details on how supports are currently implemented, and ensure that the new functionality is consistent with the existing design.
-
-
-
+# Notes
+- Review "SupportFunctionality.md" in the "Documentation" folder for more information on how supports are currently implemented in Graphite. This will help you understand where to add the new Branch logic and how it fits into the existing support generation process.

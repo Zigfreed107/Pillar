@@ -1,4 +1,4 @@
-﻿<!--
+<!--
     SupportPresetEditorWindow.xaml
     Defines the floating editor used to create and overwrite reusable support dimension presets.
 -->
@@ -8,7 +8,7 @@
         xmlns:controls="clr-namespace:Pillar.UI.Controls"
         Title="Support Preset Editor"
         Width="440"
-        Height="660"
+        Height="720"
         MinWidth="420"
         MinHeight="560"
         WindowStartupLocation="CenterOwner">
@@ -121,6 +121,46 @@
                                                 Grid.Column="1"
                                                 Margin="8,0,0,0"
                                                 Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Branch"
+                          Margin="0,10,0,0">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Maximum branch length" />
+                        <controls:NumericUpDown x:Name="MaximumBranchLengthInput"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Model clearance" />
+                        <controls:NumericUpDown x:Name="ModelClearanceInput"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0"
                                                 Maximum="1000"
                                                 Increment="0.1"
                                                 DecimalPlaces="1" />

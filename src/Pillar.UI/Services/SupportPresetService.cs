@@ -1,4 +1,4 @@
-﻿// SupportPresetService.cs
+// SupportPresetService.cs
 // Loads, saves, and selects support presets from user settings so support tools can request profiles without knowing about UI controls.
 using Pillar.Core.Supports;
 using System;
@@ -160,6 +160,8 @@ public sealed class SupportPresetService
                 BaseHeight = preset.Profile.BaseHeight,
                 StemBottomDiameter = preset.Profile.StemBottomDiameter,
                 StemTopDiameter = preset.Profile.StemTopDiameter,
+                MaximumBranchLength = preset.Profile.MaximumBranchLength,
+                ModelClearance = preset.Profile.ModelClearance,
                 HeadHeight = preset.Profile.HeadHeight,
                 HeadPenetrationDepth = preset.Profile.HeadPenetrationDepth,
                 HeadTopDiameter = preset.Profile.HeadTopDiameter,
@@ -204,6 +206,8 @@ public sealed class SupportPresetService
             presetDto.BaseHeight,
             presetDto.StemBottomDiameter,
             presetDto.StemTopDiameter,
+            presetDto.MaximumBranchLength,
+            presetDto.ModelClearance,
             presetDto.HeadHeight,
             presetDto.HeadPenetrationDepth,
             presetDto.HeadTopDiameter,
@@ -235,6 +239,8 @@ public sealed class SupportPresetService
         public float BaseHeight { get; set; }
         public float StemBottomDiameter { get; set; }
         public float StemTopDiameter { get; set; }
+        public float MaximumBranchLength { get; set; }
+        public float ModelClearance { get; set; }
         public float HeadHeight { get; set; }
         public float HeadPenetrationDepth { get; set; }
         public float HeadTopDiameter { get; set; }

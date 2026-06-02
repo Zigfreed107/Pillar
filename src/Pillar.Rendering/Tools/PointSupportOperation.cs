@@ -1,4 +1,4 @@
-﻿// PointSupportOperation.cs
+// PointSupportOperation.cs
 // Creates one point support per click by converting a viewport mesh hit into a support entity and command.
 using Pillar.Commands;
 using Pillar.Core.Document;
@@ -6,6 +6,7 @@ using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Supports;
 using Pillar.Core.Tools;
+using Pillar.Geometry.Supports;
 using Pillar.Rendering.Math;
 using Pillar.Rendering.Scene;
 using System;
@@ -91,7 +92,13 @@ public sealed class PointSupportOperation : IToolOperation
         SupportProfile supportProfile = _createSupportProfile();
         Vector3 tipPosition = meshSurfaceHit.HitPosition;
         Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(meshSurfaceHit.SurfaceNormal, supportProfile);
-        Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(tipPosition, headDirection, supportProfile);
+        SupportBranchPlan branchPlan;
+
+        if (!SupportBranchPlanner.TryCreateBranchPlan(targetMesh, tipPosition, headDirection, supportProfile, out branchPlan))
+        {
+            _statusReporter("Support skipped because the stem could not clear the model within the maximum branch length.");
+            return;
+        }
 
         if (supportLayerGroup == null)
         {
@@ -99,8 +106,10 @@ public sealed class PointSupportOperation : IToolOperation
             SupportEntity firstSupportEntity = new SupportEntity(
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
-                basePosition,
+                branchPlan.BasePosition,
                 headDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
                 supportProfile);
 
             _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
@@ -112,8 +121,10 @@ public sealed class PointSupportOperation : IToolOperation
             SupportEntity supportEntity = new SupportEntity(
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
-                basePosition,
+                branchPlan.BasePosition,
                 headDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
                 supportProfile);
 
             _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));

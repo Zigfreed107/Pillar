@@ -1,4 +1,4 @@
-﻿// SupportGroupTransformRegenerator.cs
+// SupportGroupTransformRegenerator.cs
 // Regenerates model-owned support groups after mesh transforms without coupling support behavior to WPF or Helix rendering.
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
@@ -109,6 +109,7 @@ public static class SupportGroupTransformRegenerator
         }
 
         List<SupportEntity> newPointSupports = CreatePointSupportEntities(
+            mesh,
             supportLayerGroup.Id,
             oldSupportEntities,
             oldInverseWorldTransform,
@@ -126,6 +127,7 @@ public static class SupportGroupTransformRegenerator
     /// Rebuilds point-style supports by transforming each tip anchor with the model and recreating a vertical support.
     /// </summary>
     private static List<SupportEntity> CreatePointSupportEntities(
+        MeshEntity mesh,
         Guid supportLayerGroupId,
         IReadOnlyList<SupportEntity> oldSupportEntities,
         Matrix4x4 oldInverseWorldTransform,
@@ -145,9 +147,22 @@ public static class SupportGroupTransformRegenerator
                 oldInverseWorldTransform,
                 newWorldTransform);
             Vector3 newHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(transformedHeadDirection, oldSupportEntity.Profile);
-            Vector3 newBasePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(newTipPosition, newHeadDirection, oldSupportEntity.Profile);
+            SupportBranchPlan branchPlan;
 
-            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, newTipPosition, newBasePosition, newHeadDirection, oldSupportEntity.Profile);
+            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, newTipPosition, newHeadDirection, oldSupportEntity.Profile, out branchPlan))
+            {
+                continue;
+            }
+
+            TryAddSupportEntity(
+                newSupportEntities,
+                supportLayerGroupId,
+                newTipPosition,
+                branchPlan.BasePosition,
+                newHeadDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
+                oldSupportEntity.Profile);
         }
 
         return newSupportEntities;
@@ -187,8 +202,22 @@ public static class SupportGroupTransformRegenerator
             }
 
             Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
-            Vector3 basePosition = SupportHeadDirectionCalculator.CreateShiftedBasePosition(projectionHit.Point, headDirection, supportProfile);
-            TryAddSupportEntity(newSupportEntities, supportLayerGroupId, projectionHit.Point, basePosition, headDirection, supportProfile);
+            SupportBranchPlan branchPlan;
+
+            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, projectionHit.Point, headDirection, supportProfile, out branchPlan))
+            {
+                continue;
+            }
+
+            TryAddSupportEntity(
+                newSupportEntities,
+                supportLayerGroupId,
+                projectionHit.Point,
+                branchPlan.BasePosition,
+                headDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
+                supportProfile);
         }
 
         return newSupportEntities;
@@ -283,11 +312,13 @@ public static class SupportGroupTransformRegenerator
         Vector3 tipPosition,
         Vector3 basePosition,
         Vector3 headDirection,
+        float branchLength,
+        Vector3 branchDirection,
         SupportProfile supportProfile)
     {
         try
         {
-            supportEntities.Add(new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, supportProfile));
+            supportEntities.Add(new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, supportProfile));
         }
         catch (ArgumentException)
         {
