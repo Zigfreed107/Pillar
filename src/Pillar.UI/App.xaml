@@ -13,6 +13,12 @@
         <SolidColorBrush x:Key="ModeOverlayTitleBrush" Color="#FF1F2933" />
         <SolidColorBrush x:Key="ModeOverlayBodyBrush" Color="#FF3E4C59" />
         <SolidColorBrush x:Key="ModeOverlayLabelBrush" Color="#FF007ACC" />
+        <SolidColorBrush x:Key="ClipSliderOverlayBackgroundBrush" Color="#F8FFFFFF" />
+        <SolidColorBrush x:Key="ClipSliderTrackBrush" Color="#33000000" />
+        <SolidColorBrush x:Key="ClipSliderRangeBrush" Color="#55007ACC" />
+        <SolidColorBrush x:Key="ClipSliderHandleBrush" Color="#FFFFFFFF" />
+        <SolidColorBrush x:Key="ClipSliderHandleBorderBrush" Color="#FF007ACC" />
+        <SolidColorBrush x:Key="ClipSliderTextBrush" Color="#FF1F2933" />
         <Color x:Key="ViewportAmbientLightColor">#646464</Color>
         <Color x:Key="ViewportKeyLightColor">#afafaf</Color>
         <Color x:Key="ViewportFillLightColor">#7d7d7d</Color>
@@ -42,6 +48,16 @@
             <Setter Property="MaxWidth" Value="360" />
             <Setter Property="Padding" Value="12" />
             <Setter Property="Background" Value="{DynamicResource LayerOnMicaBaseAltFillColorTertiaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ModeOverlayBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="ClipSliderOverlayPanelStyle" TargetType="Border">
+            <Setter Property="Width" Value="96" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Background" Value="{StaticResource ClipSliderOverlayBackgroundBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource ModeOverlayBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />

@@ -1,0 +1,87 @@
+<!--
+    ClipRangeSlider.xaml
+    Provides the viewport overlay control for setting the visible Z range used by render-only clipping planes.
+-->
+<UserControl x:Class="Pillar.UI.Controls.ClipRangeSlider"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False"
+             MinHeight="300"
+             MinWidth="96">
+    <Border Style="{StaticResource ClipSliderOverlayPanelStyle}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       HorizontalAlignment="Center"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource ClipSliderTextBrush}"
+                       Text="Z Clip" />
+
+            <Canvas x:Name="SliderCanvas"
+                    Grid.Row="1"
+                    Width="76"
+                    MinHeight="240"
+                    Margin="0,8"
+                    SizeChanged="SliderCanvas_SizeChanged">
+                <Rectangle x:Name="TrackRectangle"
+                           Width="8"
+                           RadiusX="4"
+                           RadiusY="4"
+                           Fill="{StaticResource ClipSliderTrackBrush}"
+                           IsHitTestVisible="False" />
+
+                <Rectangle x:Name="VisibleRangeRectangle"
+                           Width="8"
+                           RadiusX="4"
+                           RadiusY="4"
+                           Fill="{StaticResource ClipSliderRangeBrush}"
+                           IsHitTestVisible="False" />
+
+                <Border x:Name="UpperHandle"
+                        Width="54"
+                        Height="14"
+                        Background="{StaticResource ClipSliderHandleBrush}"
+                        BorderBrush="{StaticResource ClipSliderHandleBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="2"
+                        Cursor="SizeNS"
+                        MouseLeftButtonDown="UpperHandle_MouseLeftButtonDown"
+                        ToolTip="Upper clipping plane" />
+
+                <Border x:Name="LowerHandle"
+                        Width="54"
+                        Height="14"
+                        Background="{StaticResource ClipSliderHandleBrush}"
+                        BorderBrush="{StaticResource ClipSliderHandleBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="2"
+                        Cursor="SizeNS"
+                        MouseLeftButtonDown="LowerHandle_MouseLeftButtonDown"
+                        ToolTip="Lower clipping plane" />
+            </Canvas>
+
+            <TextBlock x:Name="RangeTextBlock"
+                       Grid.Row="2"
+                       HorizontalAlignment="Center"
+                       FontSize="11"
+                       Foreground="{StaticResource ClipSliderTextBrush}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap" />
+
+            <Button Grid.Row="3"
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Stretch"
+                    Click="ResetButton_Click"
+                    Content="Reset"
+                    ToolTip="Reset clipping to the full print volume" />
+        </Grid>
+    </Border>
+</UserControl>

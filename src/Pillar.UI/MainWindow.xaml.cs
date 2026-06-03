@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private readonly SupportPresetService _supportPresetService;
     private readonly CadCommandRunner _commandRunner;
     private readonly LayerPanelViewModel _layerPanelViewModel;
+    private readonly PrintableVolumeDefinition _printableVolumeDefinition;
     private readonly ViewportCameraService _viewportCameraService;
     private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
@@ -83,14 +84,17 @@ public partial class MainWindow : Window
 
         EffectsManager = new DefaultEffectsManager();
         Viewport.EffectsManager = EffectsManager; // Needed since EffectsManager is initialised AFTER Main window is initialised. Data binding needs to be updated.
+        InitializeViewportPostProcessingOptions();
 
         _document = new CadDocument();
+        BackgroundGridDefinition backgroundGridDefinition = ReadBackgroundGridDefinition();
+        _printableVolumeDefinition = backgroundGridDefinition.PrintableVolume;
         _scene = new SceneManager(
             Viewport,
             _document,
             Properties.Settings.Default.SupportSides,
             ReadSelectionOutlineColor(),
-            ReadBackgroundGridDefinition());
+            backgroundGridDefinition);
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
@@ -110,6 +114,7 @@ public partial class MainWindow : Window
             GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
+        InitializeModelClippingControls();
         _documentFileService = new DocumentFileService(
             this,
             _document,
@@ -184,6 +189,8 @@ public partial class MainWindow : Window
         _manualSupportTool.SelectionWindowChanged -= _selectionWindowOverlay.Update;
         _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
         _manualSupportTool.PreviewCalculationStateChanged -= ManualSupportTool_PreviewCalculationStateChanged;
+        ClipRangeSliderOverlay.ClipRangeChanged -= ClipRangeSliderOverlay_ClipRangeChanged;
+        DisposeViewportPostProcessingOptions();
         ClearPreviewCalculationCursor();
         _viewportCameraService.Dispose();
     }
@@ -206,6 +213,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        ApplyViewportPostProcessingOptions();
         Viewport.ZoomExtents(GetStartupViewportBounds(), 0.0);
         _hasFramedStartupView = true;
     }

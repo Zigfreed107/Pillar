@@ -36,17 +36,7 @@ public static class SupportRenderer
             Normals = new Vector3Collection(meshData.Normals)
         };
 
-        MeshGeometryModel3D model = new MeshGeometryModel3D
-        {
-            Geometry = geometry,
-            Material = CreateMaterial(color),
-            CullMode = SharpDX.Direct3D11.CullMode.Back
-        };
-
-        return new GroupModel3D
-        {
-            Children = { model }
-        };
+        return MeshRenderer.CreateSelectableMeshGroup(geometry, CreateMaterial(color));
     }
 
     /// <summary>

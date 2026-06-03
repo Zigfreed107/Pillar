@@ -45,12 +45,17 @@ public class SceneManager
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
+    private readonly PrintableVolumeDefinition _printableVolumeDefinition;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly MediaColor _selectionOutlineColor;
     private readonly PhongMaterial _highlightMaterial;
     private bool _isFaceAngleHighlightEnabled;
     private double _faceAngleThresholdDegrees = 45.0;
     private Color4 _faceAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.65f);
+    private bool _isModelClipRangeConfigured;
+    private float _modelClipLowerZ;
+    private float _modelClipUpperZ;
+    private const float ModelClipRangeTolerance = 0.001f;
 
     /// <summary>
     /// Gets the domain selection manager used by selection tools.
@@ -109,6 +114,7 @@ public class SceneManager
         _highlightMaterial = CreateSelectionMaterial(_selectionOutlineColor);
         _selectionManager = new SelectionManager(_document);
         BackgroundGridDefinition resolvedBackgroundGridDefinition = backgroundGridDefinition ?? throw new ArgumentNullException(nameof(backgroundGridDefinition));
+        _printableVolumeDefinition = resolvedBackgroundGridDefinition.PrintableVolume;
 
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
         {
@@ -278,6 +284,7 @@ public class SceneManager
             }
 
             ApplyDefaultMaterial(visual);
+            ApplyModelClipRangeIfConfigured(visual);
             if (entity is MeshEntity mesh)
             {
                 ApplyFaceAngleHighlight(visual, mesh);
@@ -525,6 +532,22 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies render-only horizontal clipping planes to mesh-based entity visuals.
+    /// </summary>
+    public void ConfigureModelClipRange(float lowerZ, float upperZ)
+    {
+        _modelClipLowerZ = global::System.Math.Min(lowerZ, upperZ);
+        _modelClipUpperZ = global::System.Math.Max(lowerZ, upperZ);
+        _isModelClipRangeConfigured = true;
+        bool isClippingActive = IsModelClipRangeActive();
+
+        foreach (GroupModel3D visual in _entityToVisual.Values)
+        {
+            MeshRenderer.ApplyClipRange(visual, _modelClipLowerZ, _modelClipUpperZ, isClippingActive);
+        }
+    }
+
+    /// <summary>
     /// Creates one renderable visual for one supported entity type.
     /// </summary>
     private GroupModel3D? CreateVisual(CadEntity entity)
@@ -568,6 +591,7 @@ public class SceneManager
         _entityToVisual[entity] = visual;
         _visualToEntity[visual] = entity;
         ApplyDefaultMaterial(visual);
+        ApplyModelClipRangeIfConfigured(visual);
         if (entity is MeshEntity mesh)
         {
             ApplyFaceAngleHighlight(visual, mesh);
@@ -620,25 +644,26 @@ public class SceneManager
             return;
         }
 
-        MeshGeometryModel3D? meshModel = MeshRenderer.GetSelectableMeshModel(group);
-
-        if (meshModel == null)
-        {
-            return;
-        }
-
-        meshModel.PostEffects = string.Empty;
-        meshModel.IsSelected = false;
-
         if (entity is SupportEntity supportEntity)
         {
-            meshModel.Material = SupportRenderer.CreateMaterial(
+            PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(
                 GetSupportLayerGroupColor(supportEntity.SupportLayerGroupId),
                 GetSupportLayerGroupOpacity(supportEntity.SupportLayerGroupId));
+            MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
+            {
+                meshModel.PostEffects = string.Empty;
+                meshModel.IsSelected = false;
+                meshModel.Material = supportMaterial;
+            });
             return;
         }
 
-        meshModel.Material = _defaultMeshMaterial;
+        MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
+        {
+            meshModel.PostEffects = string.Empty;
+            meshModel.IsSelected = false;
+            meshModel.Material = _defaultMeshMaterial;
+        });
     }
 
     /// <summary>
@@ -666,13 +691,11 @@ public class SceneManager
             return;
         }
 
-        MeshGeometryModel3D? meshModel = MeshRenderer.GetSelectableMeshModel(group);
-
-        if (meshModel != null)
+        MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
         {
             meshModel.IsSelected = true;
             meshModel.PostEffects = MeshHighlightPostEffect;
-        }
+        });
     }
 
     /// <summary>
@@ -697,12 +720,11 @@ public class SceneManager
                 continue;
             }
 
-            MeshGeometryModel3D? meshModel = SupportRenderer.GetMeshModel(visual);
-
-            if (meshModel != null)
+            PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
+            MeshRenderer.ApplyToSelectableMeshModels(visual, (MeshGeometryModel3D meshModel) =>
             {
-                meshModel.Material = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
-            }
+                meshModel.Material = supportMaterial;
+            });
         }
     }
 
@@ -724,6 +746,35 @@ public class SceneManager
         {
             _elementToVisual[faceHighlightModel] = visual;
         }
+
+        ApplyModelClipRangeIfConfigured(visual);
+    }
+
+    /// <summary>
+    /// Applies the current clipping range to one visual when the clipping overlay has already initialized.
+    /// </summary>
+    private void ApplyModelClipRangeIfConfigured(GroupModel3D visual)
+    {
+        if (!_isModelClipRangeConfigured)
+        {
+            return;
+        }
+
+        MeshRenderer.ApplyClipRange(visual, _modelClipLowerZ, _modelClipUpperZ, IsModelClipRangeActive());
+    }
+
+    /// <summary>
+    /// Returns true only when the requested range excludes part of the configured printable Z volume.
+    /// </summary>
+    private bool IsModelClipRangeActive()
+    {
+        if (!_isModelClipRangeConfigured)
+        {
+            return false;
+        }
+
+        return _modelClipLowerZ > ModelClipRangeTolerance
+            || _modelClipUpperZ < _printableVolumeDefinition.ZDistance - ModelClipRangeTolerance;
     }
 
     /// <summary>

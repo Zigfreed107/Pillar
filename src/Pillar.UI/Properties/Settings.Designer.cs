@@ -9,20 +9,20 @@
 //------------------------------------------------------------------------------
 
 namespace Pillar.UI.Properties {
-    
-    
+
+
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "18.6.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
-        
+
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
-        
+
         public static Settings Default {
             get {
                 return defaultInstance;
             }
         }
-        
+
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("50")]
@@ -31,7 +31,7 @@ namespace Pillar.UI.Properties {
                 return ((int)(this["UndoHistoryLimit"]));
             }
         }
-        
+
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("10")]
@@ -67,7 +67,7 @@ namespace Pillar.UI.Properties {
                 return ((double)(this["PrintableVolumeZ"]));
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("C:\\Coding\\Pillar\\SampleProjects\\Sample.gph")]
@@ -79,7 +79,7 @@ namespace Pillar.UI.Properties {
                 this["LoadAtStartup"] = value;
             }
         }
-        
+
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("16")]
@@ -88,7 +88,7 @@ namespace Pillar.UI.Properties {
                 return ((int)(this["SupportSides"]));
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
@@ -100,7 +100,7 @@ namespace Pillar.UI.Properties {
                 this["SupportPresetsJson"] = value;
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
@@ -112,7 +112,7 @@ namespace Pillar.UI.Properties {
                 this["FaceAngleHighlightEnabled"] = value;
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("45")]
@@ -124,7 +124,7 @@ namespace Pillar.UI.Properties {
                 this["FaceAngleThresholdDegrees"] = value;
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("#fc037b")]
@@ -136,7 +136,7 @@ namespace Pillar.UI.Properties {
                 this["FaceAngleHighlightColor"] = value;
             }
         }
-        
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("#00ce19")]
@@ -146,6 +146,18 @@ namespace Pillar.UI.Properties {
             }
             set {
                 this["SelectionOutlineColor"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public double ViewportRenderScale {
+            get {
+                return ((double)(this["ViewportRenderScale"]));
+            }
+            set {
+                this["ViewportRenderScale"] = value;
             }
         }
     }

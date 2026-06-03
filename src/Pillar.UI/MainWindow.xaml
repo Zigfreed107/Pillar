@@ -106,7 +106,7 @@
 
                     <TextBlock Margin="4,0,0,0"
                                VerticalAlignment="Center"
-                               Text="Â°" />
+                               Text="&#x00B0;" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -134,8 +134,12 @@
                                     ShowCameraTarget="True"
                                     ShowCoordinateSystem="True"
                                     ShowViewCube="True"
-                                    ZoomAroundMouseDownPoint="False"
-                                    MSAA="Maximum" EnableSSAO="True" SSAOQuality="High" SSAOIntensity=".5">
+                                    MSAA="Disable"
+                                    FXAALevel="Ultra"
+                                    EnableSSAO="True"
+                                    SSAOQuality="High"
+                                    SSAOSamplingRadius="8.0"
+                                    SSAOIntensity="4">
 
                         <hx:Viewport3DX.Camera>
                             <hx:OrthographicCamera Position="10,10,10"
@@ -172,12 +176,29 @@
                           IsHitTestVisible="True"
                           Panel.ZIndex="20">
 
-                        <layers:LayerPanel x:Name="LayerPanelOverlay"
-                                           Width="280"
-                                           Height="280"
-                                           HorizontalAlignment="Left"
-                                           VerticalAlignment="Top"
-                                           IsHitTestVisible="True" />
+                        <Grid Width="280"
+                              HorizontalAlignment="Left"
+                              VerticalAlignment="Stretch"
+                              IsHitTestVisible="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <layers:LayerPanel x:Name="LayerPanelOverlay"
+                                               Grid.Row="0"
+                                               Width="280"
+                                               Height="280"
+                                               IsHitTestVisible="True" />
+
+                            <controls:ClipRangeSlider x:Name="ClipRangeSliderOverlay"
+                                                      Grid.Row="1"
+                                                      Width="96"
+                                                      Margin="0,8,0,0"
+                                                      HorizontalAlignment="Left"
+                                                      VerticalAlignment="Stretch"
+                                                      IsHitTestVisible="True" />
+                        </Grid>
 
                         <StackPanel Width="360"
                                     HorizontalAlignment="Right"

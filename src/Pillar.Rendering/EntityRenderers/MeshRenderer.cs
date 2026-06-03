@@ -6,8 +6,10 @@ using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using Pillar.Geometry.Analysis;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Windows;
 
 namespace Pillar.Rendering.EntityRenderers;
 
@@ -20,8 +22,9 @@ public static class MeshRenderer
     private static readonly Color4 DefaultSpecularColor = new Color4(0.18f, 0.18f, 0.18f, 1.0f);
     private const float DefaultSpecularShininess = 24f;
     private const int FaceHighlightDepthBias = -4;
-    private const int SelectableMeshChildIndex = 0;
-    private const int FaceHighlightChildIndex = 1;
+    private const int StandardMeshChildIndex = 0;
+    private const int ClippedMeshChildIndex = 1;
+    private const int FaceHighlightChildIndex = 2;
 
     /// <summary>
     /// Creates one mesh visual that keeps geometry in local space and applies placement through a visual transform.
@@ -37,21 +40,52 @@ public static class MeshRenderer
                 : null
         };
 
-        MeshGeometryModel3D model = new MeshGeometryModel3D
+        GroupModel3D group = CreateSelectableMeshGroup(geometry, CreateDefaultMaterial());
+
+        ApplyTransform(group, mesh);
+        return group;
+    }
+
+    /// <summary>
+    /// Creates one grouped mesh with a normal SSAO-capable child and a cross-section child for active clipping.
+    /// </summary>
+    public static GroupModel3D CreateSelectableMeshGroup(MeshGeometry3D geometry, PhongMaterial material)
+    {
+        if (geometry == null)
+        {
+            throw new ArgumentNullException(nameof(geometry));
+        }
+
+        if (material == null)
+        {
+            throw new ArgumentNullException(nameof(material));
+        }
+
+        MeshGeometryModel3D standardModel = new MeshGeometryModel3D
         {
             Geometry = geometry,
-            Material = CreateDefaultMaterial(),
+            Material = material,
             CullMode = SharpDX.Direct3D11.CullMode.Back,
             RenderWireframe = false,
             WireframeColor = System.Windows.Media.Color.FromRgb(65, 245, 135)
         };
 
-        GroupModel3D group = new GroupModel3D
+        CrossSectionMeshGeometryModel3D clippedModel = new CrossSectionMeshGeometryModel3D
         {
-            Children = { model }
+            Geometry = geometry,
+            Material = material,
+            CullMode = SharpDX.Direct3D11.CullMode.Back,
+            RenderWireframe = false,
+            WireframeColor = System.Windows.Media.Color.FromRgb(65, 245, 135),
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = false
         };
 
-        ApplyTransform(group, mesh);
+        GroupModel3D group = new GroupModel3D
+        {
+            Children = { standardModel, clippedModel }
+        };
+
         return group;
     }
 
@@ -64,16 +98,75 @@ public static class MeshRenderer
     }
 
     /// <summary>
+    /// Applies the visible Z interval and switches between the SSAO-capable full mesh and clipping mesh.
+    /// </summary>
+    public static void ApplyClipRange(GroupModel3D visual, float lowerZ, float upperZ, bool isClippingActive)
+    {
+        if (visual == null)
+        {
+            throw new ArgumentNullException(nameof(visual));
+        }
+
+        float normalizedLowerZ = global::System.Math.Min(lowerZ, upperZ);
+        float normalizedUpperZ = global::System.Math.Max(lowerZ, upperZ);
+        MeshGeometryModel3D? standardModel = GetStandardMeshModel(visual);
+        CrossSectionMeshGeometryModel3D? clippedModel = GetClippedMeshModel(visual);
+
+        SetSelectableMeshVisibility(standardModel, !isClippingActive);
+        SetSelectableMeshVisibility(clippedModel, isClippingActive);
+
+        for (int i = 0; i < visual.Children.Count; i++)
+        {
+            if (visual.Children[i] is CrossSectionMeshGeometryModel3D crossSectionMesh)
+            {
+                ApplyClipRange(crossSectionMesh, normalizedLowerZ, normalizedUpperZ, isClippingActive);
+            }
+        }
+    }
+
+    /// <summary>
     /// Gets the base imported mesh child that owns selection and full-model post effects.
     /// </summary>
     public static MeshGeometryModel3D? GetSelectableMeshModel(GroupModel3D visual)
     {
-        if (visual.Children.Count <= SelectableMeshChildIndex)
+        CrossSectionMeshGeometryModel3D? clippedModel = GetClippedMeshModel(visual);
+
+        if (clippedModel != null && clippedModel.Visibility == Visibility.Visible)
         {
-            return null;
+            return clippedModel;
         }
 
-        return visual.Children[SelectableMeshChildIndex] as MeshGeometryModel3D;
+        return GetStandardMeshModel(visual);
+    }
+
+    /// <summary>
+    /// Applies one operation to every selectable mesh child so hidden and visible render paths stay in sync.
+    /// </summary>
+    public static void ApplyToSelectableMeshModels(GroupModel3D visual, Action<MeshGeometryModel3D> action)
+    {
+        if (visual == null)
+        {
+            throw new ArgumentNullException(nameof(visual));
+        }
+
+        if (action == null)
+        {
+            throw new ArgumentNullException(nameof(action));
+        }
+
+        MeshGeometryModel3D? standardModel = GetStandardMeshModel(visual);
+
+        if (standardModel != null)
+        {
+            action(standardModel);
+        }
+
+        CrossSectionMeshGeometryModel3D? clippedModel = GetClippedMeshModel(visual);
+
+        if (clippedModel != null)
+        {
+            action(clippedModel);
+        }
     }
 
     /// <summary>
@@ -101,12 +194,12 @@ public static class MeshRenderer
     {
         if (visual == null)
         {
-            throw new System.ArgumentNullException(nameof(visual));
+            throw new ArgumentNullException(nameof(visual));
         }
 
         if (mesh == null)
         {
-            throw new System.ArgumentNullException(nameof(mesh));
+            throw new ArgumentNullException(nameof(mesh));
         }
 
         MeshGeometryModel3D? highlightModel = GetFaceHighlightModel(visual);
@@ -188,7 +281,7 @@ public static class MeshRenderer
     /// </summary>
     private static MeshGeometryModel3D CreateFaceHighlightModel(Color4 highlightColor)
     {
-        MeshGeometryModel3D highlightModel = new MeshGeometryModel3D
+        CrossSectionMeshGeometryModel3D highlightModel = new CrossSectionMeshGeometryModel3D
         {
             Material = CreateFaceHighlightMaterial(highlightColor),
             CullMode = SharpDX.Direct3D11.CullMode.Back,
@@ -199,6 +292,65 @@ public static class MeshRenderer
 
         ClearFaceHighlightSelectionState(highlightModel);
         return highlightModel;
+    }
+
+    /// <summary>
+    /// Updates one cross-section mesh so the shader keeps fragments between two horizontal planes.
+    /// </summary>
+    private static void ApplyClipRange(CrossSectionMeshGeometryModel3D crossSectionMesh, float lowerZ, float upperZ, bool isClippingActive)
+    {
+        if (!isClippingActive)
+        {
+            crossSectionMesh.EnablePlane1 = false;
+            crossSectionMesh.EnablePlane2 = false;
+            return;
+        }
+
+        crossSectionMesh.CuttingOperation = CuttingOperation.Intersect;
+        crossSectionMesh.EnablePlane1 = true;
+        crossSectionMesh.EnablePlane2 = true;
+        crossSectionMesh.Plane1 = new System.Numerics.Plane(new Vector3(0.0f, 0.0f, 1.0f), lowerZ);
+        crossSectionMesh.Plane2 = new System.Numerics.Plane(new Vector3(0.0f, 0.0f, -1.0f), -upperZ);
+    }
+
+    /// <summary>
+    /// Gets the normal mesh child that uses Helix's standard mesh technique and contributes to SSAO.
+    /// </summary>
+    private static MeshGeometryModel3D? GetStandardMeshModel(GroupModel3D visual)
+    {
+        if (visual.Children.Count <= StandardMeshChildIndex)
+        {
+            return null;
+        }
+
+        return visual.Children[StandardMeshChildIndex] as MeshGeometryModel3D;
+    }
+
+    /// <summary>
+    /// Gets the cross-section mesh child used only while the clipping slider narrows the visible range.
+    /// </summary>
+    private static CrossSectionMeshGeometryModel3D? GetClippedMeshModel(GroupModel3D visual)
+    {
+        if (visual.Children.Count <= ClippedMeshChildIndex)
+        {
+            return null;
+        }
+
+        return visual.Children[ClippedMeshChildIndex] as CrossSectionMeshGeometryModel3D;
+    }
+
+    /// <summary>
+    /// Updates visibility and hit testing together so hidden alternate render paths do not participate in selection.
+    /// </summary>
+    private static void SetSelectableMeshVisibility(MeshGeometryModel3D? meshModel, bool isVisible)
+    {
+        if (meshModel == null)
+        {
+            return;
+        }
+
+        meshModel.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        meshModel.IsHitTestVisible = isVisible;
     }
 
     /// <summary>
