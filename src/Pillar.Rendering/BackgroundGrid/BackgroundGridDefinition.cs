@@ -1,5 +1,5 @@
 // BackgroundGridDefinition.cs
-// Defines the configurable background-grid dimensions and styling so rendering and camera framing share one source of truth.
+// Defines the printable-volume grid dimensions and styling so rendering and camera framing share one source of truth.
 using System;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
@@ -15,8 +15,7 @@ public sealed class BackgroundGridDefinition
     /// Gets the default grid definition used by the current workspace.
     /// </summary>
     public static BackgroundGridDefinition Default { get; } = new BackgroundGridDefinition(
-        width: 126.0f,
-        height: 223.0f,
+        printableVolume: new PrintableVolumeDefinition(126.0f, 223.0f, 250.0f),
         spacing: 10.0f,
         outlineOffset: 5.0f,
         gridColor: Color.FromRgb(225, 225, 225),
@@ -26,14 +25,14 @@ public sealed class BackgroundGridDefinition
         doubleBorderColor: Color.FromRgb(200, 200, 200),
         doubleBorderThickness: 2.5f,
         originColor: Color.FromRgb(100, 0, 0),
-        originThickness: 1.5f);
+        originThickness: 1.5f,
+        topCornerGuideLength: 10.0f);
 
     /// <summary>
     /// Initializes one background-grid definition.
     /// </summary>
     public BackgroundGridDefinition(
-        float width,
-        float height,
+        PrintableVolumeDefinition printableVolume,
         float spacing,
         float outlineOffset,
         Color gridColor,
@@ -43,16 +42,12 @@ public sealed class BackgroundGridDefinition
         Color doubleBorderColor,
         float doubleBorderThickness,
         Color originColor,
-        float originThickness)
+        float originThickness,
+        float topCornerGuideLength)
     {
-        if (width <= 0.0f)
+        if (printableVolume == null)
         {
-            throw new ArgumentOutOfRangeException(nameof(width), "Grid width must be greater than zero.");
-        }
-
-        if (height <= 0.0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(height), "Grid height must be greater than zero.");
+            throw new ArgumentNullException(nameof(printableVolume));
         }
 
         if (spacing <= 0.0f)
@@ -85,8 +80,12 @@ public sealed class BackgroundGridDefinition
             throw new ArgumentOutOfRangeException(nameof(originThickness), "Origin thickness must be greater than zero.");
         }
 
-        Width = width;
-        Height = height;
+        if (topCornerGuideLength <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(topCornerGuideLength), "Top-corner guide length must be greater than zero.");
+        }
+
+        PrintableVolume = printableVolume;
         Spacing = spacing;
         OutlineOffset = outlineOffset;
         GridColor = gridColor;
@@ -97,17 +96,49 @@ public sealed class BackgroundGridDefinition
         DoubleBorderThickness = doubleBorderThickness;
         OriginColor = originColor;
         OriginThickness = originThickness;
+        TopCornerGuideLength = topCornerGuideLength;
     }
+
+    /// <summary>
+    /// Gets a copy of this grid definition with different printable-volume dimensions.
+    /// </summary>
+    public BackgroundGridDefinition WithPrintableVolume(PrintableVolumeDefinition printableVolume)
+    {
+        return new BackgroundGridDefinition(
+            printableVolume,
+            Spacing,
+            OutlineOffset,
+            GridColor,
+            GridThickness,
+            BorderColor,
+            BorderThickness,
+            DoubleBorderColor,
+            DoubleBorderThickness,
+            OriginColor,
+            OriginThickness,
+            TopCornerGuideLength);
+    }
+
+    /// <summary>
+    /// Gets the printable build volume represented by the grid and top-corner guides.
+    /// </summary>
+    public PrintableVolumeDefinition PrintableVolume { get; }
 
     /// <summary>
     /// Gets the grid width along the X axis.
     /// </summary>
-    public float Width { get; }
+    public float Width
+    {
+        get { return PrintableVolume.XDistance; }
+    }
 
     /// <summary>
     /// Gets the grid height along the Y axis.
     /// </summary>
-    public float Height { get; }
+    public float Height
+    {
+        get { return PrintableVolume.YDistance; }
+    }
 
     /// <summary>
     /// Gets the spacing between adjacent interior grid lines.
@@ -160,6 +191,11 @@ public sealed class BackgroundGridDefinition
     public float OriginThickness { get; }
 
     /// <summary>
+    /// Gets the fixed length of each top-corner printable-volume guide segment.
+    /// </summary>
+    public float TopCornerGuideLength { get; }
+
+    /// <summary>
     /// Gets the world-space bounds that contain every rendered grid element.
     /// </summary>
     public Rect3D GetRenderBounds()
@@ -171,7 +207,7 @@ public sealed class BackgroundGridDefinition
         double originExtent = Spacing / 2.0;
         double maxX = global::System.Math.Max(halfOuterWidth, originExtent);
         double maxY = global::System.Math.Max(halfOuterHeight, originExtent);
-        double maxZ = originExtent;
+        double maxZ = global::System.Math.Max(originExtent, PrintableVolume.ZDistance);
 
         return new Rect3D(-maxX, -maxY, 0.0, maxX * 2.0, maxY * 2.0, maxZ);
     }

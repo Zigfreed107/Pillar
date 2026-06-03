@@ -21,6 +21,7 @@ public class BackgroundGridRenderer
     private readonly MeshGeometryModel3D _border;
     private readonly MeshGeometryModel3D _doubleBorder;
     private readonly LineGeometryModel3D _origin;
+    private readonly LineGeometryModel3D _topCornerGuides;
 
     /// <summary>
     /// Initializes the grid renderer and adds its visuals to the supplied scene root.
@@ -68,6 +69,16 @@ public class BackgroundGridRenderer
         };
 
         sceneRoot.Children.Add(_origin);
+
+        LineBuilder topCornerGuideBuilder = BuildTopCornerGuideGeometry();
+        _topCornerGuides = new LineGeometryModel3D
+        {
+            Geometry = topCornerGuideBuilder.ToLineGeometry3D(),
+            Color = _definition.GridColor,
+            Thickness = _definition.GridThickness
+        };
+
+        sceneRoot.Children.Add(_topCornerGuides);
     }
 
     /// <summary>
@@ -176,6 +187,25 @@ public class BackgroundGridRenderer
     }
 
     /// <summary>
+    /// Builds fixed-length X, Y, and Z guide segments at each top corner of the printable volume.
+    /// </summary>
+    private LineBuilder BuildTopCornerGuideGeometry()
+    {
+        LineBuilder guideBuilder = new LineBuilder();
+        float halfWidth = _definition.Width / 2.0f;
+        float halfHeight = _definition.Height / 2.0f;
+        float topZ = _definition.PrintableVolume.ZDistance;
+        float guideLength = _definition.TopCornerGuideLength;
+
+        AddTopCornerGuides(guideBuilder, -halfWidth, -halfHeight, topZ, guideLength, 1.0f, 1.0f);
+        AddTopCornerGuides(guideBuilder, halfWidth, -halfHeight, topZ, guideLength, -1.0f, 1.0f);
+        AddTopCornerGuides(guideBuilder, -halfWidth, halfHeight, topZ, guideLength, 1.0f, -1.0f);
+        AddTopCornerGuides(guideBuilder, halfWidth, halfHeight, topZ, guideLength, -1.0f, -1.0f);
+
+        return guideBuilder;
+    }
+
+    /// <summary>
     /// Creates an unlit-looking material for flat background mesh elements.
     /// </summary>
     private static PhongMaterial CreateFlatMaterial(MediaColor color)
@@ -202,6 +232,25 @@ public class BackgroundGridRenderer
 
         builder.AddTriangle(southWest, southEast, northEast);
         builder.AddTriangle(southWest, northEast, northWest);
+    }
+
+    /// <summary>
+    /// Adds one inward-facing corner marker made of short X, Y, and Z line segments.
+    /// </summary>
+    private static void AddTopCornerGuides(
+        LineBuilder builder,
+        float x,
+        float y,
+        float z,
+        float guideLength,
+        float xDirection,
+        float yDirection)
+    {
+        Vector3 corner = new Vector3(x, y, z);
+
+        builder.AddLine(corner, new Vector3(x + (xDirection * guideLength), y, z));
+        builder.AddLine(corner, new Vector3(x, y + (yDirection * guideLength), z));
+        builder.AddLine(corner, new Vector3(x, y, z - guideLength));
     }
 
 }

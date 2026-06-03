@@ -8,6 +8,15 @@
     <Setting Name="DefaultModelZStandoffFromOrigin" Type="System.Double" Scope="Application">
       <Value Profile="(Default)">10</Value>
     </Setting>
+    <Setting Name="PrintableVolumeX" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">126</Value>
+    </Setting>
+    <Setting Name="PrintableVolumeY" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">223</Value>
+    </Setting>
+    <Setting Name="PrintableVolumeZ" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">250</Value>
+    </Setting>
     <Setting Name="LoadAtStartup" Type="System.String" Scope="User">
       <Value Profile="(Default)">C:\Coding\Pillar\SampleProjects\Sample.gph</Value>
     </Setting>

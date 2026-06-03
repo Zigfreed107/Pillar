@@ -9,6 +9,7 @@ using Pillar.Core.Snapping;
 using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
+using Pillar.Rendering.BackgroundGrid;
 using Pillar.Rendering.Scene;
 using Pillar.Rendering.Tools;
 using Pillar.UI.Layers;
@@ -84,7 +85,12 @@ public partial class MainWindow : Window
         Viewport.EffectsManager = EffectsManager; // Needed since EffectsManager is initialised AFTER Main window is initialised. Data binding needs to be updated.
 
         _document = new CadDocument();
-        _scene = new SceneManager(Viewport, _document, Properties.Settings.Default.SupportSides, ReadSelectionOutlineColor());
+        _scene = new SceneManager(
+            Viewport,
+            _document,
+            Properties.Settings.Default.SupportSides,
+            ReadSelectionOutlineColor(),
+            ReadBackgroundGridDefinition());
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
@@ -133,6 +139,38 @@ public partial class MainWindow : Window
     private Rect3D GetViewportFallbackBounds()
     {
         return _scene.BackgroundGridBounds;
+    }
+
+    /// <summary>
+    /// Reads printer volume settings and adapts the shared grid definition used by rendering and camera framing.
+    /// </summary>
+    private static BackgroundGridDefinition ReadBackgroundGridDefinition()
+    {
+        PrintableVolumeDefinition defaultVolume = BackgroundGridDefinition.Default.PrintableVolume;
+        float xDistance = ReadPositiveFloatSetting(Properties.Settings.Default.PrintableVolumeX, defaultVolume.XDistance);
+        float yDistance = ReadPositiveFloatSetting(Properties.Settings.Default.PrintableVolumeY, defaultVolume.YDistance);
+        float zDistance = ReadPositiveFloatSetting(Properties.Settings.Default.PrintableVolumeZ, defaultVolume.ZDistance);
+        PrintableVolumeDefinition printableVolume = new PrintableVolumeDefinition(xDistance, yDistance, zDistance);
+
+        return BackgroundGridDefinition.Default.WithPrintableVolume(printableVolume);
+    }
+
+    /// <summary>
+    /// Converts one numeric setting to a positive float, falling back to the default when config values are invalid.
+    /// </summary>
+    private static float ReadPositiveFloatSetting(double configuredValue, float fallbackValue)
+    {
+        if (double.IsNaN(configuredValue) || double.IsInfinity(configuredValue) || configuredValue <= 0.0)
+        {
+            return fallbackValue;
+        }
+
+        if (configuredValue > float.MaxValue)
+        {
+            return fallbackValue;
+        }
+
+        return (float)configuredValue;
     }
 
     /// <summary>

@@ -88,6 +88,19 @@ public class SceneManager
     /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
     /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides, MediaColor selectionOutlineColor)
+        : this(viewport, document, supportSides, selectionOutlineColor, BackgroundGridDefinition.Default)
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
+    /// </summary>
+    public SceneManager(
+        Viewport3DX viewport,
+        CadDocument document,
+        int supportSides,
+        MediaColor selectionOutlineColor,
+        BackgroundGridDefinition backgroundGridDefinition)
     {
         _viewport = viewport;
         _document = document;
@@ -95,6 +108,7 @@ public class SceneManager
         _selectionOutlineColor = selectionOutlineColor;
         _highlightMaterial = CreateSelectionMaterial(_selectionOutlineColor);
         _selectionManager = new SelectionManager(_document);
+        BackgroundGridDefinition resolvedBackgroundGridDefinition = backgroundGridDefinition ?? throw new ArgumentNullException(nameof(backgroundGridDefinition));
 
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
         {
@@ -102,7 +116,7 @@ public class SceneManager
             Color = _selectionOutlineColor
         });
 
-        _backgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot, BackgroundGridDefinition.Default);
+        _backgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot, resolvedBackgroundGridDefinition);
         _viewport.Items.Add(_backgroundGridRoot);
         _viewport.Items.Add(_entityRoot);
 
