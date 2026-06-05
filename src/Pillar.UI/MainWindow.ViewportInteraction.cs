@@ -100,4 +100,13 @@ public partial class MainWindow
         return _activeModeId == WorkspaceModeId.ManualSupport
             && _manualSupportTool.ActiveOperationKind == ManualSupportOperationKind.Ring;
     }
+
+    /// <summary>
+    /// Gets whether keyboard handling should finish the active Line Support polyline.
+    /// </summary>
+    private bool IsLineSupportOperationActive()
+    {
+        return _activeModeId == WorkspaceModeId.ManualSupport
+            && _manualSupportTool.ActiveOperationKind == ManualSupportOperationKind.Line;
+    }
 }

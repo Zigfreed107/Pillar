@@ -14,6 +14,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     private string _name;
     private SupportLayerColor _color;
     private SupportGroupGeneratorKind _generatorKind;
+    private LineSupportSettings? _lineSupportSettings;
     private RingSupportSettings? _ringSupportSettings;
 
     /// <summary>
@@ -139,6 +140,19 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets a copy of the Line Support settings when this group is Line-tool generated.
+    /// </summary>
+    public LineSupportSettings? LineSupportSettings
+    {
+        get { return _lineSupportSettings?.Clone(); }
+        private set
+        {
+            _lineSupportSettings = value?.Clone();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
@@ -157,11 +171,29 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         SupportLayerColor? color,
         RingSupportSettings? ringSupportSettings)
     {
+        return CreateLoaded(id, modelEntityId, name, color, ringSupportSettings, null);
+    }
+
+    /// <summary>
+    /// Recreates a saved support group with generated support metadata.
+    /// </summary>
+    public static SupportLayerGroup CreateLoaded(
+        Guid id,
+        Guid modelEntityId,
+        string name,
+        SupportLayerColor? color,
+        RingSupportSettings? ringSupportSettings,
+        LineSupportSettings? lineSupportSettings)
+    {
         SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
 
         if (ringSupportSettings != null)
         {
             supportLayerGroup.SetRingSupportSettings(ringSupportSettings);
+        }
+        else if (lineSupportSettings != null)
+        {
+            supportLayerGroup.SetLineSupportSettings(lineSupportSettings);
         }
 
         return supportLayerGroup;
@@ -193,8 +225,24 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
             throw new ArgumentNullException(nameof(settings));
         }
 
+        LineSupportSettings = null;
         RingSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.RingSupport;
+    }
+
+    /// <summary>
+    /// Marks this group as Line Support generated and stores the editable generator settings.
+    /// </summary>
+    public void SetLineSupportSettings(LineSupportSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        RingSupportSettings = null;
+        LineSupportSettings = settings;
+        GeneratorKind = SupportGroupGeneratorKind.LineSupport;
     }
 
     /// <summary>
@@ -202,6 +250,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     /// </summary>
     public void ClearGeneratorSettings()
     {
+        LineSupportSettings = null;
         RingSupportSettings = null;
         GeneratorKind = SupportGroupGeneratorKind.None;
     }

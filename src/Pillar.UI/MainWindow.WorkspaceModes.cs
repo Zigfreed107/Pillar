@@ -177,6 +177,23 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Refreshes the Line Support preview when its spacing option changes.
+    /// </summary>
+    private void LineSupportToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Line)
+        {
+            return;
+        }
+
+        _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
     /// Applies the current Ring Support preview as a new support group.
     /// </summary>
     private void RingSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
@@ -203,6 +220,31 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies the current Line Support preview as a new support group or edited support group.
+    /// </summary>
+    private void LineSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Line)
+        {
+            _viewModel.SetStatusText("Choose the Line Support tool before applying line supports.");
+            return;
+        }
+
+        bool didApply = _manualSupportTool.ApplyActiveOperation();
+
+        if (!didApply)
+        {
+            return;
+        }
+
+        ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+    }
+
+    /// <summary>
     /// Closes the Ring Support panel without applying supports.
     /// </summary>
     private void RingSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
@@ -221,9 +263,37 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Closes the Line Support panel without applying supports.
+    /// </summary>
+    private void LineSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Line)
+        {
+            return;
+        }
+
+        _manualSupportTool.Cancel();
+        ExitLineSupportMode();
+    }
+
+    /// <summary>
     /// Deletes selected supports from the active Ring Support edit using the same path as the Delete key.
     /// </summary>
     private void RingSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        DeleteSelectedSupportsInActiveEditGroup();
+    }
+
+    /// <summary>
+    /// Deletes selected supports from the active Line Support edit using the same path as the Delete key.
+    /// </summary>
+    private void LineSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -282,11 +352,7 @@ public partial class MainWindow
 
         if (string.Equals(selectedToolName, "Line Support", StringComparison.Ordinal))
         {
-            ShowPlaceholderToolOptions(
-                "Line Support Options",
-                "Line Support is active. Dedicated line-support controls will be added here.",
-                ToolSessionPanelSet.None,
-                () => FinishManualSupportPlaceholderToolSession("Finished line support tool"));
+            ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             return;
         }
 
@@ -307,13 +373,28 @@ public partial class MainWindow
         ClearTransformScaleToolState();
         _activePlaceholderToolFinishAction = null;
         _toolSessionOverlayCoordinator.EndSession();
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
     /// Leaves the Ring Support operation and clears all transient Ring Support previews.
     /// </summary>
     private void ExitRingSupportMode()
+    {
+        HideToolOptionsOverlay();
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+
+        string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
+        _activeToolStatusText = statusText;
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Leaves the Line Support operation and clears all transient Line Support previews.
+    /// </summary>
+    private void ExitLineSupportMode()
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -333,7 +414,7 @@ public partial class MainWindow
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring, true);
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
         ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -396,7 +477,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Opens Ring Support settings when the requested support group was generated by the Ring Support tool.
+    /// Opens generated support settings when the requested support group was created by an editable support tool.
     /// </summary>
     private void LayerPanel_EditSupportGroupRequested(object? sender, LayerSupportGroupEditRequestedEventArgs e)
     {
@@ -404,27 +485,53 @@ public partial class MainWindow
 
         SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(e.SupportLayerGroupId);
 
-        if (supportLayerGroup == null || supportLayerGroup.GeneratorKind != SupportGroupGeneratorKind.RingSupport)
+        if (supportLayerGroup == null)
         {
             HideToolOptionsOverlay();
             _viewModel.SetStatusText("This support group does not have editable tool settings yet.");
             return;
         }
 
-        RingSupportSettings? settings = supportLayerGroup.RingSupportSettings;
-
-        if (settings == null)
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.LineSupport)
         {
-            HideToolOptionsOverlay();
-            _viewModel.SetStatusText("This support group is missing Ring Support settings.");
+            LineSupportSettings? settings = supportLayerGroup.LineSupportSettings;
+
+            if (settings == null)
+            {
+                HideToolOptionsOverlay();
+                _viewModel.SetStatusText("This support group is missing Line Support settings.");
+                return;
+            }
+
+            SetActiveMode(WorkspaceModeId.ManualSupport);
+            _lineSupportToolOptionsControl.SetLineSupportSpacing(settings.Spacing);
+            ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            _manualSupportTool.EditLineSupportGroup(supportLayerGroup);
+            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
             return;
         }
 
-        SetActiveMode(WorkspaceModeId.ManualSupport);
-        _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
-        ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
-        _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.RingSupport)
+        {
+            RingSupportSettings? settings = supportLayerGroup.RingSupportSettings;
+
+            if (settings == null)
+            {
+                HideToolOptionsOverlay();
+                _viewModel.SetStatusText("This support group is missing Ring Support settings.");
+                return;
+            }
+
+            SetActiveMode(WorkspaceModeId.ManualSupport);
+            _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
+            ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
+            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
+            return;
+        }
+
+        HideToolOptionsOverlay();
+        _viewModel.SetStatusText("This support group does not have editable tool settings yet.");
     }
 
     /// <summary>
@@ -500,7 +607,7 @@ public partial class MainWindow
     {
         _activePlaceholderToolFinishAction = null;
         _toolSessionOverlayCoordinator.BeginSession(toolOptionsControl, panels);
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -509,7 +616,7 @@ public partial class MainWindow
     private void HideToolOptionsHostOnly()
     {
         _toolSessionOverlayCoordinator.HideOptionsHostOnly();
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -520,7 +627,7 @@ public partial class MainWindow
         _activePlaceholderToolFinishAction = finishAction ?? throw new ArgumentNullException(nameof(finishAction));
         _toolSessionOptionsControl.SetSessionText(title, description);
         _toolSessionOverlayCoordinator.BeginSession(_toolSessionOptionsControl, panels);
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -568,13 +675,17 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Keeps the Ring Support Delete button aligned with selected supports in the active edit group.
+    /// Keeps generated-support Delete buttons aligned with selected supports in the active edit group.
     /// </summary>
-    private void UpdateRingSupportDeleteButtonState()
+    private void UpdateGeneratedSupportDeleteButtonState()
     {
-        bool canDeleteSelectedSupports = ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl
+        bool canDeleteSelectedSupports = (ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl
+                || ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl)
             && _manualSupportTool.HasSelectedSupportsInActiveEditGroup();
 
-        _ringSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(canDeleteSelectedSupports);
+        _ringSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
+            ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl && canDeleteSelectedSupports);
+        _lineSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
+            ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl && canDeleteSelectedSupports);
     }
 }

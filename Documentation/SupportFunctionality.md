@@ -8,7 +8,7 @@ Support data lives in the document layer and rendering only displays the current
 
 Support entities are concrete generated geometry inputs: each `SupportEntity` stores a tip position, a build-plane base position, a head direction, optional branch data, and a `SupportProfile`. When a model transform changes, the support entities are not scaled or rotated as mesh objects. Instead, they are removed and regenerated with new world-space tip, base, head-direction, and branch data.
 
-`SupportLayerGroup` owns the relationship between an imported model and a group of supports. Ring supports also store `RingSupportSettings`, which are the three circumference points and spacing needed to regenerate the group.
+`SupportLayerGroup` owns the relationship between an imported model and a group of supports. Generated support tools also store compact settings on the group, such as `RingSupportSettings` or `LineSupportSettings`, so generated supports can be regenerated from the user's original tool definition.
 
 ## Support Model
 
@@ -76,6 +76,19 @@ During model transform regeneration:
 6. Concrete support entities are regenerated at the projected hits.
 
 This means the ring follows the model's translated and scaled location, but it remains coplanar with the XY plane. After rotations, the supports may not hit the exact same surface triangles as before, because ring supports are intentionally reprojected vertically onto the transformed mesh.
+
+## Line Supports
+
+Line support groups store `LineSupportSettings`: the picked model-surface polyline points and the requested spacing.
+
+During model transform regeneration:
+
+1. Each stored line point is transformed through the old-to-new model transform path.
+2. Guide points are distributed along each line segment so no interval is longer than the saved spacing.
+3. Each guide point is projected vertically in the Z direction onto the transformed model.
+4. Concrete support entities are regenerated at the projected hits.
+
+Unlike Ring supports, Line supports preserve the picked 3D polyline rather than flattening it to a horizontal construction plane. The support locations are still vertically reprojected from that line pattern, keeping the saved feature definition compact and renderer-agnostic.
 
 ## Extension Notes
 

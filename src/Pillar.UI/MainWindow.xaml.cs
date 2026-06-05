@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     private readonly PrintableVolumeDefinition _printableVolumeDefinition;
     private readonly ViewportCameraService _viewportCameraService;
     private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
+    private readonly LineSupportToolOptionsControl _lineSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
     private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
@@ -72,6 +73,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _selectionWindowOverlay = new SelectionWindowOverlayController(this, SelectionWindowOverlay);
         _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
+        _lineSupportToolOptionsControl = new LineSupportToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
@@ -111,6 +113,7 @@ public partial class MainWindow : Window
             _commandRunner,
             _layerPanelViewModel.GetSelectedModelEntityId,
             GetRingSupportSpacingOrDefault,
+            GetLineSupportSpacingOrDefault,
             GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
@@ -277,6 +280,10 @@ public partial class MainWindow : Window
         _ringSupportToolOptionsControl.ApplyRequested += RingSupportToolOptionsControl_ApplyRequested;
         _ringSupportToolOptionsControl.CloseRequested += RingSupportToolOptionsControl_CloseRequested;
         _ringSupportToolOptionsControl.DeleteRequested += RingSupportToolOptionsControl_DeleteRequested;
+        _lineSupportToolOptionsControl.OptionsChanged += LineSupportToolOptionsControl_OptionsChanged;
+        _lineSupportToolOptionsControl.ApplyRequested += LineSupportToolOptionsControl_ApplyRequested;
+        _lineSupportToolOptionsControl.CloseRequested += LineSupportToolOptionsControl_CloseRequested;
+        _lineSupportToolOptionsControl.DeleteRequested += LineSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
@@ -340,6 +347,20 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Ring support spacing is invalid; using 5.00 mm.");
         return RingSupportToolOptionsControl.DefaultRingSupportSpacing;
+    }
+
+    /// <summary>
+    /// Reads Line Support spacing from the active Line Support options panel while keeping WPF controls out of rendering tools.
+    /// </summary>
+    private float GetLineSupportSpacingOrDefault()
+    {
+        if (_lineSupportToolOptionsControl.TryGetLineSupportSpacing(out float spacing))
+        {
+            return spacing;
+        }
+
+        _viewModel.SetStatusText("Line support spacing is invalid; using 5.00 mm.");
+        return LineSupportToolOptionsControl.DefaultLineSupportSpacing;
     }
 
     /// <summary>

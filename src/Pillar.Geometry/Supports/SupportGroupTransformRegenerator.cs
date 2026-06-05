@@ -103,6 +103,31 @@ public static class SupportGroupTransformRegenerator
                 newRingSupportSettings);
         }
 
+        LineSupportSettings? oldLineSupportSettings = supportLayerGroup.LineSupportSettings;
+
+        if (oldLineSupportSettings != null)
+        {
+            LineSupportSettings newLineSupportSettings = TransformLineSupportSettings(
+                oldLineSupportSettings,
+                oldInverseWorldTransform,
+                newWorldTransform);
+            List<SupportEntity> newLineSupports = CreateLineSupportEntities(
+                mesh,
+                supportLayerGroup.Id,
+                newLineSupportSettings,
+                ChooseSupportProfile(oldSupportEntities),
+                newWorldTransform);
+
+            return new SupportGroupRegeneration(
+                supportLayerGroup,
+                oldSupportEntities,
+                newLineSupports,
+                null,
+                null,
+                oldLineSupportSettings,
+                newLineSupportSettings);
+        }
+
         if (oldSupportEntities.Count == 0)
         {
             return null;
@@ -163,6 +188,53 @@ public static class SupportGroupTransformRegenerator
                 branchPlan.BranchLength,
                 branchPlan.BranchDirection,
                 oldSupportEntity.Profile);
+        }
+
+        return newSupportEntities;
+    }
+
+    /// <summary>
+    /// Rebuilds line supports from transformed polyline settings and vertical projection against the transformed mesh.
+    /// </summary>
+    private static List<SupportEntity> CreateLineSupportEntities(
+        MeshEntity mesh,
+        Guid supportLayerGroupId,
+        LineSupportSettings settings,
+        SupportProfile supportProfile,
+        Matrix4x4 newWorldTransform)
+    {
+        List<Vector3> guidePoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
+        List<SupportEntity> newSupportEntities = new List<SupportEntity>();
+
+        LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, guidePoints);
+
+        for (int i = 0; i < guidePoints.Count; i++)
+        {
+            Vector3 guidePoint = guidePoints[i];
+            MeshProjectionHit projectionHit;
+
+            if (!MeshVerticalProjection.TryProjectToMesh(mesh, newWorldTransform, guidePoint, out projectionHit))
+            {
+                continue;
+            }
+
+            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
+            SupportBranchPlan branchPlan;
+
+            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, projectionHit.Point, headDirection, supportProfile, out branchPlan))
+            {
+                continue;
+            }
+
+            TryAddSupportEntity(
+                newSupportEntities,
+                supportLayerGroupId,
+                projectionHit.Point,
+                branchPlan.BasePosition,
+                headDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
+                supportProfile);
         }
 
         return newSupportEntities;
@@ -249,6 +321,27 @@ public static class SupportGroupTransformRegenerator
             NormalizePointToRingPlane(transformedFirstPoint, transformedSecondPoint),
             NormalizePointToRingPlane(transformedFirstPoint, transformedThirdPoint),
             oldSettings.Spacing);
+    }
+
+    /// <summary>
+    /// Carries saved Line Support polyline points through the owning model transform.
+    /// </summary>
+    private static LineSupportSettings TransformLineSupportSettings(
+        LineSupportSettings oldSettings,
+        Matrix4x4 oldInverseWorldTransform,
+        Matrix4x4 newWorldTransform)
+    {
+        List<Vector3> transformedPoints = new List<Vector3>(oldSettings.Points.Count);
+
+        for (int i = 0; i < oldSettings.Points.Count; i++)
+        {
+            transformedPoints.Add(TransformWorldPointBetweenModelTransforms(
+                oldSettings.Points[i],
+                oldInverseWorldTransform,
+                newWorldTransform));
+        }
+
+        return new LineSupportSettings(transformedPoints, oldSettings.Spacing);
     }
 
     /// <summary>

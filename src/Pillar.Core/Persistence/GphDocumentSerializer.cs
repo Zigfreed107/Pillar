@@ -18,12 +18,13 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 11;
+    private const int CurrentVersion = 12;
     private const int MinimumSupportedVersion = 11;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
     private const string RingSupportGeneratorName = "ringSupport";
+    private const string LineSupportGeneratorName = "lineSupport";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -230,7 +231,8 @@ public sealed class GphDocumentSerializer
             Name = supportLayerGroup.Name,
             Color = CreateSupportLayerColorDto(supportLayerGroup.Color),
             GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
-            RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings)
+            RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings),
+            LineSupport = CreateLineSupportSettingsDto(supportLayerGroup.LineSupportSettings)
         };
     }
 
@@ -279,7 +281,8 @@ public sealed class GphDocumentSerializer
                 supportLayerGroupDto.ModelEntityId,
                 supportLayerGroupDto.Name,
                 CreateSupportLayerColorOrDefault(supportLayerGroupDto),
-                CreateRingSupportSettingsOrDefault(supportLayerGroupDto)));
+                CreateRingSupportSettingsOrDefault(supportLayerGroupDto),
+                CreateLineSupportSettingsOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -531,6 +534,11 @@ public sealed class GphDocumentSerializer
             return RingSupportGeneratorName;
         }
 
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.LineSupport)
+        {
+            return LineSupportGeneratorName;
+        }
+
         return null;
     }
 
@@ -551,6 +559,29 @@ public sealed class GphDocumentSerializer
             ThirdPoint = CreateVectorDto(settings.ThirdPoint),
             Spacing = settings.Spacing
         };
+    }
+
+    /// <summary>
+    /// Converts Line Support settings into their persisted representation when present.
+    /// </summary>
+    private static GphLineSupportSettingsDto? CreateLineSupportSettingsDto(LineSupportSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        GphLineSupportSettingsDto dto = new GphLineSupportSettingsDto
+        {
+            Spacing = settings.Spacing
+        };
+
+        for (int i = 0; i < settings.Points.Count; i++)
+        {
+            dto.Points.Add(CreateVectorDto(settings.Points[i]));
+        }
+
+        return dto;
     }
 
     /// <summary>
@@ -628,6 +659,11 @@ public sealed class GphDocumentSerializer
 
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
             throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
         }
 
@@ -648,6 +684,53 @@ public sealed class GphDocumentSerializer
             CreateVector(supportLayerGroupDto.RingSupport.SecondPoint),
             CreateVector(supportLayerGroupDto.RingSupport.ThirdPoint),
             supportLayerGroupDto.RingSupport.Spacing);
+    }
+
+    /// <summary>
+    /// Converts saved generator metadata into Line Support settings, or null for legacy/plain support groups.
+    /// </summary>
+    private static LineSupportSettings? CreateLineSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (string.IsNullOrWhiteSpace(supportLayerGroupDto.GeneratorKind))
+        {
+            return null;
+        }
+
+        if (!string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
+        }
+
+        if (supportLayerGroupDto.LineSupport == null)
+        {
+            throw new InvalidDataException("A Line Support group is missing its generator settings.");
+        }
+
+        if (supportLayerGroupDto.LineSupport.Points == null || supportLayerGroupDto.LineSupport.Points.Count < 2)
+        {
+            throw new InvalidDataException("A Line Support group is missing its polyline points.");
+        }
+
+        List<Vector3> points = new List<Vector3>(supportLayerGroupDto.LineSupport.Points.Count);
+
+        for (int i = 0; i < supportLayerGroupDto.LineSupport.Points.Count; i++)
+        {
+            GphVector3Dto? point = supportLayerGroupDto.LineSupport.Points[i];
+
+            if (point == null)
+            {
+                throw new InvalidDataException($"A Line Support group has a null point at index {i}.");
+            }
+
+            points.Add(CreateVector(point));
+        }
+
+        return new LineSupportSettings(points, supportLayerGroupDto.LineSupport.Spacing);
     }
 
     /// <summary>
@@ -804,6 +887,7 @@ public sealed class GphDocumentSerializer
         public GphSupportLayerColorDto? Color { get; set; }
         public string? GeneratorKind { get; set; }
         public GphRingSupportSettingsDto? RingSupport { get; set; }
+        public GphLineSupportSettingsDto? LineSupport { get; set; }
     }
 
     /// <summary>
@@ -814,6 +898,15 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? FirstPoint { get; set; }
         public GphVector3Dto? SecondPoint { get; set; }
         public GphVector3Dto? ThirdPoint { get; set; }
+        public float Spacing { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Line Support generator settings.
+    /// </summary>
+    private sealed class GphLineSupportSettingsDto
+    {
+        public List<GphVector3Dto?> Points { get; set; } = new List<GphVector3Dto?>();
         public float Spacing { get; set; }
     }
 

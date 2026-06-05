@@ -1,11 +1,15 @@
 // Program.cs
 // Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
+using Pillar.Core.Document;
 using Pillar.Core.Entities;
+using Pillar.Core.Layers;
+using Pillar.Core.Persistence;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 
 namespace Pillar.Geometry.SmokeTests;
@@ -38,6 +42,11 @@ public static class Program
         RunTest(failures, "Branch is omitted when stem is already clear", ValidateBranchIsOmittedWhenStemIsAlreadyClear);
         RunTest(failures, "Support is skipped when branch cannot clear model", ValidateSupportIsSkippedWhenBranchCannotClearModel);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
+        RunTest(failures, "Line support pattern includes clicked endpoints", ValidateLineSupportPatternIncludesClickedEndpoints);
+        RunTest(failures, "Line support pattern avoids duplicate shared vertices", ValidateLineSupportPatternAvoidsDuplicateSharedVertices);
+        RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
+        RunTest(failures, "Line support pattern handles degenerate segments", ValidateLineSupportPatternHandlesDegenerateSegments);
+        RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
@@ -309,6 +318,166 @@ public static class Program
 
         ValidateVectorNear(new Vector3(0.25f, 0.25f, 2.0f), hit.Point, 0.0001f, "Expected projection point to land on the triangle plane.");
         ValidateVectorNear(Vector3.UnitZ, hit.Normal, 0.0001f, "Expected projection normal to match the triangle normal.");
+    }
+
+    /// <summary>
+    /// Validates that Line Support guide generation preserves the user's clicked endpoints.
+    /// </summary>
+    private static void ValidateLineSupportPatternIncludesClickedEndpoints()
+    {
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(0.0f, 0.0f, 1.0f),
+            new Vector3(10.0f, 0.0f, 1.0f)
+        };
+        List<Vector3> guidePoints = new List<Vector3>();
+
+        LineSupportPattern.FillGuidePoints(points, 3.0f, guidePoints);
+
+        ValidateVectorNear(points[0], guidePoints[0], 0.0001f, "Expected the first clicked point to be included.");
+        ValidateVectorNear(points[1], guidePoints[guidePoints.Count - 1], 0.0001f, "Expected the final clicked point to be included.");
+    }
+
+    /// <summary>
+    /// Validates that adjacent line segments do not duplicate their shared clicked vertex.
+    /// </summary>
+    private static void ValidateLineSupportPatternAvoidsDuplicateSharedVertices()
+    {
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(0.0f, 0.0f, 1.0f),
+            new Vector3(10.0f, 0.0f, 1.0f),
+            new Vector3(10.0f, 10.0f, 1.0f)
+        };
+        List<Vector3> guidePoints = new List<Vector3>();
+        int sharedVertexCount = 0;
+
+        LineSupportPattern.FillGuidePoints(points, 5.0f, guidePoints);
+
+        for (int i = 0; i < guidePoints.Count; i++)
+        {
+            if (Vector3.Distance(guidePoints[i], points[1]) <= 0.0001f)
+            {
+                sharedVertexCount++;
+            }
+        }
+
+        if (sharedVertexCount != 1)
+        {
+            throw new InvalidOperationException("Expected the shared polyline vertex to be emitted exactly once.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that no generated interval exceeds the requested spacing.
+    /// </summary>
+    private static void ValidateLineSupportPatternRespectsSpacingMaximum()
+    {
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(0.0f, 0.0f, 1.0f),
+            new Vector3(10.0f, 0.0f, 1.0f)
+        };
+        List<Vector3> guidePoints = new List<Vector3>();
+
+        LineSupportPattern.FillGuidePoints(points, 3.0f, guidePoints);
+
+        for (int i = 1; i < guidePoints.Count; i++)
+        {
+            float intervalLength = Vector3.Distance(guidePoints[i - 1], guidePoints[i]);
+
+            if (intervalLength > 3.0001f)
+            {
+                throw new InvalidOperationException("Expected every generated line interval to be no larger than the spacing setting.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that degenerate segments are skipped without producing invalid points.
+    /// </summary>
+    private static void ValidateLineSupportPatternHandlesDegenerateSegments()
+    {
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(2.0f, 2.0f, 1.0f),
+            new Vector3(2.0f, 2.0f, 1.0f),
+            new Vector3(2.1f, 2.0f, 1.0f)
+        };
+        List<Vector3> guidePoints = new List<Vector3>();
+
+        LineSupportPattern.FillGuidePoints(points, 5.0f, guidePoints);
+
+        for (int i = 0; i < guidePoints.Count; i++)
+        {
+            ValidateFinite(guidePoints[i]);
+        }
+
+        ValidateVectorNear(points[0], guidePoints[0], 0.0001f, "Expected the first valid point to be preserved.");
+        ValidateVectorNear(points[2], guidePoints[guidePoints.Count - 1], 0.0001f, "Expected the tiny non-degenerate endpoint to be preserved.");
+    }
+
+    /// <summary>
+    /// Validates that Line Support generator metadata is saved and loaded with the project.
+    /// </summary>
+    private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(1.0f, 1.0f, 2.0f),
+            new Vector3(6.0f, 1.0f, 2.0f),
+            new Vector3(6.0f, 4.0f, 2.0f)
+        };
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Line Supports");
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(points, 2.5f));
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "LineSupportSettingsSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1)
+            {
+                throw new InvalidOperationException("Expected one loaded support layer group.");
+            }
+
+            SupportLayerGroup loadedSupportLayerGroup = loadedDocument.SupportLayerGroups[0];
+            LineSupportSettings? loadedSettings = loadedSupportLayerGroup.LineSupportSettings;
+
+            if (loadedSupportLayerGroup.GeneratorKind != SupportGroupGeneratorKind.LineSupport || loadedSettings == null)
+            {
+                throw new InvalidOperationException("Expected the loaded support layer group to preserve Line Support metadata.");
+            }
+
+            if (loadedSettings.Points.Count != points.Count || MathF.Abs(loadedSettings.Spacing - 2.5f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected the loaded Line Support settings to preserve point count and spacing.");
+            }
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                ValidateVectorNear(points[i], loadedSettings.Points[i], 0.0001f, "Expected loaded Line Support points to match saved points.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
     }
 
     /// <summary>

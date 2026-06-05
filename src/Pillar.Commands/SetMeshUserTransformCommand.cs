@@ -135,7 +135,7 @@ public sealed class SetMeshUserTransformCommand : ICadCommand
     }
 
     /// <summary>
-    /// Restores Ring Support generator settings when a regenerated group is controlled by the Ring Support tool.
+    /// Restores generator settings when a regenerated group is controlled by a parametric support tool.
     /// </summary>
     private static void ApplyGeneratorSettings(SupportGroupRegeneration supportRegeneration, bool useNewState)
     {
@@ -146,6 +146,16 @@ public sealed class SetMeshUserTransformCommand : ICadCommand
         if (settings != null)
         {
             supportRegeneration.SupportLayerGroup.SetRingSupportSettings(settings);
+            return;
+        }
+
+        LineSupportSettings? lineSettings = useNewState
+            ? supportRegeneration.NewLineSupportSettings
+            : supportRegeneration.OldLineSupportSettings;
+
+        if (lineSettings != null)
+        {
+            supportRegeneration.SupportLayerGroup.SetLineSupportSettings(lineSettings);
         }
     }
 }

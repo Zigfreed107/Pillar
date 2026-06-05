@@ -42,6 +42,7 @@ public class SceneManager
     private readonly SnapMarkerRenderer _snapMarkerRenderer;
     private readonly PreviewLineRenderer _previewLineRenderer;
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
+    private readonly LineSupportPreviewRenderer _lineSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
@@ -128,6 +129,7 @@ public class SceneManager
 
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
         _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
+        _lineSupportPreviewRenderer = new LineSupportPreviewRenderer(_previewRoot);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
@@ -469,6 +471,90 @@ public class SceneManager
     public void HideRingSupportCircleAndMarkers()
     {
         _ringSupportPreviewRenderer.HideCircleAndMarkers();
+    }
+
+    /// <summary>
+    /// Shows the transient Line Support polyline preview.
+    /// </summary>
+    public void ShowLineSupportPreview(IReadOnlyList<Vector3> points, Vector3? hoverPoint)
+    {
+        _lineSupportPreviewRenderer.ShowPolyline(points, hoverPoint);
+    }
+
+    /// <summary>
+    /// Shows transient projected support marker positions for the Line Support tool.
+    /// </summary>
+    public void ShowLineSupportMarkers(IReadOnlyList<Vector3> markerPositions)
+    {
+        _lineSupportPreviewRenderer.ShowMarkers(markerPositions);
+    }
+
+    /// <summary>
+    /// Hides transient projected Line Support marker positions while leaving the polyline visible.
+    /// </summary>
+    public void HideLineSupportMarkers()
+    {
+        _lineSupportPreviewRenderer.HideMarkers();
+    }
+
+    /// <summary>
+    /// Shows the Line Support cursor spacing guide.
+    /// </summary>
+    public void ShowLineSupportSpacingGuide(Vector3 center, float diameter)
+    {
+        _lineSupportPreviewRenderer.ShowSpacingGuide(center, diameter);
+    }
+
+    /// <summary>
+    /// Hides the Line Support cursor spacing guide.
+    /// </summary>
+    public void HideLineSupportSpacingGuide()
+    {
+        _lineSupportPreviewRenderer.HideSpacingGuide();
+    }
+
+    /// <summary>
+    /// Shows editable Line Support polyline point handles.
+    /// </summary>
+    public void ShowLineSupportPointHandles(IReadOnlyList<Vector3> points, float handleDiameter)
+    {
+        _lineSupportPreviewRenderer.ShowPointHandles(points, handleDiameter);
+    }
+
+    /// <summary>
+    /// Hides editable Line Support polyline point handles.
+    /// </summary>
+    public void HideLineSupportPointHandles()
+    {
+        _lineSupportPreviewRenderer.HidePointHandles();
+    }
+
+    /// <summary>
+    /// Hit-tests only the transient Line Support point handles.
+    /// </summary>
+    public bool TryHitLineSupportPointHandle(Vector2 screenPosition, out int pointIndex)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is Element3D hitModel
+                && _lineSupportPreviewRenderer.TryGetPointHandleIndex(hitModel, out pointIndex))
+            {
+                return true;
+            }
+        }
+
+        pointIndex = -1;
+        return false;
+    }
+
+    /// <summary>
+    /// Hides all transient Line Support preview geometry.
+    /// </summary>
+    public void HideLineSupportPreview()
+    {
+        _lineSupportPreviewRenderer.Hide();
     }
 
     /// <summary>

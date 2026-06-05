@@ -25,6 +25,7 @@ public class ManualSupportTool : ITool
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getRingSupportSpacing;
+    private readonly Func<float> _getLineSupportSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private IToolOperation? _activeOperation;
 
@@ -38,6 +39,7 @@ public class ManualSupportTool : ITool
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getRingSupportSpacing,
+        Func<float> getLineSupportSpacing,
         Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -46,6 +48,7 @@ public class ManualSupportTool : ITool
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
+        _getLineSupportSpacing = getLineSupportSpacing ?? throw new ArgumentNullException(nameof(getLineSupportSpacing));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
@@ -117,6 +120,26 @@ public class ManualSupportTool : ITool
             return;
         }
 
+        if (operationKind == ManualSupportOperationKind.Line)
+        {
+            LineSupportOperation lineSupportOperation = new LineSupportOperation(
+                _document,
+                _projectionService,
+                _scene,
+                _commandRunner,
+                _getSelectedModelEntityId,
+                _getLineSupportSpacing,
+                _createSupportProfile,
+                RaiseStatusMessageRequested,
+                RaisePrecisionSelectCursorRequested,
+                RaisePreviewCalculationStateChanged);
+
+            lineSupportOperation.SelectionWindowChanged += RaiseSelectionWindowChanged;
+            _activeOperation = lineSupportOperation;
+            RaiseStatusMessageRequested("Click the first point on the selected model for line supports.");
+            return;
+        }
+
         if (operationKind == ManualSupportOperationKind.Ring)
         {
             RingSupportOperation ringSupportOperation = new RingSupportOperation(
@@ -177,6 +200,12 @@ public class ManualSupportTool : ITool
     /// </summary>
     public void RefreshActiveOperationPreview()
     {
+        if (_activeOperation is LineSupportOperation lineSupportOperation)
+        {
+            lineSupportOperation.RefreshPreview();
+            return;
+        }
+
         if (_activeOperation is RingSupportOperation ringSupportOperation)
         {
             ringSupportOperation.RefreshPreview();
@@ -188,12 +217,30 @@ public class ManualSupportTool : ITool
     /// </summary>
     public bool ApplyActiveOperation()
     {
+        if (_activeOperation is LineSupportOperation lineSupportOperation)
+        {
+            return lineSupportOperation.Apply();
+        }
+
         if (_activeOperation is RingSupportOperation ringSupportOperation)
         {
             return ringSupportOperation.Apply();
         }
 
-        RaiseStatusMessageRequested("Choose the Ring Support tool before applying ring supports.");
+        RaiseStatusMessageRequested("Choose a generated support tool before applying supports.");
+        return false;
+    }
+
+    /// <summary>
+    /// Completes the active Line Support polyline when the shell receives the finishing keyboard or Apply request.
+    /// </summary>
+    public bool FinalizeActiveLineSupportPolyline()
+    {
+        if (_activeOperation is LineSupportOperation lineSupportOperation)
+        {
+            return lineSupportOperation.FinalizePolyline();
+        }
+
         return false;
     }
 
@@ -278,6 +325,27 @@ public class ManualSupportTool : ITool
         if (_activeOperation is RingSupportOperation ringSupportOperation)
         {
             ringSupportOperation.EditExistingRingSupportGroup(supportLayerGroup);
+        }
+    }
+
+    /// <summary>
+    /// Loads an existing Line Support-generated group into the Line Support operation.
+    /// </summary>
+    public void EditLineSupportGroup(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        if (ActiveOperationKind != ManualSupportOperationKind.Line)
+        {
+            SetActiveOperation(ManualSupportOperationKind.Line);
+        }
+
+        if (_activeOperation is LineSupportOperation lineSupportOperation)
+        {
+            lineSupportOperation.EditExistingLineSupportGroup(supportLayerGroup);
         }
     }
 

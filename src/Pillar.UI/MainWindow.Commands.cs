@@ -85,6 +85,13 @@ public partial class MainWindow
             return;
         }
 
+        if (IsLineSupportOperationActive())
+        {
+            _manualSupportTool.FinalizeActiveLineSupportPolyline();
+            e.Handled = true;
+            return;
+        }
+
         _toolManager.CancelActiveTool();
         SetActiveMode(WorkspaceModeId.Select);
         e.Handled = true;
@@ -117,7 +124,7 @@ public partial class MainWindow
         }
 
         _layerPanelViewModel.RefreshFromDocument();
-        UpdateRingSupportDeleteButtonState();
+        UpdateGeneratedSupportDeleteButtonState();
         return true;
     }
 

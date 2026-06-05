@@ -21,12 +21,36 @@ public sealed class SupportGroupRegeneration
         IReadOnlyList<SupportEntity> newSupportEntities,
         RingSupportSettings? oldRingSupportSettings,
         RingSupportSettings? newRingSupportSettings)
+        : this(
+            supportLayerGroup,
+            oldSupportEntities,
+            newSupportEntities,
+            oldRingSupportSettings,
+            newRingSupportSettings,
+            null,
+            null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an immutable support regeneration snapshot for one support group.
+    /// </summary>
+    public SupportGroupRegeneration(
+        SupportLayerGroup supportLayerGroup,
+        IReadOnlyList<SupportEntity> oldSupportEntities,
+        IReadOnlyList<SupportEntity> newSupportEntities,
+        RingSupportSettings? oldRingSupportSettings,
+        RingSupportSettings? newRingSupportSettings,
+        LineSupportSettings? oldLineSupportSettings,
+        LineSupportSettings? newLineSupportSettings)
     {
         SupportLayerGroup = supportLayerGroup ?? throw new ArgumentNullException(nameof(supportLayerGroup));
         OldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
         NewSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
         OldRingSupportSettings = oldRingSupportSettings?.Clone();
         NewRingSupportSettings = newRingSupportSettings?.Clone();
+        OldLineSupportSettings = oldLineSupportSettings?.Clone();
+        NewLineSupportSettings = newLineSupportSettings?.Clone();
 
         ValidateSupportOwnership(OldSupportEntities, SupportLayerGroup.Id, nameof(oldSupportEntities));
         ValidateSupportOwnership(NewSupportEntities, SupportLayerGroup.Id, nameof(newSupportEntities));
@@ -56,6 +80,16 @@ public sealed class SupportGroupRegeneration
     /// Gets the Ring Support generator settings transformed for the new model transform, when this is a Ring group.
     /// </summary>
     public RingSupportSettings? NewRingSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Line Support generator settings present before the transform, when this is a Line group.
+    /// </summary>
+    public LineSupportSettings? OldLineSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Line Support generator settings transformed for the new model transform, when this is a Line group.
+    /// </summary>
+    public LineSupportSettings? NewLineSupportSettings { get; }
 
     /// <summary>
     /// Verifies every support entity belongs to the group carried by this regeneration snapshot.
