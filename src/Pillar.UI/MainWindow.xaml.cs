@@ -114,6 +114,7 @@ public partial class MainWindow : Window
             _layerPanelViewModel.GetSelectedModelEntityId,
             GetRingSupportSpacingOrDefault,
             GetLineSupportSpacingOrDefault,
+            GetLineSupportPlaceSupportsAtBendsOrDefault,
             GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
@@ -130,6 +131,7 @@ public partial class MainWindow : Window
         WireWorkspaceState();
         RegisterWorkspaceModes();
         InitializeFaceAngleHighlightControls();
+        InitializeScaledCursorControls();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
@@ -189,6 +191,7 @@ public partial class MainWindow : Window
         _ = sender;
         _ = e;
         SetPrecisionSelectCursor(false);
+        _scene.HideScaledCursorPreview();
         _manualSupportTool.SelectionWindowChanged -= _selectionWindowOverlay.Update;
         _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
         _manualSupportTool.PreviewCalculationStateChanged -= ManualSupportTool_PreviewCalculationStateChanged;
@@ -361,6 +364,14 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Line support spacing is invalid; using 5.00 mm.");
         return LineSupportToolOptionsControl.DefaultLineSupportSpacing;
+    }
+
+    /// <summary>
+    /// Reads the Line Support bend placement option while keeping WPF controls out of rendering tools.
+    /// </summary>
+    private bool GetLineSupportPlaceSupportsAtBendsOrDefault()
+    {
+        return _lineSupportToolOptionsControl.GetPlaceSupportsAtBends();
     }
 
     /// <summary>

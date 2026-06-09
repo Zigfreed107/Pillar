@@ -89,6 +89,15 @@ namespace Pillar.UI.Properties {
             }
         }
 
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("#FF00AEEF")]
+        public string ScaledCursorCircleColor {
+            get {
+                return ((string)(this["ScaledCursorCircleColor"]));
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
@@ -158,6 +167,18 @@ namespace Pillar.UI.Properties {
             }
             set {
                 this["ViewportRenderScale"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public double ScaledCursorDiameter {
+            get {
+                return ((double)(this["ScaledCursorDiameter"]));
+            }
+            set {
+                this["ScaledCursorDiameter"] = value;
             }
         }
     }

@@ -10,6 +10,7 @@
         xmlns:hx="http://helix-toolkit.org/wpf/SharpDX"
         xmlns:layers="clr-namespace:Pillar.UI.Layers"
         xmlns:modes="clr-namespace:Pillar.UI.Modes"
+        xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
         Title="{Binding WindowTitle}"
         Height="1080"
         Width="1920"
@@ -82,31 +83,139 @@
                             Margin="12,0,0,0"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <CheckBox x:Name="FaceAngleHighlightCheckBox"
-                              Margin="0,0,8,0"
-                              VerticalAlignment="Center"
-                              Content="Highlight shallow faces"
-                              Checked="FaceAngleHighlightCheckBox_Changed"
-                              Unchecked="FaceAngleHighlightCheckBox_Changed"
-                              ToolTip="Highlight model faces within the selected angle from the XY build plate." />
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Margin="0,0,4,0"
-                               VerticalAlignment="Center"
-                               Text="Angle" />
+                        <ToggleButton x:Name="FaceAngleHighlightToggleButton"
+                                      Grid.Column="0"
+                                      MinHeight="28"
+                                      Padding="8,2"
+                                      VerticalAlignment="Center"
+                                      Content="Highlight shallow faces"
+                                      Checked="FaceAngleHighlightToggleButton_Changed"
+                                      Unchecked="FaceAngleHighlightToggleButton_Changed"
+                                      ToolTip="Highlight model faces within the selected angle from the XY build plate." />
 
-                    <controls:NumericUpDown x:Name="FaceAngleThresholdNumericUpDown"
-                                            Width="72"
-                                            Minimum="1"
-                                            Maximum="90"
-                                            Increment="1"
-                                            DecimalPlaces="0"
-                                            Value="45"
-                                            IsEnabled="False"
-                                            ValueChanged="FaceAngleThresholdNumericUpDown_ValueChanged" />
+                        <ToggleButton x:Name="FaceAngleHighlightDropDownButton"
+                                      Grid.Column="1"
+                                      Width="26"
+                                      MinHeight="28"
+                                      Margin="2,0,0,0"
+                                      Padding="0"
+                                      VerticalAlignment="Center"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Content="&#xE70D;"
+                                      FontFamily="Segoe Fluent Icons"
+                                      PreviewMouseDown="FaceAngleHighlightDropDownButton_PreviewMouseDown"
+                                      Click="FaceAngleHighlightDropDownButton_Click"
+                                      ToolTip="Shallow face highlight settings" />
 
-                    <TextBlock Margin="4,0,0,0"
-                               VerticalAlignment="Center"
-                               Text="&#x00B0;" />
+                        <primitives:Popup x:Name="FaceAngleHighlightSettingsPopup"
+                                          AllowsTransparency="True"
+                                          Placement="Bottom"
+                                          PlacementTarget="{Binding ElementName=FaceAngleHighlightDropDownButton}"
+                                          StaysOpen="False"
+                                          Closed="FaceAngleHighlightSettingsPopup_Closed">
+                            <Border MinWidth="170"
+                                    Padding="10"
+                                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                    BorderThickness="1"
+                                    SnapsToDevicePixels="True">
+                                <StackPanel>
+                                    <TextBlock Margin="0,0,0,6"
+                                               Text="Angle" />
+                                    <DockPanel LastChildFill="True">
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="&#x00B0;" />
+                                        <controls:NumericUpDown x:Name="FaceAngleThresholdNumericUpDown"
+                                                                Width="96"
+                                                                Minimum="1"
+                                                                Maximum="90"
+                                                                Increment="1"
+                                                                DecimalPlaces="0"
+                                                                Value="45"
+                                                                ValueChanged="FaceAngleThresholdNumericUpDown_ValueChanged" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </primitives:Popup>
+                    </Grid>
+
+                    <Border Width="1"
+                            Height="24"
+                            Margin="12,0"
+                            Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <ToggleButton x:Name="ScaledCursorToggleButton"
+                                      Grid.Column="0"
+                                      MinHeight="28"
+                                      Padding="8,2"
+                                      VerticalAlignment="Center"
+                                      Content="Scaled Cursor"
+                                      Checked="ScaledCursorToggleButton_Changed"
+                                      Unchecked="ScaledCursorToggleButton_Changed"
+                                      ToolTip="Show a scaled guide circle on the build plate under the cursor." />
+
+                        <ToggleButton x:Name="ScaledCursorDropDownButton"
+                                      Grid.Column="1"
+                                      Width="26"
+                                      MinHeight="28"
+                                      Margin="2,0,0,0"
+                                      Padding="0"
+                                      VerticalAlignment="Center"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
+                                      Content="&#xE70D;"
+                                      FontFamily="Segoe Fluent Icons"
+                                      PreviewMouseDown="ScaledCursorDropDownButton_PreviewMouseDown"
+                                      Click="ScaledCursorDropDownButton_Click"
+                                      ToolTip="Scaled cursor settings" />
+
+                        <primitives:Popup x:Name="ScaledCursorSettingsPopup"
+                                          AllowsTransparency="True"
+                                          Placement="Bottom"
+                                          PlacementTarget="{Binding ElementName=ScaledCursorDropDownButton}"
+                                          StaysOpen="False"
+                                          Closed="ScaledCursorSettingsPopup_Closed">
+                            <Border MinWidth="190"
+                                    Padding="10"
+                                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                    BorderThickness="1"
+                                    SnapsToDevicePixels="True">
+                                <StackPanel>
+                                    <TextBlock Margin="0,0,0,6"
+                                               Text="Circle diameter" />
+                                    <DockPanel LastChildFill="True">
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Margin="6,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Text="mm" />
+                                        <controls:NumericUpDown x:Name="ScaledCursorDiameterNumericUpDown"
+                                                                Width="116"
+                                                                Minimum="0.10"
+                                                                Maximum="500.00"
+                                                                Increment="0.50"
+                                                                DecimalPlaces="2"
+                                                                ValueChanged="ScaledCursorDiameterNumericUpDown_ValueChanged" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </primitives:Popup>
+                    </Grid>
                 </StackPanel>
             </Grid>
         </Border>
@@ -127,6 +236,7 @@
                                     IsViewCubeEdgeClicksEnabled="True"
                                     ModelUpDirection="0,0,1"
                                     MouseDown="Viewport_MouseDown"
+                                    MouseLeave="Viewport_MouseLeave"
                                     MouseMove="Viewport_MouseMove"
                                     MouseUp="Viewport_MouseUp"
                                     Orthographic="True"

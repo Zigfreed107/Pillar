@@ -46,7 +46,9 @@ public static class Program
         RunTest(failures, "Line support pattern avoids duplicate shared vertices", ValidateLineSupportPatternAvoidsDuplicateSharedVertices);
         RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
         RunTest(failures, "Line support pattern handles degenerate segments", ValidateLineSupportPatternHandlesDegenerateSegments);
+        RunTest(failures, "Line support pattern can skip bend supports", ValidateLineSupportPatternCanSkipBendSupports);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
+        RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
@@ -418,6 +420,38 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that continuous Line Support spacing can avoid forcing a support at an interior bend.
+    /// </summary>
+    private static void ValidateLineSupportPatternCanSkipBendSupports()
+    {
+        List<Vector3> points = new List<Vector3>
+        {
+            new Vector3(0.0f, 0.0f, 1.0f),
+            new Vector3(2.0f, 0.0f, 1.0f),
+            new Vector3(2.0f, 8.0f, 1.0f)
+        };
+        List<Vector3> guidePoints = new List<Vector3>();
+
+        LineSupportPattern.FillGuidePoints(points, 4.0f, false, guidePoints);
+
+        if (guidePoints.Count != 4)
+        {
+            throw new InvalidOperationException("Expected the continuous polyline to be split into four support locations.");
+        }
+
+        for (int i = 0; i < guidePoints.Count; i++)
+        {
+            if (Vector3.Distance(guidePoints[i], points[1]) <= 0.0001f)
+            {
+                throw new InvalidOperationException("Expected the interior bend to be skipped when bend supports are disabled.");
+            }
+        }
+
+        ValidateVectorNear(points[0], guidePoints[0], 0.0001f, "Expected continuous spacing to preserve the first clicked point.");
+        ValidateVectorNear(points[2], guidePoints[guidePoints.Count - 1], 0.0001f, "Expected continuous spacing to preserve the final clicked point.");
+    }
+
+    /// <summary>
     /// Validates that Line Support generator metadata is saved and loaded with the project.
     /// </summary>
     private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
@@ -437,7 +471,7 @@ public static class Program
             new Vector3(6.0f, 4.0f, 2.0f)
         };
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Line Supports");
-        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(points, 2.5f));
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(points, 2.5f, false));
         document.AddSupportLayerGroup(supportLayerGroup);
 
         GphDocumentSerializer serializer = new GphDocumentSerializer();
@@ -446,6 +480,13 @@ public static class Program
         try
         {
             serializer.Save(document, filePath);
+            string savedJson = File.ReadAllText(filePath);
+
+            if (savedJson.IndexOf("\"version\"", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                throw new InvalidOperationException("Expected saved Graphite project files to omit pre-V2 file version metadata.");
+            }
+
             GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
 
             if (loadedDocument.SupportLayerGroups.Count != 1)
@@ -466,10 +507,47 @@ public static class Program
                 throw new InvalidOperationException("Expected the loaded Line Support settings to preserve point count and spacing.");
             }
 
+            if (loadedSettings.PlaceSupportsAtBends)
+            {
+                throw new InvalidOperationException("Expected the loaded Line Support settings to preserve bend placement behavior.");
+            }
+
             for (int i = 0; i < points.Count; i++)
             {
                 ValidateVectorNear(points[i], loadedSettings.Points[i], 0.0001f, "Expected loaded Line Support points to match saved points.");
             }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that removing file versioning does not remove the Graphite file identity check.
+    /// </summary>
+    private static void ValidateGphSerializerRejectsInvalidFormat()
+    {
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "InvalidFormatSmoke.gph");
+
+        try
+        {
+            File.WriteAllText(filePath, "{\"format\":\"NotGraphite\",\"entities\":[],\"supportLayerGroups\":[]}");
+
+            try
+            {
+                serializer.LoadDocument(filePath);
+            }
+            catch (InvalidDataException)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("Expected non-Graphite project files to be rejected.");
         }
         finally
         {

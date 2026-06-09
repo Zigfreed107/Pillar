@@ -44,6 +44,7 @@ public class SceneManager
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
     private readonly LineSupportPreviewRenderer _lineSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
+    private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
     private readonly PrintableVolumeDefinition _printableVolumeDefinition;
@@ -131,6 +132,7 @@ public class SceneManager
         _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
         _lineSupportPreviewRenderer = new LineSupportPreviewRenderer(_previewRoot);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
+        _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
@@ -463,6 +465,22 @@ public class SceneManager
     public void HideScaleOriginPreview()
     {
         _scaleOriginPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows the visual-only scaled cursor circle at the supplied build-plate position.
+    /// </summary>
+    public void ShowScaledCursorPreview(Vector3 center, float diameter, MediaColor color)
+    {
+        _scaledCursorPreviewRenderer.Show(center, diameter, color);
+    }
+
+    /// <summary>
+    /// Hides the scaled cursor guide when the toolbar toggle is off or the cursor leaves the viewport.
+    /// </summary>
+    public void HideScaledCursorPreview()
+    {
+        _scaledCursorPreviewRenderer.Hide();
     }
 
     /// <summary>

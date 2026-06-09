@@ -11,12 +11,22 @@ namespace Pillar.Core.Layers;
 /// </summary>
 public sealed class LineSupportSettings
 {
+    public const bool DefaultPlaceSupportsAtBends = true;
+
     private readonly List<Vector3> _points;
+
+    /// <summary>
+    /// Creates validated Line Support generator settings with the default bend behavior.
+    /// </summary>
+    public LineSupportSettings(IReadOnlyList<Vector3> points, float spacing)
+        : this(points, spacing, DefaultPlaceSupportsAtBends)
+    {
+    }
 
     /// <summary>
     /// Creates validated Line Support generator settings.
     /// </summary>
-    public LineSupportSettings(IReadOnlyList<Vector3> points, float spacing)
+    public LineSupportSettings(IReadOnlyList<Vector3> points, float spacing, bool placeSupportsAtBends)
     {
         if (points == null)
         {
@@ -37,6 +47,7 @@ public sealed class LineSupportSettings
         }
 
         Spacing = ValidateSpacing(spacing);
+        PlaceSupportsAtBends = placeSupportsAtBends;
     }
 
     /// <summary>
@@ -53,11 +64,16 @@ public sealed class LineSupportSettings
     public float Spacing { get; }
 
     /// <summary>
+    /// Gets whether clicked polyline vertices must be emitted as support locations.
+    /// </summary>
+    public bool PlaceSupportsAtBends { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public LineSupportSettings Clone()
     {
-        return new LineSupportSettings(_points, Spacing);
+        return new LineSupportSettings(_points, Spacing, PlaceSupportsAtBends);
     }
 
     /// <summary>

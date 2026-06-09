@@ -53,7 +53,9 @@ public partial class MainWindow
             return;
         }
 
-        _toolManager.ActiveTool?.OnMouseMove(GetScreenPosition(e));
+        Vector2 screenPosition = GetScreenPosition(e);
+        _toolManager.ActiveTool?.OnMouseMove(screenPosition);
+        UpdateScaledCursorPreview(screenPosition);
 
         if (e.LeftButton == MouseButtonState.Pressed)
         {

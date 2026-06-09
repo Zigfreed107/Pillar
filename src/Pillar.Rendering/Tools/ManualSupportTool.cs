@@ -26,6 +26,7 @@ public class ManualSupportTool : ITool
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getRingSupportSpacing;
     private readonly Func<float> _getLineSupportSpacing;
+    private readonly Func<bool> _getLineSupportPlaceSupportsAtBends;
     private readonly Func<SupportProfile> _createSupportProfile;
     private IToolOperation? _activeOperation;
 
@@ -40,6 +41,7 @@ public class ManualSupportTool : ITool
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getRingSupportSpacing,
         Func<float> getLineSupportSpacing,
+        Func<bool> getLineSupportPlaceSupportsAtBends,
         Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -49,6 +51,7 @@ public class ManualSupportTool : ITool
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
         _getLineSupportSpacing = getLineSupportSpacing ?? throw new ArgumentNullException(nameof(getLineSupportSpacing));
+        _getLineSupportPlaceSupportsAtBends = getLineSupportPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getLineSupportPlaceSupportsAtBends));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
@@ -129,6 +132,7 @@ public class ManualSupportTool : ITool
                 _commandRunner,
                 _getSelectedModelEntityId,
                 _getLineSupportSpacing,
+                _getLineSupportPlaceSupportsAtBends,
                 _createSupportProfile,
                 RaiseStatusMessageRequested,
                 RaisePrecisionSelectCursorRequested,

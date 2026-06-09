@@ -18,8 +18,6 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
-    private const int CurrentVersion = 12;
-    private const int MinimumSupportedVersion = 11;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
@@ -138,8 +136,7 @@ public sealed class GphDocumentSerializer
     {
         GphDocumentDto dto = new GphDocumentDto
         {
-            Format = FormatName,
-            Version = CurrentVersion
+            Format = FormatName
         };
 
         foreach (CadEntity entity in document.Entities)
@@ -244,11 +241,6 @@ public sealed class GphDocumentSerializer
         if (!string.Equals(documentDto.Format, FormatName, StringComparison.Ordinal))
         {
             throw new InvalidDataException("The selected file is not a Graphite project file.");
-        }
-
-        if (documentDto.Version < MinimumSupportedVersion || documentDto.Version > CurrentVersion)
-        {
-            throw new NotSupportedException($"Graphite project file version {documentDto.Version} is not supported.");
         }
 
         if (documentDto.Entities == null)
@@ -573,7 +565,8 @@ public sealed class GphDocumentSerializer
 
         GphLineSupportSettingsDto dto = new GphLineSupportSettingsDto
         {
-            Spacing = settings.Spacing
+            Spacing = settings.Spacing,
+            PlaceSupportsAtBends = settings.PlaceSupportsAtBends
         };
 
         for (int i = 0; i < settings.Points.Count; i++)
@@ -730,7 +723,10 @@ public sealed class GphDocumentSerializer
             points.Add(CreateVector(point));
         }
 
-        return new LineSupportSettings(points, supportLayerGroupDto.LineSupport.Spacing);
+        bool placeSupportsAtBends = supportLayerGroupDto.LineSupport.PlaceSupportsAtBends
+            ?? LineSupportSettings.DefaultPlaceSupportsAtBends;
+
+        return new LineSupportSettings(points, supportLayerGroupDto.LineSupport.Spacing, placeSupportsAtBends);
     }
 
     /// <summary>
@@ -797,7 +793,6 @@ public sealed class GphDocumentSerializer
     private sealed class GphDocumentDto
     {
         public string Format { get; set; } = string.Empty;
-        public int Version { get; set; }
         public List<GphEntityDto> Entities { get; set; } = new List<GphEntityDto>();
         public List<GphSupportLayerGroupDto> SupportLayerGroups { get; set; } = new List<GphSupportLayerGroupDto>();
     }
@@ -908,6 +903,7 @@ public sealed class GphDocumentSerializer
     {
         public List<GphVector3Dto?> Points { get; set; } = new List<GphVector3Dto?>();
         public float Spacing { get; set; }
+        public bool? PlaceSupportsAtBends { get; set; }
     }
 
     /// <summary>

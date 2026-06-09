@@ -50,6 +50,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
+    private readonly Func<bool> _getPlaceSupportsAtBends;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private readonly Action<bool> _precisionSelectCursorRequester;
@@ -78,6 +79,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
+        Func<bool> getPlaceSupportsAtBends,
         Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter,
         Action<bool> precisionSelectCursorRequester,
@@ -89,6 +91,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
+        _getPlaceSupportsAtBends = getPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getPlaceSupportsAtBends));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
         _precisionSelectCursorRequester = precisionSelectCursorRequester ?? throw new ArgumentNullException(nameof(precisionSelectCursorRequester));
@@ -386,7 +389,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
             return false;
         }
 
-        LineSupportSettings settings = new LineSupportSettings(_points, _getSpacing());
+        LineSupportSettings settings = new LineSupportSettings(_points, _getSpacing(), _getPlaceSupportsAtBends());
 
         if (_editingSupportLayerGroupId.HasValue)
         {
@@ -817,7 +820,11 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         missedProjectionCount = 0;
         invalidSupportCount = 0;
 
-        LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, _guidePreviewPoints);
+        LineSupportPattern.FillGuidePoints(
+            settings.Points,
+            settings.Spacing,
+            settings.PlaceSupportsAtBends,
+            _guidePreviewPoints);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
@@ -877,7 +884,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
     {
         _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
-        LineSupportPattern.FillGuidePoints(_points, _getSpacing(), _guidePreviewPoints);
+        LineSupportPattern.FillGuidePoints(_points, _getSpacing(), _getPlaceSupportsAtBends(), _guidePreviewPoints);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {

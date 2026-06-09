@@ -505,6 +505,7 @@ public partial class MainWindow
 
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _lineSupportToolOptionsControl.SetLineSupportSpacing(settings.Spacing);
+            _lineSupportToolOptionsControl.SetPlaceSupportsAtBends(settings.PlaceSupportsAtBends);
             ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditLineSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);

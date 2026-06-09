@@ -14,6 +14,7 @@ public partial class LineSupportToolOptionsControl : UserControl
 {
     private const int OptionsChangedDelayMilliseconds = 300;
     public const float DefaultLineSupportSpacing = 5.0f;
+    public const bool DefaultPlaceSupportsAtBends = true;
 
     private readonly DispatcherTimer _optionsChangedTimer;
     private bool _isSynchronizingOptions;
@@ -97,6 +98,32 @@ public partial class LineSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Gets whether generated Line Support guide points should include every clicked polyline vertex.
+    /// </summary>
+    public bool GetPlaceSupportsAtBends()
+    {
+        return PlaceSupportsAtBendsCheckBox.IsChecked == true;
+    }
+
+    /// <summary>
+    /// Sets the bend placement option without raising live-preview refresh events.
+    /// </summary>
+    public void SetPlaceSupportsAtBends(bool placeSupportsAtBends)
+    {
+        _optionsChangedTimer.Stop();
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            PlaceSupportsAtBendsCheckBox.IsChecked = placeSupportsAtBends;
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
+        }
+    }
+
+    /// <summary>
     /// Enables or disables the Delete button based on active support selection.
     /// </summary>
     public void SetDeleteSelectedSupportsEnabled(bool isEnabled)
@@ -108,6 +135,22 @@ public partial class LineSupportToolOptionsControl : UserControl
     /// Schedules an option-driven preview refresh after the user pauses editing.
     /// </summary>
     private void LineSupportSpacingNumericUpDown_ValueChanged(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_isSynchronizingOptions)
+        {
+            return;
+        }
+
+        RestartOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Schedules a preview refresh when the user changes bend placement behavior.
+    /// </summary>
+    private void PlaceSupportsAtBendsCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;

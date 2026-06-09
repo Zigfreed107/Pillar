@@ -206,7 +206,7 @@ public static class SupportGroupTransformRegenerator
         List<Vector3> guidePoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
         List<SupportEntity> newSupportEntities = new List<SupportEntity>();
 
-        LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, guidePoints);
+        LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, settings.PlaceSupportsAtBends, guidePoints);
 
         for (int i = 0; i < guidePoints.Count; i++)
         {
@@ -341,7 +341,7 @@ public static class SupportGroupTransformRegenerator
                 newWorldTransform));
         }
 
-        return new LineSupportSettings(transformedPoints, oldSettings.Spacing);
+        return new LineSupportSettings(transformedPoints, oldSettings.Spacing, oldSettings.PlaceSupportsAtBends);
     }
 
     /// <summary>

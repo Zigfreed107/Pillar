@@ -79,12 +79,12 @@ This means the ring follows the model's translated and scaled location, but it r
 
 ## Line Supports
 
-Line support groups store `LineSupportSettings`: the picked model-surface polyline points and the requested spacing.
+Line support groups store `LineSupportSettings`: the picked model-surface polyline points, the requested spacing, and whether supports should be forced at clicked bends.
 
 During model transform regeneration:
 
 1. Each stored line point is transformed through the old-to-new model transform path.
-2. Guide points are distributed along each line segment so no interval is longer than the saved spacing.
+2. Guide points are distributed using the saved bend placement option. With bend supports enabled, every clicked vertex is included and each segment is evenly divided between vertices. With bend supports disabled, the full polyline length is evenly divided without forcing interior vertices to become support points.
 3. Each guide point is projected vertically in the Z direction onto the transformed model.
 4. Concrete support entities are regenerated at the projected hits.
 

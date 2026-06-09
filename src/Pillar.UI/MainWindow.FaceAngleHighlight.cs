@@ -16,6 +16,7 @@ public partial class MainWindow
     private const string DefaultFaceAngleHighlightColor = "#CCFF0000";
     private bool _isSynchronizingFaceAngleHighlightControls;
     private bool _isFaceAngleHighlightInitialized;
+    private bool _wasFaceAngleHighlightPopupOpenBeforeArrowMouseDown;
 
     /// <summary>
     /// Loads persisted toolbar values and applies the initial face-angle highlight state to the scene.
@@ -27,9 +28,9 @@ public partial class MainWindow
         try
         {
             int thresholdDegrees = ClampFaceAngleThreshold(Settings.Default.FaceAngleThresholdDegrees);
-            FaceAngleHighlightCheckBox.IsChecked = Settings.Default.FaceAngleHighlightEnabled;
+            FaceAngleHighlightToggleButton.IsChecked = Settings.Default.FaceAngleHighlightEnabled;
+            FaceAngleHighlightDropDownButton.IsChecked = false;
             FaceAngleThresholdNumericUpDown.Value = thresholdDegrees;
-            FaceAngleThresholdNumericUpDown.IsEnabled = Settings.Default.FaceAngleHighlightEnabled;
         }
         finally
         {
@@ -41,9 +42,9 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Persists checkbox changes and enables or disables the angle editor.
+    /// Persists toggle changes and applies the active shallow-face highlight state.
     /// </summary>
-    private void FaceAngleHighlightCheckBox_Changed(object sender, RoutedEventArgs e)
+    private void FaceAngleHighlightToggleButton_Changed(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
@@ -55,11 +56,56 @@ public partial class MainWindow
             return;
         }
 
-        bool isEnabled = FaceAngleHighlightCheckBox.IsChecked == true;
-        FaceAngleThresholdNumericUpDown.IsEnabled = isEnabled;
+        bool isEnabled = FaceAngleHighlightToggleButton.IsChecked == true;
         Settings.Default.FaceAngleHighlightEnabled = isEnabled;
         Settings.Default.Save();
         ApplyFaceAngleHighlightSettings();
+    }
+
+    /// <summary>
+    /// Captures popup state before WPF's outside-click popup handling can close it.
+    /// </summary>
+    private void FaceAngleHighlightDropDownButton_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        _wasFaceAngleHighlightPopupOpenBeforeArrowMouseDown = FaceAngleHighlightSettingsPopup.IsOpen;
+    }
+
+    /// <summary>
+    /// Toggles the angle settings popup from the split-button arrow.
+    /// </summary>
+    private void FaceAngleHighlightDropDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (!AreFaceAngleHighlightControlsReady())
+        {
+            return;
+        }
+
+        bool shouldOpenPopup = !_wasFaceAngleHighlightPopupOpenBeforeArrowMouseDown;
+        FaceAngleHighlightSettingsPopup.IsOpen = shouldOpenPopup;
+        FaceAngleHighlightDropDownButton.IsChecked = shouldOpenPopup;
+        _wasFaceAngleHighlightPopupOpenBeforeArrowMouseDown = false;
+    }
+
+    /// <summary>
+    /// Keeps the arrow toggle visually synchronized when the popup closes from outside clicks.
+    /// </summary>
+    private void FaceAngleHighlightSettingsPopup_Closed(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (!AreFaceAngleHighlightControlsReady())
+        {
+            return;
+        }
+
+        FaceAngleHighlightDropDownButton.IsChecked = false;
     }
 
     /// <summary>
@@ -108,7 +154,7 @@ public partial class MainWindow
             return;
         }
 
-        bool isEnabled = FaceAngleHighlightCheckBox.IsChecked == true;
+        bool isEnabled = FaceAngleHighlightToggleButton.IsChecked == true;
         int thresholdDegrees = ClampFaceAngleThreshold((int)Math.Round(FaceAngleThresholdNumericUpDown.Value));
         Color4 highlightColor = ReadFaceAngleHighlightColor();
         _scene.ConfigureFaceAngleHighlight(isEnabled, thresholdDegrees, highlightColor);
@@ -119,7 +165,9 @@ public partial class MainWindow
     /// </summary>
     private bool AreFaceAngleHighlightControlsReady()
     {
-        return FaceAngleHighlightCheckBox != null
+        return FaceAngleHighlightToggleButton != null
+            && FaceAngleHighlightDropDownButton != null
+            && FaceAngleHighlightSettingsPopup != null
             && FaceAngleThresholdNumericUpDown != null;
     }
 

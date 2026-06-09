@@ -20,6 +20,18 @@ public static class LineSupportPattern
     /// </summary>
     public static void FillGuidePoints(IReadOnlyList<Vector3> polylinePoints, float spacing, IList<Vector3> guidePoints)
     {
+        FillGuidePoints(polylinePoints, spacing, true, guidePoints);
+    }
+
+    /// <summary>
+    /// Appends guide points for the requested Line Support bend behavior into a caller-owned buffer.
+    /// </summary>
+    public static void FillGuidePoints(
+        IReadOnlyList<Vector3> polylinePoints,
+        float spacing,
+        bool placeSupportsAtBends,
+        IList<Vector3> guidePoints)
+    {
         if (polylinePoints == null)
         {
             throw new ArgumentNullException(nameof(polylinePoints));
@@ -38,6 +50,13 @@ public static class LineSupportPattern
         }
 
         float validatedSpacing = ValidateSpacing(spacing);
+
+        if (!placeSupportsAtBends)
+        {
+            FillContinuousGuidePoints(polylinePoints, validatedSpacing, guidePoints);
+            return;
+        }
+
         guidePoints.Add(polylinePoints[0]);
 
         for (int segmentIndex = 1; segmentIndex < polylinePoints.Count; segmentIndex++)
@@ -69,6 +88,97 @@ public static class LineSupportPattern
                 guidePoints.Add(Vector3.Lerp(start, end, t));
             }
         }
+    }
+
+    /// <summary>
+    /// Distributes supports evenly along the whole polyline without forcing interior vertices to become supports.
+    /// </summary>
+    private static void FillContinuousGuidePoints(IReadOnlyList<Vector3> polylinePoints, float spacing, IList<Vector3> guidePoints)
+    {
+        float totalLength = CalculatePolylineLength(polylinePoints);
+
+        if (totalLength <= MinimumSegmentLength)
+        {
+            guidePoints.Add(polylinePoints[0]);
+            return;
+        }
+
+        int intervalCount = (int)MathF.Ceiling(totalLength / spacing);
+
+        if (intervalCount < 1)
+        {
+            intervalCount = 1;
+        }
+
+        int supportCount = intervalCount + 1;
+
+        if (supportCount > MaximumSupportCount)
+        {
+            supportCount = MaximumSupportCount;
+        }
+
+        for (int supportIndex = 0; supportIndex < supportCount; supportIndex++)
+        {
+            float distanceAlongPolyline = supportCount == 1
+                ? 0.0f
+                : totalLength * (supportIndex / (float)(supportCount - 1));
+
+            guidePoints.Add(EvaluatePolylineAtDistance(polylinePoints, distanceAlongPolyline));
+        }
+    }
+
+    /// <summary>
+    /// Calculates the combined length of all non-degenerate polyline segments.
+    /// </summary>
+    private static float CalculatePolylineLength(IReadOnlyList<Vector3> polylinePoints)
+    {
+        float totalLength = 0.0f;
+
+        for (int segmentIndex = 1; segmentIndex < polylinePoints.Count; segmentIndex++)
+        {
+            float segmentLength = Vector3.Distance(polylinePoints[segmentIndex - 1], polylinePoints[segmentIndex]);
+
+            if (segmentLength > MinimumSegmentLength)
+            {
+                totalLength += segmentLength;
+            }
+        }
+
+        return totalLength;
+    }
+
+    /// <summary>
+    /// Evaluates a point at a measured distance along the non-degenerate parts of the polyline.
+    /// </summary>
+    private static Vector3 EvaluatePolylineAtDistance(IReadOnlyList<Vector3> polylinePoints, float distanceAlongPolyline)
+    {
+        float traversedLength = 0.0f;
+        Vector3 lastValidEnd = polylinePoints[0];
+
+        for (int segmentIndex = 1; segmentIndex < polylinePoints.Count; segmentIndex++)
+        {
+            Vector3 start = polylinePoints[segmentIndex - 1];
+            Vector3 end = polylinePoints[segmentIndex];
+            float segmentLength = Vector3.Distance(start, end);
+
+            if (segmentLength <= MinimumSegmentLength)
+            {
+                continue;
+            }
+
+            lastValidEnd = end;
+
+            if (distanceAlongPolyline <= traversedLength + segmentLength)
+            {
+                float segmentDistance = distanceAlongPolyline - traversedLength;
+                float t = Math.Clamp(segmentDistance / segmentLength, 0.0f, 1.0f);
+                return Vector3.Lerp(start, end, t);
+            }
+
+            traversedLength += segmentLength;
+        }
+
+        return lastValidEnd;
     }
 
     /// <summary>
