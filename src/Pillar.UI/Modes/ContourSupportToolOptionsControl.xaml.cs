@@ -169,11 +169,11 @@ public partial class ContourSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
-    /// Enables or disables open-contour offset fields based on the current contour shape.
+    /// Enables contour offset fields based on the current contour shape.
     /// </summary>
     public void SetContourClosed(bool isClosed)
     {
-        StartOffsetNumericUpDown.IsEnabled = !isClosed;
+        StartOffsetNumericUpDown.IsEnabled = true;
         FinalOffsetNumericUpDown.IsEnabled = !isClosed;
     }
 

@@ -1216,10 +1216,11 @@ public static class ContourSupportPattern
             if (IsClosed)
             {
                 int supportCount = Math.Max(3, (int)MathF.Ceiling(pathLength / settings.Spacing));
+                float closedStartDistance = NormalizeClosedLoopDistance(settings.StartOffset, pathLength);
 
                 for (int i = 0; i < supportCount && supportSamples.Count < MaximumSupportCount; i++)
                 {
-                    float distance = pathLength * (i / (float)supportCount);
+                    float distance = closedStartDistance + (pathLength * (i / (float)supportCount));
                     supportSamples.Add(EvaluateAtDistance(distance));
                 }
 
@@ -1258,7 +1259,10 @@ public static class ContourSupportPattern
         /// </summary>
         private ContourSupportSample EvaluateAtDistance(float distance)
         {
-            float remainingDistance = Math.Max(0.0f, distance);
+            float pathLength = Length;
+            float remainingDistance = IsClosed
+                ? NormalizeClosedLoopDistance(distance, pathLength)
+                : Math.Max(0.0f, distance);
 
             for (int i = 1; i < Points.Count; i++)
             {
@@ -1294,6 +1298,26 @@ public static class ContourSupportPattern
             }
 
             return new ContourSupportSample(Points[Points.Count - 1], SegmentNormals[SegmentNormals.Count - 1]);
+        }
+
+        /// <summary>
+        /// Wraps a distance around a closed contour so offsets can rotate support positions without changing spacing.
+        /// </summary>
+        private static float NormalizeClosedLoopDistance(float distance, float pathLength)
+        {
+            if (pathLength <= MinimumSegmentLength)
+            {
+                return 0.0f;
+            }
+
+            float wrappedDistance = distance % pathLength;
+
+            if (wrappedDistance < 0.0f)
+            {
+                wrappedDistance += pathLength;
+            }
+
+            return wrappedDistance;
         }
     }
 }

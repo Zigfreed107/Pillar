@@ -816,6 +816,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         out int invalidSupportCount)
     {
         SupportProfile supportProfile = _createSupportProfile();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
         List<SupportEntity> supportEntities = new List<SupportEntity>();
         missedProjectionCount = 0;
         invalidSupportCount = 0;
@@ -830,19 +831,21 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         {
             Vector3 guidePoint = _guidePreviewPoints[i];
             MeshProjectionHit projectionHit;
+            SupportPlacementPlan placementPlan;
 
-            if (!MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectionHit))
+            if (!MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
             {
-                missedProjectionCount++;
-                continue;
-            }
+                Vector3 ignoredProjectedPoint;
 
-            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
-            SupportBranchPlan branchPlan;
+                if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out ignoredProjectedPoint))
+                {
+                    invalidSupportCount++;
+                }
+                else
+                {
+                    missedProjectionCount++;
+                }
 
-            if (!SupportBranchPlanner.TryCreateBranchPlan(selectedMesh, projectionHit.Point, headDirection, supportProfile, out branchPlan))
-            {
-                invalidSupportCount++;
                 continue;
             }
 
@@ -851,10 +854,10 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
                 supportEntities.Add(new SupportEntity(
                     supportLayerGroupId,
                     projectionHit.Point,
-                    branchPlan.BasePosition,
-                    headDirection,
-                    branchPlan.BranchLength,
-                    branchPlan.BranchDirection,
+                    placementPlan.BasePosition,
+                    placementPlan.HeadDirection,
+                    placementPlan.BranchLength,
+                    placementPlan.BranchDirection,
                     supportProfile));
             }
             catch (ArgumentException)
@@ -885,15 +888,18 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _guidePreviewPoints.Clear();
         _projectedPreviewPoints.Clear();
         LineSupportPattern.FillGuidePoints(_points, _getSpacing(), _getPlaceSupportsAtBends(), _guidePreviewPoints);
+        SupportProfile supportProfile = _createSupportProfile();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(_getSpacing(), supportProfile);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
             Vector3 guidePoint = _guidePreviewPoints[i];
-            Vector3 projectedPoint;
+            MeshProjectionHit projectionHit;
+            SupportPlacementPlan placementPlan;
 
-            if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out projectedPoint))
+            if (MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
             {
-                _projectedPreviewPoints.Add(projectedPoint);
+                _projectedPreviewPoints.Add(projectionHit.Point);
             }
         }
 

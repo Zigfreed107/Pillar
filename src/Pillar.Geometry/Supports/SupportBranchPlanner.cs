@@ -44,6 +44,7 @@ public readonly struct SupportBranchPlan
 public static class SupportBranchPlanner
 {
     private const float GeometryTolerance = 0.000001f;
+    private const float HeadContactAllowance = 0.001f;
     private const int BranchSearchSteps = 24;
 
     /// <summary>
@@ -86,19 +87,41 @@ public static class SupportBranchPlanner
         }
 
         Vector3 clampedHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, profile);
-        Vector3 headJointPosition = tipPosition - (clampedHeadDirection * profile.HeadHeight);
+        float usableHeadLength = CalculateUsableHeadLength(tipPosition, 0.0f, clampedHeadDirection, profile.HeadHeight);
+        Vector3 headJointPosition = tipPosition - (clampedHeadDirection * usableHeadLength);
         Vector3 branchDirection = CreateMaximumAngleBranchDirection(clampedHeadDirection, profile);
-        float clearanceRadius = profile.ModelClearance + (profile.StemTopDiameter * 0.5f);
+        float stemClearanceRadius = profile.ModelClearance + (profile.StemTopDiameter * 0.5f);
+        float supportBodyRadius = profile.StemTopDiameter * 0.5f;
 
         if (profile.MaximumBranchLength <= GeometryTolerance)
         {
-            plan = CreatePlan(headJointPosition, 0.0f, branchDirection);
-            return true;
+            return TryCreateCandidatePlan(
+                mesh,
+                worldTransform,
+                tipPosition,
+                headJointPosition,
+                headJointPosition,
+                clampedHeadDirection,
+                0.0f,
+                branchDirection,
+                stemClearanceRadius,
+                supportBodyRadius,
+                out plan);
         }
 
-        if (IsVerticalStemClear(mesh, worldTransform, headJointPosition, clearanceRadius))
+        if (TryCreateCandidatePlan(
+            mesh,
+            worldTransform,
+            tipPosition,
+            headJointPosition,
+            headJointPosition,
+            clampedHeadDirection,
+            0.0f,
+            branchDirection,
+            stemClearanceRadius,
+            supportBodyRadius,
+            out plan))
         {
-            plan = CreatePlan(headJointPosition, 0.0f, branchDirection);
             return true;
         }
 
@@ -112,15 +135,111 @@ public static class SupportBranchPlanner
                 continue;
             }
 
-            if (IsVerticalStemClear(mesh, worldTransform, stemJointPosition, clearanceRadius))
+            if (TryCreateCandidatePlan(
+                mesh,
+                worldTransform,
+                tipPosition,
+                stemJointPosition,
+                headJointPosition,
+                clampedHeadDirection,
+                branchLength,
+                branchDirection,
+                stemClearanceRadius,
+                supportBodyRadius,
+                out plan))
             {
-                plan = CreatePlan(stemJointPosition, branchLength, branchDirection);
                 return true;
             }
         }
 
         plan = default;
         return false;
+    }
+
+    /// <summary>
+    /// Calculates the head length that can physically fit above the build plate.
+    /// </summary>
+    private static float CalculateUsableHeadLength(Vector3 tipPosition, float baseZ, Vector3 headDirection, float requestedHeadLength)
+    {
+        if (headDirection.Z <= GeometryTolerance)
+        {
+            return requestedHeadLength;
+        }
+
+        float maximumLengthByHeight = MathF.Max(0.0f, (tipPosition.Z - baseZ) / headDirection.Z);
+        return MathF.Min(requestedHeadLength, maximumLengthByHeight);
+    }
+
+    /// <summary>
+    /// Creates one branch plan only when every non-penetrating support segment clears the mesh.
+    /// </summary>
+    private static bool TryCreateCandidatePlan(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 tipPosition,
+        Vector3 stemJointPosition,
+        Vector3 headJointPosition,
+        Vector3 headDirection,
+        float branchLength,
+        Vector3 branchDirection,
+        float stemClearanceRadius,
+        float supportBodyRadius,
+        out SupportBranchPlan plan)
+    {
+        if (!IsSupportPathClear(
+            mesh,
+            worldTransform,
+            tipPosition,
+            stemJointPosition,
+            headJointPosition,
+            headDirection,
+            branchLength,
+            stemClearanceRadius,
+            supportBodyRadius))
+        {
+            plan = default;
+            return false;
+        }
+
+        plan = CreatePlan(stemJointPosition, branchLength, branchDirection);
+        return true;
+    }
+
+    /// <summary>
+    /// Tests the stem, optional branch, and exterior head centerline against the transformed mesh.
+    /// </summary>
+    private static bool IsSupportPathClear(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 tipPosition,
+        Vector3 stemJointPosition,
+        Vector3 headJointPosition,
+        Vector3 headDirection,
+        float branchLength,
+        float stemClearanceRadius,
+        float supportBodyRadius)
+    {
+        Vector3 stemStart = new Vector3(stemJointPosition.X, stemJointPosition.Y, 0.0f);
+
+        if (!IsCapsuleClear(mesh, worldTransform, stemStart, stemJointPosition, stemClearanceRadius))
+        {
+            return false;
+        }
+
+        if (branchLength > GeometryTolerance
+            && !IsCapsuleClear(mesh, worldTransform, stemJointPosition, headJointPosition, supportBodyRadius))
+        {
+            return false;
+        }
+
+        Vector3 headCheckEnd = tipPosition - (headDirection * HeadContactAllowance);
+
+        if (Vector3.DistanceSquared(headJointPosition, headCheckEnd) <= GeometryTolerance)
+        {
+            return true;
+        }
+
+        return IsSegmentCenterlineClear(mesh, worldTransform, headJointPosition, headCheckEnd);
     }
 
     /// <summary>
@@ -163,17 +282,15 @@ public static class SupportBranchPlanner
     }
 
     /// <summary>
-    /// Tests whether a vertical stem cylinder centered below the stem joint clears the transformed mesh.
+    /// Tests whether a swept clearance radius around a support segment clears the transformed mesh.
     /// </summary>
-    private static bool IsVerticalStemClear(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 stemJointPosition, float clearanceRadius)
+    private static bool IsCapsuleClear(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 segmentStart, Vector3 segmentEnd, float clearanceRadius)
     {
         if (clearanceRadius <= GeometryTolerance)
         {
             return true;
         }
 
-        Vector3 segmentStart = new Vector3(stemJointPosition.X, stemJointPosition.Y, 0.0f);
-        Vector3 segmentEnd = stemJointPosition;
         float clearanceRadiusSquared = clearanceRadius * clearanceRadius;
 
         for (int triangleStart = 0; triangleStart < mesh.TriangleIndices.Count; triangleStart += 3)
@@ -182,7 +299,7 @@ public static class SupportBranchPlanner
             Vector3 b = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[triangleStart + 1]], worldTransform);
             Vector3 c = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[triangleStart + 2]], worldTransform);
 
-            if (CanSkipTriangleByBounds(stemJointPosition, clearanceRadius, a, b, c))
+            if (CanSkipTriangleByBounds(segmentStart, segmentEnd, clearanceRadius, a, b, c))
             {
                 continue;
             }
@@ -197,14 +314,36 @@ public static class SupportBranchPlanner
     }
 
     /// <summary>
+    /// Tests whether a support segment centerline intersects any transformed mesh triangle.
+    /// </summary>
+    private static bool IsSegmentCenterlineClear(MeshEntity mesh, Matrix4x4 worldTransform, Vector3 segmentStart, Vector3 segmentEnd)
+    {
+        for (int triangleStart = 0; triangleStart < mesh.TriangleIndices.Count; triangleStart += 3)
+        {
+            Vector3 a = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[triangleStart]], worldTransform);
+            Vector3 b = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[triangleStart + 1]], worldTransform);
+            Vector3 c = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[triangleStart + 2]], worldTransform);
+
+            if (DoesSegmentIntersectTriangle(segmentStart, segmentEnd, a, b, c))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Quickly rejects triangles whose expanded bounding box cannot reach the proposed vertical stem.
     /// </summary>
-    private static bool CanSkipTriangleByBounds(Vector3 stemJointPosition, float clearanceRadius, Vector3 a, Vector3 b, Vector3 c)
+    private static bool CanSkipTriangleByBounds(Vector3 segmentStart, Vector3 segmentEnd, float clearanceRadius, Vector3 a, Vector3 b, Vector3 c)
     {
         float minZ = MathF.Min(a.Z, MathF.Min(b.Z, c.Z));
         float maxZ = MathF.Max(a.Z, MathF.Max(b.Z, c.Z));
+        float segmentMinZ = MathF.Min(segmentStart.Z, segmentEnd.Z);
+        float segmentMaxZ = MathF.Max(segmentStart.Z, segmentEnd.Z);
 
-        if (maxZ < -clearanceRadius || minZ > stemJointPosition.Z + clearanceRadius)
+        if (maxZ < segmentMinZ - clearanceRadius || minZ > segmentMaxZ + clearanceRadius)
         {
             return true;
         }
@@ -213,25 +352,29 @@ public static class SupportBranchPlanner
         float maxX = MathF.Max(a.X, MathF.Max(b.X, c.X));
         float minY = MathF.Min(a.Y, MathF.Min(b.Y, c.Y));
         float maxY = MathF.Max(a.Y, MathF.Max(b.Y, c.Y));
-        float dx = DistanceFromRange(stemJointPosition.X, minX, maxX);
-        float dy = DistanceFromRange(stemJointPosition.Y, minY, maxY);
+        float segmentMinX = MathF.Min(segmentStart.X, segmentEnd.X);
+        float segmentMaxX = MathF.Max(segmentStart.X, segmentEnd.X);
+        float segmentMinY = MathF.Min(segmentStart.Y, segmentEnd.Y);
+        float segmentMaxY = MathF.Max(segmentStart.Y, segmentEnd.Y);
+        float dx = DistanceBetweenRanges(segmentMinX, segmentMaxX, minX, maxX);
+        float dy = DistanceBetweenRanges(segmentMinY, segmentMaxY, minY, maxY);
 
         return (dx * dx) + (dy * dy) > clearanceRadius * clearanceRadius;
     }
 
     /// <summary>
-    /// Gets the distance between one coordinate and a closed range.
+    /// Gets the distance between two closed coordinate ranges.
     /// </summary>
-    private static float DistanceFromRange(float value, float min, float max)
+    private static float DistanceBetweenRanges(float firstMin, float firstMax, float secondMin, float secondMax)
     {
-        if (value < min)
+        if (firstMax < secondMin)
         {
-            return min - value;
+            return secondMin - firstMax;
         }
 
-        if (value > max)
+        if (secondMax < firstMin)
         {
-            return value - max;
+            return firstMin - secondMax;
         }
 
         return 0.0f;

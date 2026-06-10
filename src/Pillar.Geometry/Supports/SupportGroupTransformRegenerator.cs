@@ -232,6 +232,7 @@ public static class SupportGroupTransformRegenerator
     {
         List<Vector3> guidePoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
         List<SupportEntity> newSupportEntities = new List<SupportEntity>();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
 
         LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, settings.PlaceSupportsAtBends, guidePoints);
 
@@ -239,16 +240,9 @@ public static class SupportGroupTransformRegenerator
         {
             Vector3 guidePoint = guidePoints[i];
             MeshProjectionHit projectionHit;
+            SupportPlacementPlan placementPlan;
 
-            if (!MeshVerticalProjection.TryProjectToMesh(mesh, newWorldTransform, guidePoint, out projectionHit))
-            {
-                continue;
-            }
-
-            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
-            SupportBranchPlan branchPlan;
-
-            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, projectionHit.Point, headDirection, supportProfile, out branchPlan))
+            if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, newWorldTransform, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
             {
                 continue;
             }
@@ -257,10 +251,10 @@ public static class SupportGroupTransformRegenerator
                 newSupportEntities,
                 supportLayerGroupId,
                 projectionHit.Point,
-                branchPlan.BasePosition,
-                headDirection,
-                branchPlan.BranchLength,
-                branchPlan.BranchDirection,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
                 supportProfile);
         }
 
@@ -287,6 +281,7 @@ public static class SupportGroupTransformRegenerator
         int requestedSupportCount = RingSupportPattern.CalculateSupportCount(circle, settings.Spacing);
         List<Vector3> guidePoints = new List<Vector3>(requestedSupportCount);
         List<SupportEntity> newSupportEntities = new List<SupportEntity>(requestedSupportCount);
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
 
         RingSupportPattern.FillGuidePoints(circle, settings.Spacing, guidePoints);
 
@@ -294,16 +289,9 @@ public static class SupportGroupTransformRegenerator
         {
             Vector3 guidePoint = guidePoints[i];
             MeshProjectionHit projectionHit;
+            SupportPlacementPlan placementPlan;
 
-            if (!MeshVerticalProjection.TryProjectToMesh(mesh, newWorldTransform, guidePoint, out projectionHit))
-            {
-                continue;
-            }
-
-            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(projectionHit.Normal, supportProfile);
-            SupportBranchPlan branchPlan;
-
-            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, projectionHit.Point, headDirection, supportProfile, out branchPlan))
+            if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, newWorldTransform, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
             {
                 continue;
             }
@@ -312,10 +300,10 @@ public static class SupportGroupTransformRegenerator
                 newSupportEntities,
                 supportLayerGroupId,
                 projectionHit.Point,
-                branchPlan.BasePosition,
-                headDirection,
-                branchPlan.BranchLength,
-                branchPlan.BranchDirection,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
                 supportProfile);
         }
 
@@ -344,10 +332,9 @@ public static class SupportGroupTransformRegenerator
         for (int i = 0; i < contourResult.SupportSamples.Count; i++)
         {
             ContourSupportSample sample = contourResult.SupportSamples[i];
-            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(sample.Normal, supportProfile);
-            SupportBranchPlan branchPlan;
+            SupportPlacementPlan placementPlan;
 
-            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, sample.Position, headDirection, supportProfile, out branchPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, newWorldTransform, sample.Position, sample.Normal, supportProfile, out placementPlan))
             {
                 continue;
             }
@@ -356,10 +343,10 @@ public static class SupportGroupTransformRegenerator
                 newSupportEntities,
                 supportLayerGroupId,
                 sample.Position,
-                branchPlan.BasePosition,
-                headDirection,
-                branchPlan.BranchLength,
-                branchPlan.BranchDirection,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
                 supportProfile);
         }
 

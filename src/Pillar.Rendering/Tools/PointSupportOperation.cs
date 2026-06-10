@@ -91,12 +91,11 @@ public sealed class PointSupportOperation : IToolOperation
         SupportLayerGroup resolvedSupportLayerGroup;
         SupportProfile supportProfile = _createSupportProfile();
         Vector3 tipPosition = meshSurfaceHit.HitPosition;
-        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(meshSurfaceHit.SurfaceNormal, supportProfile);
-        SupportBranchPlan branchPlan;
+        SupportPlacementPlan placementPlan;
 
-        if (!SupportBranchPlanner.TryCreateBranchPlan(targetMesh, tipPosition, headDirection, supportProfile, out branchPlan))
+        if (!SupportPlacementPlanner.TryCreatePlacement(targetMesh, tipPosition, meshSurfaceHit.SurfaceNormal, supportProfile, out placementPlan))
         {
-            _statusReporter("Support skipped because the stem could not clear the model within the maximum branch length.");
+            _statusReporter("Support skipped because it would pass through the model.");
             return;
         }
 
@@ -106,10 +105,10 @@ public sealed class PointSupportOperation : IToolOperation
             SupportEntity firstSupportEntity = new SupportEntity(
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
-                branchPlan.BasePosition,
-                headDirection,
-                branchPlan.BranchLength,
-                branchPlan.BranchDirection,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
                 supportProfile);
 
             _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
@@ -121,10 +120,10 @@ public sealed class PointSupportOperation : IToolOperation
             SupportEntity supportEntity = new SupportEntity(
                 resolvedSupportLayerGroup.Id,
                 tipPosition,
-                branchPlan.BasePosition,
-                headDirection,
-                branchPlan.BranchLength,
-                branchPlan.BranchDirection,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
                 supportProfile);
 
             _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));

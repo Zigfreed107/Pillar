@@ -11,28 +11,68 @@ namespace Pillar.Core.Supports;
 public static class SupportHeadDirectionCalculator
 {
     private const float DirectionTolerance = 0.000001f;
+    private const float NearVerticalNormalZTolerance = 0.005f;
 
     /// <summary>
     /// Converts one surface normal into the clamped head direction from the head joint toward the model contact.
     /// </summary>
     public static Vector3 CreateHeadDirectionFromSurfaceNormal(Vector3 surfaceNormal, SupportProfile profile)
     {
+        Vector3 headDirection;
+
+        if (TryCreateHeadDirectionFromSurfaceNormal(surfaceNormal, profile, out headDirection))
+        {
+            return headDirection;
+        }
+
+        return Vector3.UnitZ;
+    }
+
+    /// <summary>
+    /// Converts one exterior surface normal into a supportable head direction from the head joint toward the model contact.
+    /// </summary>
+    public static bool TryCreateHeadDirectionFromSurfaceNormal(Vector3 surfaceNormal, SupportProfile profile, out Vector3 headDirection)
+    {
         if (profile == null)
         {
             throw new ArgumentNullException(nameof(profile));
         }
 
+        headDirection = Vector3.UnitZ;
+
+        Vector3 normalizedSurfaceNormal = NormalizeOrDefault(surfaceNormal, Vector3.UnitZ);
+
+        if (normalizedSurfaceNormal.Z > NearVerticalNormalZTolerance)
+        {
+            return false;
+        }
+
         if (profile.MaxHeadAngleFromVerticalDegrees <= 0.0f)
+        {
+            headDirection = Vector3.UnitZ;
+            return true;
+        }
+
+        Vector3 approachFromOutside = normalizedSurfaceNormal.Z > DirectionTolerance
+            ? CreateHorizontalApproachFromNearVerticalNormal(normalizedSurfaceNormal)
+            : -normalizedSurfaceNormal;
+        headDirection = ClampDirectionToProfile(approachFromOutside, profile);
+        return true;
+    }
+
+    /// <summary>
+    /// Creates an outside approach for numerically noisy vertical faces without letting a tiny positive Z flip the horizontal direction.
+    /// </summary>
+    private static Vector3 CreateHorizontalApproachFromNearVerticalNormal(Vector3 normalizedSurfaceNormal)
+    {
+        Vector3 horizontalNormal = new Vector3(normalizedSurfaceNormal.X, normalizedSurfaceNormal.Y, 0.0f);
+
+        if (horizontalNormal.LengthSquared() <= DirectionTolerance)
         {
             return Vector3.UnitZ;
         }
 
-        Vector3 normalizedSurfaceNormal = NormalizeOrDefault(surfaceNormal, Vector3.UnitZ);
-        Vector3 upwardCandidate = normalizedSurfaceNormal.Z < 0.0f
-            ? -normalizedSurfaceNormal
-            : normalizedSurfaceNormal;
-
-        return ClampDirectionToProfile(upwardCandidate, profile);
+        return -Vector3.Normalize(horizontalNormal);
     }
 
     /// <summary>

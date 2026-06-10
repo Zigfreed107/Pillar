@@ -18,8 +18,8 @@ The current support model has four conceptual sections:
 
 - Base: a truncated cone from the build plate upward. It stores `BaseBottomRadius` and `BaseHeight`. Its top radius is derived from the next section so the base connects cleanly without a visible seam.
 - Stem: a cone between the base and the head. It stores `StemBottomDiameter` and `StemTopDiameter`. If the remaining distance after base and head placement is zero or negative, no stem mesh is emitted, but the support still keeps stem settings in its profile.
-- Branch: an optional capped cylinder between the vertical stem and the angled head. It stores derived per-support data in `SupportEntity.BranchLength` and `SupportEntity.BranchDirection`, while the preset controls `MaximumBranchLength` and `ModelClearance`. `SupportBranchPlanner` calculates this data against the owning mesh before the support entity is created. The branch moves the vertical stem away from the model, using the head direction's horizontal azimuth and the preset's maximum head angle. If a length of zero already gives enough model clearance, no branch is emitted. If no tested length within the preset maximum clears the model, that candidate support is skipped.
-- Head: a truncated cone that attaches to the model. It stores `HeadHeight`, `HeadPenetrationDepth`, `HeadTopDiameter`, and `MaxHeadAngleFromVerticalDegrees`. Its bottom diameter is always derived from `StemTopDiameter`, so the stem and head meet without a diameter mismatch. `HeadTopDiameter` is measured at the model intersection point. The penetration section continues past the intersection into the model using that intersection diameter. When angled heads are enabled, the support stores a clamped head direction, shifts the vertical stem under the head joint, and adds a ball mesh at the stem/head connection.
+- Branch: an optional capped cylinder between the vertical stem and the angled head. It stores derived per-support data in `SupportEntity.BranchLength` and `SupportEntity.BranchDirection`, while the preset controls `MaximumBranchLength` and `ModelClearance`. `SupportPlacementPlanner` and `SupportBranchPlanner` calculate this data against the owning mesh before the support entity is created. The branch moves the vertical stem away from the model, using the head direction's horizontal azimuth and the preset's maximum head angle. If a length of zero already gives the vertical stem enough model clearance, no branch is emitted. Branches are checked against the support body radius rather than the full model clearance because they must naturally approach the attachment point. If no tested length within the preset maximum clears the vertical stem and avoids branch/head intersection with the model, that candidate support is skipped.
+- Head: a truncated cone that attaches to the model. It stores `HeadHeight`, `HeadPenetrationDepth`, `HeadTopDiameter`, and `MaxHeadAngleFromVerticalDegrees`. Its bottom diameter is always derived from `StemTopDiameter`, so the stem and head meet without a diameter mismatch. `HeadTopDiameter` is measured at the model intersection point. The penetration section continues past the intersection into the model using that intersection diameter. When angled heads are enabled, the support stores a clamped head direction based on the exterior face normal, shifts the vertical stem under the head joint, and adds a ball mesh at the stem/head connection. Upward-facing contacts are skipped because a build-plate support would have to pass through the model to reach them.
 
 `SupportMeshBuilder` converts a `SupportEntity` plus a support side count into triangle geometry. The builder clamps too-short supports so the base and head fit inside the available axis length instead of rejecting the entire support. With no branch, it emits the existing vertical base/stem, angled head, penetration section, and one ball joint. With a branch, it emits the vertical base/stem, capped branch cylinder, angled head, penetration section, and two ball joints so the STL remains closed for slicers.
 
@@ -72,7 +72,7 @@ During model transform regeneration:
 2. The second and third points are flattened onto the horizontal plane defined by the transformed first point.
 3. A new circle is calculated from those horizontal points.
 4. Guide points are distributed around the circle using the original spacing.
-5. Each guide point is projected vertically in the Z direction onto the transformed model.
+5. Each guide point is projected vertically in the Z direction onto the transformed model, with the same bounded nearest-surface fallback used by Line supports for near-vertical faces.
 6. Concrete support entities are regenerated at the projected hits.
 
 This means the ring follows the model's translated and scaled location, but it remains coplanar with the XY plane. After rotations, the supports may not hit the exact same surface triangles as before, because ring supports are intentionally reprojected vertically onto the transformed mesh.
@@ -85,10 +85,16 @@ During model transform regeneration:
 
 1. Each stored line point is transformed through the old-to-new model transform path.
 2. Guide points are distributed using the saved bend placement option. With bend supports enabled, every clicked vertex is included and each segment is evenly divided between vertices. With bend supports disabled, the full polyline length is evenly divided without forcing interior vertices to become support points.
-3. Each guide point is projected vertically in the Z direction onto the transformed model.
+3. Each guide point is projected vertically in the Z direction onto the transformed model. If a generated guide point sits just beside a vertical face, such as the inside wall of a tube, support projection can fall back to the nearest supportable surface point inside a bounded radius derived from support spacing and model clearance.
 4. Concrete support entities are regenerated at the projected hits.
 
 Unlike Ring supports, Line supports preserve the picked 3D polyline rather than flattening it to a horizontal construction plane. The support locations are still vertically reprojected from that line pattern, keeping the saved feature definition compact and renderer-agnostic.
+
+## Contour Supports
+
+Contour support groups store `ContourSupportSettings`: the seed point and triangle, contour Z height, coplanar threshold, spacing, start offset, and final offset.
+
+During regeneration, the selected connected face patch is sliced by the stored Z height and supports are distributed along the selected contour. Open contours use Start offset and Final offset as end trims before spacing is applied. Closed contours ignore Final offset, while Start offset wraps around the loop and rotates the support positions without changing support count or spacing.
 
 ## Extension Notes
 

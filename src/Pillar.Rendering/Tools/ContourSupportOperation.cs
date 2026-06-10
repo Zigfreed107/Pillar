@@ -472,10 +472,9 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
         for (int i = 0; i < contourResult.SupportSamples.Count; i++)
         {
             ContourSupportSample sample = contourResult.SupportSamples[i];
-            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(sample.Normal, supportProfile);
-            SupportBranchPlan branchPlan;
+            SupportPlacementPlan placementPlan;
 
-            if (!SupportBranchPlanner.TryCreateBranchPlan(selectedMesh, sample.Position, headDirection, supportProfile, out branchPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(selectedMesh, sample.Position, sample.Normal, supportProfile, out placementPlan))
             {
                 invalidSupportCount++;
                 continue;
@@ -486,10 +485,10 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
                 supportEntities.Add(new SupportEntity(
                     supportLayerGroupId,
                     sample.Position,
-                    branchPlan.BasePosition,
-                    headDirection,
-                    branchPlan.BranchLength,
-                    branchPlan.BranchDirection,
+                    placementPlan.BasePosition,
+                    placementPlan.HeadDirection,
+                    placementPlan.BranchLength,
+                    placementPlan.BranchDirection,
                     supportProfile));
             }
             catch (ArgumentException)

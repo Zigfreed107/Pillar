@@ -34,6 +34,10 @@ public static class Program
         RunTest(failures, "Angled seam closes without a 2 PI endpoint", ValidateAngledSeamSupportMesh);
         RunTest(failures, "Default support head direction stays vertical", ValidateDefaultSupportHeadDirectionStaysVertical);
         RunTest(failures, "Support head direction clamps to profile angle", ValidateSupportHeadDirectionClampsToProfileAngle);
+        RunTest(failures, "Side face support head approaches from outside", ValidateSideFaceSupportHeadApproachesFromOutside);
+        RunTest(failures, "Near-vertical positive-Z side face remains supportable", ValidateNearVerticalPositiveZSideFaceRemainsSupportable);
+        RunTest(failures, "Upward support contact is rejected", ValidateUpwardSupportContactIsRejected);
+        RunTest(failures, "Downward overhang support placement remains valid", ValidateDownwardOverhangSupportPlacementRemainsValid);
         RunTest(failures, "Angled head support mesh is closed", ValidateAngledHeadSupportMesh);
         RunTest(failures, "Joint ball normals point outward", ValidateJointBallNormalsPointOutward);
         RunTest(failures, "Default branch setting creates no branch", ValidateDefaultBranchSettingCreatesNoBranch);
@@ -41,7 +45,15 @@ public static class Program
         RunTest(failures, "Branch support mesh is closed with outward balls", ValidateBranchSupportMeshIsClosedWithOutwardBalls);
         RunTest(failures, "Branch is omitted when stem is already clear", ValidateBranchIsOmittedWhenStemIsAlreadyClear);
         RunTest(failures, "Support is skipped when branch cannot clear model", ValidateSupportIsSkippedWhenBranchCannotClearModel);
+        RunTest(failures, "Branch may approach valid contact inside model clearance", ValidateBranchMayApproachValidContactInsideModelClearance);
+        RunTest(failures, "Support placement rejects crossing angled head", ValidateSupportPlacementRejectsCrossingAngledHead);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
+        RunTest(failures, "Vertical projection handles vertical side faces", ValidateVerticalProjectionHandlesVerticalSideFaces);
+        RunTest(failures, "Support projection falls back to nearby vertical face", ValidateSupportProjectionFallsBackToNearbyVerticalFace);
+        RunTest(failures, "Support projection fallback handles neighboring vertical face points", ValidateSupportProjectionFallbackHandlesNeighboringVerticalFacePoints);
+        RunTest(failures, "Support projection fallback rejects distant vertical face", ValidateSupportProjectionFallbackRejectsDistantVerticalFace);
+        RunTest(failures, "Vertical support projection chooses first exterior hit", ValidateVerticalSupportProjectionChoosesFirstExteriorHit);
+        RunTest(failures, "Transform regeneration uses supportable projection", ValidateTransformRegenerationUsesSupportableProjection);
         RunTest(failures, "Line support pattern includes clicked endpoints", ValidateLineSupportPatternIncludesClickedEndpoints);
         RunTest(failures, "Line support pattern avoids duplicate shared vertices", ValidateLineSupportPatternAvoidsDuplicateSharedVertices);
         RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
@@ -54,6 +66,8 @@ public static class Program
         RunTest(failures, "Contour support threshold blocks sharp face transitions", ValidateContourSupportThresholdBlocksSharpFaceTransitions);
         RunTest(failures, "Contour support threshold works with duplicated STL-style vertices", ValidateContourSupportThresholdWorksWithDuplicatedVertices);
         RunTest(failures, "Contour support closed loop spacing is even", ValidateContourSupportClosedLoopSpacingIsEven);
+        RunTest(failures, "Contour support closed loop start offset rotates supports", ValidateContourSupportClosedLoopStartOffsetRotatesSupports);
+        RunTest(failures, "Contour support places supports on noisy near-vertical faces", ValidateContourSupportPlacesSupportsOnNoisyNearVerticalFaces);
         RunTest(failures, "Contour support open offsets respect spacing", ValidateContourSupportOpenOffsetsRespectSpacing);
         RunTest(failures, "Contour support Z edits choose nearest patch contour", ValidateContourSupportZEditsChooseNearestPatchContour);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
@@ -155,6 +169,87 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that side-face supports approach the contact from outside the model instead of through the interior.
+    /// </summary>
+    private static void ValidateSideFaceSupportHeadApproachesFromOutside()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        Vector3 headDirection;
+
+        if (!SupportHeadDirectionCalculator.TryCreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile, out headDirection))
+        {
+            throw new InvalidOperationException("Expected a vertical side face to be supportable with an angled head.");
+        }
+
+        if (headDirection.X >= -0.0001f || headDirection.Z <= 0.0f)
+        {
+            throw new InvalidOperationException("Expected the head direction to move from the outside stem toward the side face.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that STL tessellation noise on a vertical wall does not make the face look like an upward contact.
+    /// </summary>
+    private static void ValidateNearVerticalPositiveZSideFaceRemainsSupportable()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        Vector3 noisySideNormal = Vector3.Normalize(new Vector3(1.0f, 0.0f, 0.0004f));
+        Vector3 headDirection;
+
+        if (!SupportHeadDirectionCalculator.TryCreateHeadDirectionFromSurfaceNormal(noisySideNormal, profile, out headDirection))
+        {
+            throw new InvalidOperationException("Expected a numerically noisy near-vertical face to remain supportable.");
+        }
+
+        if (headDirection.X >= -0.0001f || headDirection.Z <= 0.0f)
+        {
+            throw new InvalidOperationException("Expected the noisy side face to keep the same outside approach direction.");
+        }
+
+        float expectedZ = MathF.Cos(45.0f * (MathF.PI / 180.0f));
+
+        if (MathF.Abs(headDirection.Z - expectedZ) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the noisy side face head direction to be clamped to the profile angle.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that upward-facing model contacts are skipped because supports cannot approach them from the build plate.
+    /// </summary>
+    private static void ValidateUpwardSupportContactIsRejected()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        Vector3 headDirection;
+
+        if (SupportHeadDirectionCalculator.TryCreateHeadDirectionFromSurfaceNormal(Vector3.UnitZ, profile, out headDirection))
+        {
+            throw new InvalidOperationException("Expected upward-facing contacts to be rejected for build-plate supports.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that downward overhang contacts still accept ordinary build-plate supports.
+    /// </summary>
+    private static void ValidateDownwardOverhangSupportPlacementRemainsValid()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 10.0f),
+            new Vector3(0.0f, 1.0f, 10.0f),
+            new Vector3(1.0f, 0.0f, 10.0f),
+            Transform3DData.Identity);
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(mesh, new Vector3(0.25f, 0.25f, 10.0f), -Vector3.UnitZ, profile, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected a downward overhang to accept a support placement.");
+        }
+
+        ValidateVectorNear(Vector3.UnitZ, placementPlan.HeadDirection, 0.0001f, "Expected the overhang head direction to be vertical.");
+    }
+
+    /// <summary>
     /// Validates a support with a shifted vertical stem and angled closed head.
     /// </summary>
     private static void ValidateAngledHeadSupportMesh()
@@ -223,7 +318,11 @@ public static class Program
     private static void ValidateDefaultBranchSettingCreatesNoBranch()
     {
         SupportProfile profile = SupportDefaults.CreateProfile();
-        MeshEntity mesh = CreateBlockingWallMesh(-10.0f, 10.0f, Transform3DData.Identity);
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(20.0f, 20.0f, 5.0f),
+            new Vector3(21.0f, 20.0f, 5.0f),
+            new Vector3(20.0f, 21.0f, 5.0f),
+            Transform3DData.Identity);
         Vector3 tipPosition = new Vector3(0.0f, 0.0f, 10.0f);
         SupportBranchPlan branchPlan;
 
@@ -300,7 +399,7 @@ public static class Program
     private static void ValidateSupportIsSkippedWhenBranchCannotClearModel()
     {
         SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f);
-        MeshEntity mesh = CreateBlockingWallMesh(-10.0f, 1.0f, Transform3DData.Identity);
+        MeshEntity mesh = CreateBlockingWallMesh(-10.0f, 10.0f, Transform3DData.Identity);
         Vector3 tipPosition = new Vector3(0.0f, 0.0f, 10.0f);
         Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
         SupportBranchPlan branchPlan;
@@ -308,6 +407,41 @@ public static class Program
         if (SupportBranchPlanner.TryCreateBranchPlan(mesh, tipPosition, headDirection, profile, out branchPlan))
         {
             throw new InvalidOperationException("Expected the planner to skip a support that cannot clear the model.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that the branch may approach the model contact while the vertical stem still observes model clearance.
+    /// </summary>
+    private static void ValidateBranchMayApproachValidContactInsideModelClearance()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
+        MeshEntity mesh = CreateSideContactPanelMesh();
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(mesh, new Vector3(0.0f, 5.0f, 10.0f), Vector3.UnitX, profile, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected a branch to move the vertical stem clear while still approaching the model contact.");
+        }
+
+        if (placementPlan.BranchLength <= 0.0f)
+        {
+            throw new InvalidOperationException("Expected this placement to require a branch.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that the angled head centerline cannot cross another model face before the intended contact.
+    /// </summary>
+    private static void ValidateSupportPlacementRejectsCrossingAngledHead()
+    {
+        SupportProfile profile = CreateAngledProfile(45.0f);
+        MeshEntity mesh = CreateHeadBlockingPanelMesh();
+        SupportPlacementPlan placementPlan;
+
+        if (SupportPlacementPlanner.TryCreatePlacement(mesh, new Vector3(0.0f, 0.0f, 10.0f), Vector3.UnitX, profile, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected the placement planner to reject an angled head that crosses the model.");
         }
     }
 
@@ -330,6 +464,139 @@ public static class Program
 
         ValidateVectorNear(new Vector3(0.25f, 0.25f, 2.0f), hit.Point, 0.0001f, "Expected projection point to land on the triangle plane.");
         ValidateVectorNear(Vector3.UnitZ, hit.Normal, 0.0001f, "Expected projection normal to match the triangle normal.");
+    }
+
+    /// <summary>
+    /// Validates vertical tube-like faces where the vertical projection line overlaps the triangle plane.
+    /// </summary>
+    private static void ValidateVerticalProjectionHandlesVerticalSideFaces()
+    {
+        MeshEntity mesh = CreateSideContactPanelMesh();
+        MeshProjectionHit hit;
+
+        if (!MeshVerticalProjection.TryProjectToMesh(mesh, new Vector3(0.0f, 5.0f, 10.0f), out hit))
+        {
+            throw new InvalidOperationException("Expected the vertical guide point to hit the vertical side face.");
+        }
+
+        ValidateVectorNear(new Vector3(0.0f, 5.0f, 10.0f), hit.Point, 0.0001f, "Expected projection to preserve the guide height on a vertical face.");
+        ValidateVectorNear(Vector3.UnitX, hit.Normal, 0.0001f, "Expected projection normal to match the side face normal.");
+    }
+
+    /// <summary>
+    /// Validates that generated supports can snap from a nearby guide point back onto a vertical wall.
+    /// </summary>
+    private static void ValidateSupportProjectionFallsBackToNearbyVerticalFace()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
+        MeshEntity mesh = CreateSideContactPanelMesh();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(5.0f, profile);
+        MeshProjectionHit hit;
+        SupportPlacementPlan placementPlan;
+
+        if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, new Vector3(0.2f, 5.0f, 10.0f), profile, fallbackRadius, out hit, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected fallback projection to find the nearby vertical face.");
+        }
+
+        ValidateVectorNear(new Vector3(0.0f, 5.0f, 10.0f), hit.Point, 0.0001f, "Expected fallback projection to snap to the closest side face point.");
+    }
+
+    /// <summary>
+    /// Validates that neighboring guide points on a vertical wall project consistently.
+    /// </summary>
+    private static void ValidateSupportProjectionFallbackHandlesNeighboringVerticalFacePoints()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
+        MeshEntity mesh = CreateSideContactPanelMesh();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(5.0f, profile);
+        MeshProjectionHit firstHit;
+        MeshProjectionHit secondHit;
+        SupportPlacementPlan firstPlacementPlan;
+        SupportPlacementPlan secondPlacementPlan;
+
+        if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, new Vector3(0.2f, 4.0f, 10.0f), profile, fallbackRadius, out firstHit, out firstPlacementPlan)
+            || !MeshVerticalProjection.TryProjectSupportToMesh(mesh, new Vector3(0.2f, 6.0f, 10.0f), profile, fallbackRadius, out secondHit, out secondPlacementPlan))
+        {
+            throw new InvalidOperationException("Expected neighboring vertical-wall guide points to both produce supportable hits.");
+        }
+
+        ValidateVectorNear(new Vector3(0.0f, 4.0f, 10.0f), firstHit.Point, 0.0001f, "Expected the first neighboring point to snap to the side face.");
+        ValidateVectorNear(new Vector3(0.0f, 6.0f, 10.0f), secondHit.Point, 0.0001f, "Expected the second neighboring point to snap to the side face.");
+    }
+
+    /// <summary>
+    /// Validates that the fallback radius prevents supports from jumping to unrelated geometry.
+    /// </summary>
+    private static void ValidateSupportProjectionFallbackRejectsDistantVerticalFace()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
+        MeshEntity mesh = CreateSideContactPanelMesh();
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(1.0f, profile);
+        MeshProjectionHit hit;
+        SupportPlacementPlan placementPlan;
+
+        if (MeshVerticalProjection.TryProjectSupportToMesh(mesh, new Vector3(2.0f, 5.0f, 10.0f), profile, fallbackRadius, out hit, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected fallback projection to reject a distant vertical face.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that support projection searches from the build plate instead of choosing the nearest Z hit.
+    /// </summary>
+    private static void ValidateVerticalSupportProjectionChoosesFirstExteriorHit()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        MeshProjectionHit hit;
+        SupportPlacementPlan placementPlan;
+
+        if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, new Vector3(0.25f, 0.25f, 13.0f), profile, out hit, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected the stacked mesh to produce a supportable lower exterior hit.");
+        }
+
+        ValidateVectorNear(new Vector3(0.25f, 0.25f, 10.0f), hit.Point, 0.0001f, "Expected support projection to choose the first exterior hit above the build plate.");
+    }
+
+    /// <summary>
+    /// Validates that transform regeneration uses the same supportable projection as initial support generation.
+    /// </summary>
+    private static void ValidateTransformRegenerationUsesSupportableProjection()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Line Supports");
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(
+            new List<Vector3>
+            {
+                new Vector3(0.25f, 0.25f, 13.0f),
+                new Vector3(0.75f, 0.25f, 13.0f)
+            },
+            10.0f));
+
+        document.AddEntity(mesh);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        IReadOnlyList<SupportGroupRegeneration> regenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            document,
+            mesh,
+            Transform3DData.Identity,
+            Transform3DData.Identity);
+
+        if (regenerations.Count != 1 || regenerations[0].NewSupportEntities.Count == 0)
+        {
+            throw new InvalidOperationException("Expected transform regeneration to recreate line supports.");
+        }
+
+        for (int i = 0; i < regenerations[0].NewSupportEntities.Count; i++)
+        {
+            if (MathF.Abs(regenerations[0].NewSupportEntities[i].TipPosition.Z - 10.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected regenerated supports to use the lower exterior projection hit.");
+            }
+        }
     }
 
     /// <summary>
@@ -710,6 +977,122 @@ public static class Program
             {
                 throw new InvalidOperationException("Expected closed contour intervals to stay within the requested spacing.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Validates that closed contour start offset rotates support positions without changing count or spacing.
+    /// </summary>
+    private static void ValidateContourSupportClosedLoopStartOffsetRotatesSupports()
+    {
+        MeshEntity mesh = CreateOpenTopCubeSideMesh();
+        ContourSupportSettings baselineSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            3.0f,
+            0.0f,
+            0.0f);
+        ContourSupportSettings offsetSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            3.0f,
+            2.0f,
+            0.0f);
+        ContourSupportResult baselineResult;
+        ContourSupportResult offsetResult;
+
+        if (!ContourSupportPattern.TryCreate(mesh, baselineSettings, out baselineResult)
+            || !ContourSupportPattern.TryCreate(mesh, offsetSettings, out offsetResult))
+        {
+            throw new InvalidOperationException("Expected both closed contour offset cases to produce supports.");
+        }
+
+        if (!baselineResult.IsClosed || !offsetResult.IsClosed)
+        {
+            throw new InvalidOperationException("Expected both contour offset cases to stay closed.");
+        }
+
+        if (baselineResult.SupportSamples.Count != offsetResult.SupportSamples.Count)
+        {
+            throw new InvalidOperationException("Expected start offset to preserve the closed-loop support count.");
+        }
+
+        float firstShiftDistance = Vector3.Distance(
+            baselineResult.SupportSamples[0].Position,
+            offsetResult.SupportSamples[0].Position);
+
+        if (MathF.Abs(firstShiftDistance - 2.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the closed-loop start offset to shift the first support around the contour.");
+        }
+
+        for (int i = 0; i < offsetResult.SupportSamples.Count; i++)
+        {
+            Vector3 current = offsetResult.SupportSamples[i].Position;
+            Vector3 next = offsetResult.SupportSamples[(i + 1) % offsetResult.SupportSamples.Count].Position;
+
+            if (Vector3.Distance(current, next) > 3.0001f)
+            {
+                throw new InvalidOperationException("Expected shifted closed contour intervals to stay within the requested spacing.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that contour samples on near-vertical STL-noisy faces all pass support placement.
+    /// </summary>
+    private static void ValidateContourSupportPlacesSupportsOnNoisyNearVerticalFaces()
+    {
+        MeshEntity mesh = CreateNoisyOpenTopCubeSideMesh();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            5.0f,
+            0.0f,
+            0.0f);
+        SupportProfile profile = CreateBranchProfile(45.0f, 20.0f, 0.5f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a closed contour on the noisy near-vertical tube mesh.");
+        }
+
+        if (!result.IsClosed)
+        {
+            throw new InvalidOperationException("Expected the noisy tube contour to form a closed loop.");
+        }
+
+        int placementCount = 0;
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            ContourSupportSample sample = result.SupportSamples[i];
+
+            if (sample.Normal.Z <= 0.0001f)
+            {
+                throw new InvalidOperationException("Expected this synthetic contour to exercise tiny positive-Z normals.");
+            }
+
+            SupportPlacementPlan placementPlan;
+
+            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, sample.Position, sample.Normal, profile, out placementPlan))
+            {
+                throw new InvalidOperationException("Expected every noisy near-vertical contour sample to accept a support placement.");
+            }
+
+            placementCount++;
+        }
+
+        if (placementCount != result.SupportSamples.Count)
+        {
+            throw new InvalidOperationException("Expected support placement to cover every contour sample.");
         }
     }
 
@@ -1116,6 +1499,89 @@ public static class Program
     }
 
     /// <summary>
+    /// Creates two downward-facing horizontal faces stacked along Z for support projection ordering tests.
+    /// </summary>
+    private static MeshEntity CreateStackedDownwardHorizontalFaces()
+    {
+        return new MeshEntity(
+            "Stacked support projection faces",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(0.0f, 1.0f, 10.0f),
+                new Vector3(1.0f, 0.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 14.0f),
+                new Vector3(0.0f, 1.0f, 14.0f),
+                new Vector3(1.0f, 0.0f, 14.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a vertical panel that intersects the expected angled head centerline.
+    /// </summary>
+    private static MeshEntity CreateHeadBlockingPanelMesh()
+    {
+        return new MeshEntity(
+            "Head blocking panel",
+            new List<Vector3>
+            {
+                new Vector3(2.0f, -1.0f, 6.5f),
+                new Vector3(2.0f, 1.0f, 6.5f),
+                new Vector3(2.0f, 1.0f, 9.0f),
+                new Vector3(2.0f, -1.0f, 9.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a side face with outward +X normals for support placement clearance tests.
+    /// </summary>
+    private static MeshEntity CreateSideContactPanelMesh()
+    {
+        return new MeshEntity(
+            "Side contact panel",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 14.0f),
+                new Vector3(0.0f, 0.0f, 14.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
     /// Creates one vertical rectangular panel split into two triangles.
     /// </summary>
     private static MeshEntity CreateSingleVerticalPanel()
@@ -1411,6 +1877,57 @@ public static class Program
                 new Vector3(10.0f, 0.0f, 10.0f),
                 new Vector3(10.0f, 10.0f, 10.0f),
                 new Vector3(0.0f, 10.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                5,
+                0,
+                5,
+                4,
+                1,
+                2,
+                6,
+                1,
+                6,
+                5,
+                2,
+                3,
+                7,
+                2,
+                7,
+                6,
+                3,
+                0,
+                4,
+                3,
+                4,
+                7
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates four connected side panels with tiny inward top-edge drift that makes their normals slightly positive in Z.
+    /// </summary>
+    private static MeshEntity CreateNoisyOpenTopCubeSideMesh()
+    {
+        const float Drift = 0.004f;
+
+        return new MeshEntity(
+            "Noisy open top cube sides",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(Drift, Drift, 10.0f),
+                new Vector3(10.0f - Drift, Drift, 10.0f),
+                new Vector3(10.0f - Drift, 10.0f - Drift, 10.0f),
+                new Vector3(Drift, 10.0f - Drift, 10.0f)
             },
             new List<int>
             {
