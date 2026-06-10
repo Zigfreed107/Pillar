@@ -16,6 +16,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     private SupportGroupGeneratorKind _generatorKind;
     private LineSupportSettings? _lineSupportSettings;
     private RingSupportSettings? _ringSupportSettings;
+    private ContourSupportSettings? _contourSupportSettings;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
@@ -153,6 +154,19 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets a copy of the Contour Support settings when this group is Contour-tool generated.
+    /// </summary>
+    public ContourSupportSettings? ContourSupportSettings
+    {
+        get { return _contourSupportSettings?.Clone(); }
+        private set
+        {
+            _contourSupportSettings = value?.Clone();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
@@ -185,6 +199,21 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         RingSupportSettings? ringSupportSettings,
         LineSupportSettings? lineSupportSettings)
     {
+        return CreateLoaded(id, modelEntityId, name, color, ringSupportSettings, lineSupportSettings, null);
+    }
+
+    /// <summary>
+    /// Recreates a saved support group with generated support metadata.
+    /// </summary>
+    public static SupportLayerGroup CreateLoaded(
+        Guid id,
+        Guid modelEntityId,
+        string name,
+        SupportLayerColor? color,
+        RingSupportSettings? ringSupportSettings,
+        LineSupportSettings? lineSupportSettings,
+        ContourSupportSettings? contourSupportSettings)
+    {
         SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
 
         if (ringSupportSettings != null)
@@ -194,6 +223,10 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         else if (lineSupportSettings != null)
         {
             supportLayerGroup.SetLineSupportSettings(lineSupportSettings);
+        }
+        else if (contourSupportSettings != null)
+        {
+            supportLayerGroup.SetContourSupportSettings(contourSupportSettings);
         }
 
         return supportLayerGroup;
@@ -226,6 +259,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         }
 
         LineSupportSettings = null;
+        ContourSupportSettings = null;
         RingSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.RingSupport;
     }
@@ -241,8 +275,25 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         }
 
         RingSupportSettings = null;
+        ContourSupportSettings = null;
         LineSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.LineSupport;
+    }
+
+    /// <summary>
+    /// Marks this group as Contour Support generated and stores the editable generator settings.
+    /// </summary>
+    public void SetContourSupportSettings(ContourSupportSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        RingSupportSettings = null;
+        LineSupportSettings = null;
+        ContourSupportSettings = settings;
+        GeneratorKind = SupportGroupGeneratorKind.ContourSupport;
     }
 
     /// <summary>
@@ -252,6 +303,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     {
         LineSupportSettings = null;
         RingSupportSettings = null;
+        ContourSupportSettings = null;
         GeneratorKind = SupportGroupGeneratorKind.None;
     }
 

@@ -130,6 +130,9 @@ public partial class MainWindow
             case ManualSupportOperationKind.Ring:
                 return "Manual support mode: ring support operation active";
 
+            case ManualSupportOperationKind.Contour:
+                return "Manual support mode: contour support operation active";
+
             case ManualSupportOperationKind.None:
             default:
                 return "Manual support mode: choose an operation";
@@ -194,6 +197,41 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Refreshes the Contour Support preview when one of its options changes.
+    /// </summary>
+    private void ContourSupportToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Contour)
+        {
+            return;
+        }
+
+        _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
+    /// Puts the active Contour Support operation into model-click Z-height selection mode.
+    /// </summary>
+    private void ContourSupportToolOptionsControl_PickZHeightRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Contour)
+        {
+            _viewModel.SetStatusText("Choose the Contour Support tool before picking a contour Z height.");
+            return;
+        }
+
+        _manualSupportTool.BeginPickContourSupportZHeight();
+    }
+
+    /// <summary>
     /// Applies the current Ring Support preview as a new support group.
     /// </summary>
     private void RingSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
@@ -245,6 +283,31 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies the current Contour Support preview as a new support group or edited support group.
+    /// </summary>
+    private void ContourSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Contour)
+        {
+            _viewModel.SetStatusText("Choose the Contour Support tool before applying contour supports.");
+            return;
+        }
+
+        bool didApply = _manualSupportTool.ApplyActiveOperation();
+
+        if (!didApply)
+        {
+            return;
+        }
+
+        ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+    }
+
+    /// <summary>
     /// Closes the Ring Support panel without applying supports.
     /// </summary>
     private void RingSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
@@ -281,6 +344,24 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Closes the Contour Support panel without applying supports.
+    /// </summary>
+    private void ContourSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Contour)
+        {
+            return;
+        }
+
+        _manualSupportTool.Cancel();
+        ExitContourSupportMode();
+    }
+
+    /// <summary>
     /// Deletes selected supports from the active Ring Support edit using the same path as the Delete key.
     /// </summary>
     private void RingSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
@@ -294,6 +375,16 @@ public partial class MainWindow
     /// Deletes selected supports from the active Line Support edit using the same path as the Delete key.
     /// </summary>
     private void LineSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        DeleteSelectedSupportsInActiveEditGroup();
+    }
+
+    /// <summary>
+    /// Deletes selected supports from the active Contour Support edit using the same path as the Delete key.
+    /// </summary>
+    private void ContourSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -362,6 +453,12 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, "Contour Support", StringComparison.Ordinal))
+        {
+            ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            return;
+        }
+
         HideToolOptionsOverlay();
     }
 
@@ -395,6 +492,21 @@ public partial class MainWindow
     /// Leaves the Line Support operation and clears all transient Line Support previews.
     /// </summary>
     private void ExitLineSupportMode()
+    {
+        HideToolOptionsOverlay();
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+
+        string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
+        _activeToolStatusText = statusText;
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Leaves the Contour Support operation and clears all transient Contour Support previews.
+    /// </summary>
+    private void ExitContourSupportMode()
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -528,6 +640,25 @@ public partial class MainWindow
             ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
+            return;
+        }
+
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.ContourSupport)
+        {
+            ContourSupportSettings? settings = supportLayerGroup.ContourSupportSettings;
+
+            if (settings == null)
+            {
+                HideToolOptionsOverlay();
+                _viewModel.SetStatusText("This support group is missing Contour Support settings.");
+                return;
+            }
+
+            SetActiveMode(WorkspaceModeId.ManualSupport);
+            _contourSupportToolOptionsControl.SetContourSupportSettings(settings);
+            ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            _manualSupportTool.EditContourSupportGroup(supportLayerGroup);
+            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Contour);
             return;
         }
 
@@ -681,12 +812,15 @@ public partial class MainWindow
     private void UpdateGeneratedSupportDeleteButtonState()
     {
         bool canDeleteSelectedSupports = (ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl
-                || ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl)
+                || ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl
+                || ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl)
             && _manualSupportTool.HasSelectedSupportsInActiveEditGroup();
 
         _ringSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
             ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl && canDeleteSelectedSupports);
         _lineSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
             ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl && canDeleteSelectedSupports);
+        _contourSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
+            ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl && canDeleteSelectedSupports);
     }
 }

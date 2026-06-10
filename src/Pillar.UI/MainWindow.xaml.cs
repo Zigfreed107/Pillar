@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private readonly ViewportCameraService _viewportCameraService;
     private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
     private readonly LineSupportToolOptionsControl _lineSupportToolOptionsControl;
+    private readonly ContourSupportToolOptionsControl _contourSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
     private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
@@ -74,6 +75,7 @@ public partial class MainWindow : Window
         _selectionWindowOverlay = new SelectionWindowOverlayController(this, SelectionWindowOverlay);
         _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
         _lineSupportToolOptionsControl = new LineSupportToolOptionsControl();
+        _contourSupportToolOptionsControl = new ContourSupportToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
@@ -115,6 +117,13 @@ public partial class MainWindow : Window
             GetRingSupportSpacingOrDefault,
             GetLineSupportSpacingOrDefault,
             GetLineSupportPlaceSupportsAtBendsOrDefault,
+            GetContourSupportZHeightOrDefault,
+            GetContourSupportCoplanarThresholdOrDefault,
+            GetContourSupportSpacingOrDefault,
+            GetContourSupportStartOffsetOrDefault,
+            GetContourSupportFinalOffsetOrDefault,
+            SetContourSupportZHeight,
+            SetContourSupportClosedState,
             GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
@@ -287,6 +296,11 @@ public partial class MainWindow : Window
         _lineSupportToolOptionsControl.ApplyRequested += LineSupportToolOptionsControl_ApplyRequested;
         _lineSupportToolOptionsControl.CloseRequested += LineSupportToolOptionsControl_CloseRequested;
         _lineSupportToolOptionsControl.DeleteRequested += LineSupportToolOptionsControl_DeleteRequested;
+        _contourSupportToolOptionsControl.OptionsChanged += ContourSupportToolOptionsControl_OptionsChanged;
+        _contourSupportToolOptionsControl.PickZHeightRequested += ContourSupportToolOptionsControl_PickZHeightRequested;
+        _contourSupportToolOptionsControl.ApplyRequested += ContourSupportToolOptionsControl_ApplyRequested;
+        _contourSupportToolOptionsControl.CloseRequested += ContourSupportToolOptionsControl_CloseRequested;
+        _contourSupportToolOptionsControl.DeleteRequested += ContourSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
@@ -372,6 +386,92 @@ public partial class MainWindow : Window
     private bool GetLineSupportPlaceSupportsAtBendsOrDefault()
     {
         return _lineSupportToolOptionsControl.GetPlaceSupportsAtBends();
+    }
+
+    /// <summary>
+    /// Reads Contour Support Z height from the active Contour Support options panel.
+    /// </summary>
+    private float GetContourSupportZHeightOrDefault()
+    {
+        if (_contourSupportToolOptionsControl.TryGetZHeight(out float zHeight))
+        {
+            return zHeight;
+        }
+
+        _viewModel.SetStatusText("Contour support Z height is invalid; using 0.00 mm.");
+        return 0.0f;
+    }
+
+    /// <summary>
+    /// Reads Contour Support coplanar threshold from the active Contour Support options panel.
+    /// </summary>
+    private float GetContourSupportCoplanarThresholdOrDefault()
+    {
+        if (_contourSupportToolOptionsControl.TryGetCoplanarThresholdDegrees(out float threshold))
+        {
+            return threshold;
+        }
+
+        _viewModel.SetStatusText("Contour support threshold is invalid; using 15 degrees.");
+        return ContourSupportToolOptionsControl.DefaultCoplanarThresholdDegrees;
+    }
+
+    /// <summary>
+    /// Reads Contour Support spacing from the active Contour Support options panel.
+    /// </summary>
+    private float GetContourSupportSpacingOrDefault()
+    {
+        if (_contourSupportToolOptionsControl.TryGetSpacing(out float spacing))
+        {
+            return spacing;
+        }
+
+        _viewModel.SetStatusText("Contour support spacing is invalid; using 5.00 mm.");
+        return ContourSupportToolOptionsControl.DefaultContourSupportSpacing;
+    }
+
+    /// <summary>
+    /// Reads Contour Support start offset from the active Contour Support options panel.
+    /// </summary>
+    private float GetContourSupportStartOffsetOrDefault()
+    {
+        if (_contourSupportToolOptionsControl.TryGetStartOffset(out float startOffset))
+        {
+            return startOffset;
+        }
+
+        _viewModel.SetStatusText("Contour support start offset is invalid; using 0.00 mm.");
+        return ContourSupportToolOptionsControl.DefaultStartOffset;
+    }
+
+    /// <summary>
+    /// Reads Contour Support final offset from the active Contour Support options panel.
+    /// </summary>
+    private float GetContourSupportFinalOffsetOrDefault()
+    {
+        if (_contourSupportToolOptionsControl.TryGetFinalOffset(out float finalOffset))
+        {
+            return finalOffset;
+        }
+
+        _viewModel.SetStatusText("Contour support final offset is invalid; using 0.00 mm.");
+        return ContourSupportToolOptionsControl.DefaultFinalOffset;
+    }
+
+    /// <summary>
+    /// Writes a picked Contour Support Z height back to the options panel without coupling the operation to WPF.
+    /// </summary>
+    private void SetContourSupportZHeight(float zHeight)
+    {
+        _contourSupportToolOptionsControl.SetZHeight(zHeight);
+    }
+
+    /// <summary>
+    /// Writes the current contour closed/open state back to the options panel without coupling the operation to WPF.
+    /// </summary>
+    private void SetContourSupportClosedState(bool isClosed)
+    {
+        _contourSupportToolOptionsControl.SetContourClosed(isClosed);
     }
 
     /// <summary>

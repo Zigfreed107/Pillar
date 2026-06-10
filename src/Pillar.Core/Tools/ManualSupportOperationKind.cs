@@ -10,5 +10,6 @@ public enum ManualSupportOperationKind
     None,
     Point,
     Line,
-    Ring
+    Ring,
+    Contour
 }

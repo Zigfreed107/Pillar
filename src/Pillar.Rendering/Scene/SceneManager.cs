@@ -6,6 +6,7 @@ using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Geometry.Supports;
 using Pillar.Rendering.BackgroundGrid;
 using Pillar.Rendering.EntityRenderers;
 using Pillar.Rendering.Preview;
@@ -43,6 +44,7 @@ public class SceneManager
     private readonly PreviewLineRenderer _previewLineRenderer;
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
     private readonly LineSupportPreviewRenderer _lineSupportPreviewRenderer;
+    private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
     private readonly SelectionManager _selectionManager;
@@ -131,6 +133,7 @@ public class SceneManager
         _previewLineRenderer = new PreviewLineRenderer(_previewRoot);
         _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
         _lineSupportPreviewRenderer = new LineSupportPreviewRenderer(_previewRoot);
+        _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
@@ -573,6 +576,22 @@ public class SceneManager
     public void HideLineSupportPreview()
     {
         _lineSupportPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows the transient Contour Support contour and marker preview.
+    /// </summary>
+    public void ShowContourSupportPreview(ContourSupportResult contourResult)
+    {
+        _contourSupportPreviewRenderer.Show(contourResult);
+    }
+
+    /// <summary>
+    /// Hides all transient Contour Support preview geometry.
+    /// </summary>
+    public void HideContourSupportPreview()
+    {
+        _contourSupportPreviewRenderer.Hide();
     }
 
     /// <summary>

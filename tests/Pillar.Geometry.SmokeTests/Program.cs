@@ -47,7 +47,17 @@ public static class Program
         RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
         RunTest(failures, "Line support pattern handles degenerate segments", ValidateLineSupportPatternHandlesDegenerateSegments);
         RunTest(failures, "Line support pattern can skip bend supports", ValidateLineSupportPatternCanSkipBendSupports);
+        RunTest(failures, "Contour support stays in seeded connected patch", ValidateContourSupportStaysInSeededConnectedPatch);
+        RunTest(failures, "Contour support traverses duplicated STL-style panel vertices", ValidateContourSupportTraversesDuplicatedPanelVertices);
+        RunTest(failures, "Contour support selects nearby longer path when seed slice is short", ValidateContourSupportSelectsNearbyLongerPathWhenSeedSliceIsShort);
+        RunTest(failures, "Contour support bridges tiny slice endpoint gaps", ValidateContourSupportBridgesTinySliceEndpointGaps);
+        RunTest(failures, "Contour support threshold blocks sharp face transitions", ValidateContourSupportThresholdBlocksSharpFaceTransitions);
+        RunTest(failures, "Contour support threshold works with duplicated STL-style vertices", ValidateContourSupportThresholdWorksWithDuplicatedVertices);
+        RunTest(failures, "Contour support closed loop spacing is even", ValidateContourSupportClosedLoopSpacingIsEven);
+        RunTest(failures, "Contour support open offsets respect spacing", ValidateContourSupportOpenOffsetsRespectSpacing);
+        RunTest(failures, "Contour support Z edits choose nearest patch contour", ValidateContourSupportZEditsChooseNearestPatchContour);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
+        RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -452,6 +462,326 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that a contour only uses the connected face patch seeded by the clicked face.
+    /// </summary>
+    private static void ValidateContourSupportStaysInSeededConnectedPatch()
+    {
+        MeshEntity mesh = CreateTwoDisconnectedVerticalPanels();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            180.0f,
+            2.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a contour on the seeded panel.");
+        }
+
+        for (int i = 0; i < result.ContourPoints.Count; i++)
+        {
+            if (result.ContourPoints[i].X > 1.0f)
+            {
+                throw new InvalidOperationException("Expected the contour to stay on the seeded connected patch only.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that imported STL-style triangle soup still traverses coincident geometric edges.
+    /// </summary>
+    private static void ValidateContourSupportTraversesDuplicatedPanelVertices()
+    {
+        MeshEntity mesh = CreateStlStyleSingleVerticalPanel();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            1.0f,
+            5.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a contour on the duplicated-vertex panel.");
+        }
+
+        if (result.Length < 9.999f)
+        {
+            throw new InvalidOperationException("Expected the contour to span both duplicated-vertex triangles edge-to-edge.");
+        }
+
+        float minimumY = float.MaxValue;
+        float maximumY = float.MinValue;
+
+        for (int i = 0; i < result.ContourPoints.Count; i++)
+        {
+            minimumY = MathF.Min(minimumY, result.ContourPoints[i].Y);
+            maximumY = MathF.Max(maximumY, result.ContourPoints[i].Y);
+        }
+
+        if (minimumY > 0.0001f || maximumY < 9.999f)
+        {
+            throw new InvalidOperationException("Expected the duplicated-vertex panel contour to reach both panel edges.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a short seed-fragment does not win over a nearby longer contour in the same patch.
+    /// </summary>
+    private static void ValidateContourSupportSelectsNearbyLongerPathWhenSeedSliceIsShort()
+    {
+        MeshEntity mesh = CreateConnectedShortAndLongPanels();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 0.05f, 5.0f),
+            0,
+            5.0f,
+            180.0f,
+            5.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a contour from the connected short-and-long panel patch.");
+        }
+
+        if (!result.Diagnostics.UsedNearestLongerPath)
+        {
+            throw new InvalidOperationException("Expected the extractor to replace the short seed path with the nearby longer contour.");
+        }
+
+        if (result.Length < 9.999f)
+        {
+            throw new InvalidOperationException("Expected the selected contour to use the longer nearby panel.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that tiny slice endpoint gaps do not split one connected contour into fragments.
+    /// </summary>
+    private static void ValidateContourSupportBridgesTinySliceEndpointGaps()
+    {
+        MeshEntity mesh = CreateConnectedPanelWithTinySliceEndpointGap();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(2.0f, 0.0f, 5.0f),
+            0,
+            5.0f,
+            180.0f,
+            5.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a contour across the tiny endpoint gap.");
+        }
+
+        if (result.Length < 9.999f)
+        {
+            throw new InvalidOperationException("Expected contour assembly to bridge the tiny slice endpoint gap.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that the coplanar threshold prevents contour traversal around a sharp corner.
+    /// </summary>
+    private static void ValidateContourSupportThresholdBlocksSharpFaceTransitions()
+    {
+        MeshEntity mesh = CreateBentVerticalPanels();
+        ContourSupportSettings blockedSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            10.0f,
+            2.0f,
+            0.0f,
+            0.0f);
+        ContourSupportSettings allowedSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            2.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult blockedResult;
+        ContourSupportResult allowedResult;
+
+        if (!ContourSupportPattern.TryCreate(mesh, blockedSettings, out blockedResult)
+            || !ContourSupportPattern.TryCreate(mesh, allowedSettings, out allowedResult))
+        {
+            throw new InvalidOperationException("Expected both contour threshold cases to produce contours.");
+        }
+
+        if (allowedResult.Length <= blockedResult.Length + 1.0f)
+        {
+            throw new InvalidOperationException("Expected the relaxed threshold to include the adjacent sharp face.");
+        }
+
+        if (blockedResult.Diagnostics.ThresholdBlockedAdjacencyCount == 0)
+        {
+            throw new InvalidOperationException("Expected diagnostics to record threshold-blocked adjacency.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that geometric adjacency still respects normal-angle thresholding on STL-style meshes.
+    /// </summary>
+    private static void ValidateContourSupportThresholdWorksWithDuplicatedVertices()
+    {
+        MeshEntity mesh = CreateStlStyleBentVerticalPanels();
+        ContourSupportSettings blockedSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            10.0f,
+            2.0f,
+            0.0f,
+            0.0f);
+        ContourSupportSettings allowedSettings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            2.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult blockedResult;
+        ContourSupportResult allowedResult;
+
+        if (!ContourSupportPattern.TryCreate(mesh, blockedSettings, out blockedResult)
+            || !ContourSupportPattern.TryCreate(mesh, allowedSettings, out allowedResult))
+        {
+            throw new InvalidOperationException("Expected both duplicated-vertex threshold cases to produce contours.");
+        }
+
+        if (blockedResult.Length < 9.999f)
+        {
+            throw new InvalidOperationException("Expected the blocked duplicated-vertex contour to still span the seeded panel.");
+        }
+
+        if (allowedResult.Length <= blockedResult.Length + 9.0f)
+        {
+            throw new InvalidOperationException("Expected the relaxed threshold to include the adjacent duplicated-vertex face.");
+        }
+    }
+
+    /// <summary>
+    /// Validates closed contour distribution reduces spacing evenly so no interval exceeds the requested spacing.
+    /// </summary>
+    private static void ValidateContourSupportClosedLoopSpacingIsEven()
+    {
+        MeshEntity mesh = CreateOpenTopCubeSideMesh();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            100.0f,
+            3.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected a closed cube-side contour.");
+        }
+
+        if (!result.IsClosed)
+        {
+            throw new InvalidOperationException("Expected the cube side contour to form a closed loop.");
+        }
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            Vector3 current = result.SupportSamples[i].Position;
+            Vector3 next = result.SupportSamples[(i + 1) % result.SupportSamples.Count].Position;
+
+            if (Vector3.Distance(current, next) > 3.0001f)
+            {
+                throw new InvalidOperationException("Expected closed contour intervals to stay within the requested spacing.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates open contour offsets are applied before spacing distribution.
+    /// </summary>
+    private static void ValidateContourSupportOpenOffsetsRespectSpacing()
+    {
+        MeshEntity mesh = CreateSingleVerticalPanel();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            1.0f,
+            5.0f,
+            2.0f,
+            2.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected an open panel contour.");
+        }
+
+        if (result.IsClosed)
+        {
+            throw new InvalidOperationException("Expected a single-panel contour to stay open.");
+        }
+
+        ValidateVectorNear(new Vector3(0.0f, 2.0f, 5.0f), result.SupportSamples[0].Position, 0.0001f, "Expected the first support to honor the start offset.");
+        ValidateVectorNear(new Vector3(0.0f, 8.0f, 5.0f), result.SupportSamples[result.SupportSamples.Count - 1].Position, 0.0001f, "Expected the final support to honor the final offset.");
+
+        for (int i = 1; i < result.SupportSamples.Count; i++)
+        {
+            if (Vector3.Distance(result.SupportSamples[i - 1].Position, result.SupportSamples[i].Position) > 5.0001f)
+            {
+                throw new InvalidOperationException("Expected open contour intervals to stay within the requested spacing.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates edited Z heights can select the nearest contour in the same seeded face patch.
+    /// </summary>
+    private static void ValidateContourSupportZEditsChooseNearestPatchContour()
+    {
+        MeshEntity mesh = CreateSingleVerticalPanel();
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 1.0f),
+            0,
+            8.0f,
+            1.0f,
+            3.0f,
+            0.0f,
+            0.0f);
+        ContourSupportResult result;
+
+        if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected the edited Z height to find a contour in the seeded patch.");
+        }
+
+        for (int i = 0; i < result.ContourPoints.Count; i++)
+        {
+            if (MathF.Abs(result.ContourPoints[i].Z - 8.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected every edited-Z contour point to use the requested Z height.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Validates that Line Support generator metadata is saved and loaded with the project.
     /// </summary>
     private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
@@ -515,6 +845,68 @@ public static class Program
             for (int i = 0; i < points.Count; i++)
             {
                 ValidateVectorNear(points[i], loadedSettings.Points[i], 0.0001f, "Expected loaded Line Support points to match saved points.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that Contour Support generator metadata is saved and loaded with the project.
+    /// </summary>
+    private static void ValidateContourSupportSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleVerticalPanel();
+        document.AddEntity(mesh);
+        ContourSupportSettings settings = new ContourSupportSettings(
+            new Vector3(0.0f, 2.0f, 2.0f),
+            0,
+            5.0f,
+            15.0f,
+            2.5f,
+            0.5f,
+            0.75f);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Contour Supports");
+        supportLayerGroup.SetContourSupportSettings(settings);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "ContourSupportSettingsSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1)
+            {
+                throw new InvalidOperationException("Expected one loaded support layer group.");
+            }
+
+            SupportLayerGroup loadedSupportLayerGroup = loadedDocument.SupportLayerGroups[0];
+            ContourSupportSettings? loadedSettings = loadedSupportLayerGroup.ContourSupportSettings;
+
+            if (loadedSupportLayerGroup.GeneratorKind != SupportGroupGeneratorKind.ContourSupport || loadedSettings == null)
+            {
+                throw new InvalidOperationException("Expected the loaded support layer group to preserve Contour Support metadata.");
+            }
+
+            ValidateVectorNear(settings.SeedPoint, loadedSettings.SeedPoint, 0.0001f, "Expected loaded Contour Support seed point to match.");
+
+            if (loadedSettings.SeedTriangleIndex != settings.SeedTriangleIndex
+                || MathF.Abs(loadedSettings.ZHeight - settings.ZHeight) > 0.0001f
+                || MathF.Abs(loadedSettings.CoplanarThresholdDegrees - settings.CoplanarThresholdDegrees) > 0.0001f
+                || MathF.Abs(loadedSettings.Spacing - settings.Spacing) > 0.0001f
+                || MathF.Abs(loadedSettings.StartOffset - settings.StartOffset) > 0.0001f
+                || MathF.Abs(loadedSettings.FinalOffset - settings.FinalOffset) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected loaded Contour Support settings to preserve all numeric fields.");
             }
         }
         finally
@@ -721,6 +1113,334 @@ public static class Program
             },
             new List<Vector3>(),
             userTransform: userTransform);
+    }
+
+    /// <summary>
+    /// Creates one vertical rectangular panel split into two triangles.
+    /// </summary>
+    private static MeshEntity CreateSingleVerticalPanel()
+    {
+        return new MeshEntity(
+            "Single vertical panel",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates one STL-style vertical panel where adjacent triangles duplicate coincident vertices.
+    /// </summary>
+    private static MeshEntity CreateStlStyleSingleVerticalPanel()
+    {
+        return new MeshEntity(
+            "STL-style single vertical panel",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a patch where a small seed panel is connected above the slice to a larger nearby panel.
+    /// </summary>
+    private static MeshEntity CreateConnectedShortAndLongPanels()
+    {
+        return new MeshEntity(
+            "Connected short and long contour panels",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 0.1f, 0.0f),
+                new Vector3(0.0f, 0.1f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(0.2f, 0.0f, 0.0f),
+                new Vector3(0.2f, 0.1f, 0.0f),
+                new Vector3(0.2f, 10.0f, 0.0f),
+                new Vector3(0.2f, 10.0f, 10.0f),
+                new Vector3(0.2f, 0.1f, 10.0f),
+                new Vector3(0.2f, 0.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+                4,
+                5,
+                8,
+                4,
+                8,
+                9,
+                5,
+                6,
+                7,
+                5,
+                7,
+                8,
+                3,
+                9,
+                8,
+                3,
+                8,
+                2
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates two vertical slice panels with a tiny endpoint gap but connected by top faces above the slice.
+    /// </summary>
+    private static MeshEntity CreateConnectedPanelWithTinySliceEndpointGap()
+    {
+        return new MeshEntity(
+            "Connected panel with tiny slice endpoint gap",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(5.0f, 0.0f, 0.0f),
+                new Vector3(5.0f, 0.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(5.0005f, 0.0f, 0.0f),
+                new Vector3(10.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 0.0f, 10.0f),
+                new Vector3(5.0005f, 0.0f, 10.0f),
+                new Vector3(0.0f, 0.1f, 10.0f),
+                new Vector3(5.0f, 0.1f, 10.0f),
+                new Vector3(5.0005f, 0.1f, 10.0f),
+                new Vector3(10.0f, 0.1f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+                4,
+                5,
+                6,
+                4,
+                6,
+                7,
+                3,
+                2,
+                9,
+                3,
+                9,
+                8,
+                2,
+                7,
+                10,
+                2,
+                10,
+                9,
+                7,
+                6,
+                11,
+                7,
+                11,
+                10
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates two disconnected vertical panels at different X positions.
+    /// </summary>
+    private static MeshEntity CreateTwoDisconnectedVerticalPanels()
+    {
+        return new MeshEntity(
+            "Disconnected vertical panels",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(20.0f, 0.0f, 0.0f),
+                new Vector3(20.0f, 10.0f, 0.0f),
+                new Vector3(20.0f, 10.0f, 10.0f),
+                new Vector3(20.0f, 0.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+                4,
+                5,
+                6,
+                4,
+                6,
+                7
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates two vertical panels sharing an edge at a 90-degree corner.
+    /// </summary>
+    private static MeshEntity CreateBentVerticalPanels()
+    {
+        return new MeshEntity(
+            "Bent vertical panels",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(10.0f, 10.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+                1,
+                4,
+                5,
+                1,
+                5,
+                2
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates two bent STL-style panels where each triangle owns its own vertex records.
+    /// </summary>
+    private static MeshEntity CreateStlStyleBentVerticalPanels()
+    {
+        return new MeshEntity(
+            "STL-style bent vertical panels",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 10.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates four connected vertical side panels that slice into a closed square loop.
+    /// </summary>
+    private static MeshEntity CreateOpenTopCubeSideMesh()
+    {
+        return new MeshEntity(
+            "Open top cube sides",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 0.0f, 10.0f),
+                new Vector3(10.0f, 0.0f, 10.0f),
+                new Vector3(10.0f, 10.0f, 10.0f),
+                new Vector3(0.0f, 10.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                5,
+                0,
+                5,
+                4,
+                1,
+                2,
+                6,
+                1,
+                6,
+                5,
+                2,
+                3,
+                7,
+                2,
+                7,
+                6,
+                3,
+                0,
+                4,
+                3,
+                4,
+                7
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
     }
 
     /// <summary>

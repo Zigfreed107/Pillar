@@ -28,6 +28,8 @@ public sealed class SupportGroupRegeneration
             oldRingSupportSettings,
             newRingSupportSettings,
             null,
+            null,
+            null,
             null)
     {
     }
@@ -43,6 +45,32 @@ public sealed class SupportGroupRegeneration
         RingSupportSettings? newRingSupportSettings,
         LineSupportSettings? oldLineSupportSettings,
         LineSupportSettings? newLineSupportSettings)
+        : this(
+            supportLayerGroup,
+            oldSupportEntities,
+            newSupportEntities,
+            oldRingSupportSettings,
+            newRingSupportSettings,
+            oldLineSupportSettings,
+            newLineSupportSettings,
+            null,
+            null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an immutable support regeneration snapshot for one support group.
+    /// </summary>
+    public SupportGroupRegeneration(
+        SupportLayerGroup supportLayerGroup,
+        IReadOnlyList<SupportEntity> oldSupportEntities,
+        IReadOnlyList<SupportEntity> newSupportEntities,
+        RingSupportSettings? oldRingSupportSettings,
+        RingSupportSettings? newRingSupportSettings,
+        LineSupportSettings? oldLineSupportSettings,
+        LineSupportSettings? newLineSupportSettings,
+        ContourSupportSettings? oldContourSupportSettings,
+        ContourSupportSettings? newContourSupportSettings)
     {
         SupportLayerGroup = supportLayerGroup ?? throw new ArgumentNullException(nameof(supportLayerGroup));
         OldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
@@ -51,6 +79,8 @@ public sealed class SupportGroupRegeneration
         NewRingSupportSettings = newRingSupportSettings?.Clone();
         OldLineSupportSettings = oldLineSupportSettings?.Clone();
         NewLineSupportSettings = newLineSupportSettings?.Clone();
+        OldContourSupportSettings = oldContourSupportSettings?.Clone();
+        NewContourSupportSettings = newContourSupportSettings?.Clone();
 
         ValidateSupportOwnership(OldSupportEntities, SupportLayerGroup.Id, nameof(oldSupportEntities));
         ValidateSupportOwnership(NewSupportEntities, SupportLayerGroup.Id, nameof(newSupportEntities));
@@ -90,6 +120,16 @@ public sealed class SupportGroupRegeneration
     /// Gets the Line Support generator settings transformed for the new model transform, when this is a Line group.
     /// </summary>
     public LineSupportSettings? NewLineSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Contour Support generator settings present before the transform, when this is a Contour group.
+    /// </summary>
+    public ContourSupportSettings? OldContourSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Contour Support generator settings transformed for the new model transform, when this is a Contour group.
+    /// </summary>
+    public ContourSupportSettings? NewContourSupportSettings { get; }
 
     /// <summary>
     /// Verifies every support entity belongs to the group carried by this regeneration snapshot.

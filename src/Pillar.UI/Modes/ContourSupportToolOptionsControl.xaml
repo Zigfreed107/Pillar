@@ -1,0 +1,185 @@
+<!--
+    ContourSupportToolOptionsControl.xaml
+    Defines the self-contained Contour Support tool options overlay panel shown when the Contour Support operation is active.
+-->
+<UserControl x:Class="Pillar.UI.Modes.ContourSupportToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Contour Support Options" />
+
+            <Grid Margin="0,14,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="112" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="34" />
+                    <ColumnDefinition Width="36" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Margin="0,4,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Z height" />
+                <controls:NumericUpDown x:Name="ContourZHeightNumericUpDown"
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        MinWidth="104"
+                                        Minimum="-100000"
+                                        Maximum="100000"
+                                        Increment="0.25"
+                                        DecimalPlaces="2"
+                                        Value="0.00"
+                                        ValueChanged="ContourOption_ValueChanged" />
+                <TextBlock Grid.Row="0"
+                           Grid.Column="2"
+                           Margin="8,4,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="mm" />
+                <Button Grid.Row="0"
+                        Grid.Column="3"
+                        MinHeight="28"
+                        Margin="6,0,0,0"
+                        HorizontalAlignment="Stretch"
+                        Click="PickZHeightButton_Click"
+                        Content="&#xE7C9;"
+                        FontFamily="Segoe Fluent Icons"
+                        ToolTip="Pick contour Z height from the model" />
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Margin="0,10,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Coplanar threshold" />
+                <controls:NumericUpDown x:Name="CoplanarThresholdNumericUpDown"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,8,0,0"
+                                        MinWidth="104"
+                                        Minimum="0"
+                                        Maximum="180"
+                                        Increment="1"
+                                        DecimalPlaces="0"
+                                        Value="15"
+                                        ValueChanged="ContourOption_ValueChanged" />
+                <TextBlock Grid.Row="1"
+                           Grid.Column="3"
+                           Margin="8,12,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="deg" />
+
+                <TextBlock Grid.Row="2"
+                           Grid.Column="0"
+                           Margin="0,10,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Spacing" />
+                <controls:NumericUpDown x:Name="ContourSpacingNumericUpDown"
+                                        Grid.Row="2"
+                                        Grid.Column="1"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,8,0,0"
+                                        MinWidth="104"
+                                        Minimum="0.25"
+                                        Increment="0.25"
+                                        DecimalPlaces="2"
+                                        Value="5.00"
+                                        ValueChanged="ContourOption_ValueChanged" />
+                <TextBlock Grid.Row="2"
+                           Grid.Column="3"
+                           Margin="8,12,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="mm" />
+
+                <TextBlock Grid.Row="3"
+                           Grid.Column="0"
+                           Margin="0,10,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Start offset" />
+                <controls:NumericUpDown x:Name="StartOffsetNumericUpDown"
+                                        Grid.Row="3"
+                                        Grid.Column="1"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,8,0,0"
+                                        MinWidth="104"
+                                        Minimum="0"
+                                        Increment="0.25"
+                                        DecimalPlaces="2"
+                                        Value="0.00"
+                                        ValueChanged="ContourOption_ValueChanged" />
+                <TextBlock Grid.Row="3"
+                           Grid.Column="3"
+                           Margin="8,12,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="mm" />
+
+                <TextBlock Grid.Row="4"
+                           Grid.Column="0"
+                           Margin="0,10,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Final offset" />
+                <controls:NumericUpDown x:Name="FinalOffsetNumericUpDown"
+                                        Grid.Row="4"
+                                        Grid.Column="1"
+                                        Grid.ColumnSpan="2"
+                                        Margin="0,8,0,0"
+                                        MinWidth="104"
+                                        Minimum="0"
+                                        Increment="0.25"
+                                        DecimalPlaces="2"
+                                        Value="0.00"
+                                        ValueChanged="ContourOption_ValueChanged" />
+                <TextBlock Grid.Row="4"
+                           Grid.Column="3"
+                           Margin="8,12,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="mm" />
+
+                <Button x:Name="DeleteSelectedSupportsButton"
+                        Grid.Row="5"
+                        Grid.Column="1"
+                        Grid.ColumnSpan="2"
+                        MinHeight="30"
+                        Margin="0,10,0,0"
+                        HorizontalAlignment="Stretch"
+                        Click="DeleteSelectedSupportsButton_Click"
+                        Content="Delete"
+                        IsEnabled="False" />
+
+                <Grid Grid.Row="6"
+                      Grid.Column="0"
+                      Grid.ColumnSpan="4"
+                      Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="ApplyContourSupportButton_Click"
+                            Content="Apply" />
+                    <Button Grid.Column="2"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="CloseContourSupportButton_Click"
+                            Content="Close" />
+                </Grid>
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

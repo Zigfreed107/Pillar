@@ -27,7 +27,14 @@ public class ManualSupportTool : ITool
     private readonly Func<float> _getRingSupportSpacing;
     private readonly Func<float> _getLineSupportSpacing;
     private readonly Func<bool> _getLineSupportPlaceSupportsAtBends;
+    private readonly Func<float> _getContourSupportZHeight;
+    private readonly Func<float> _getContourSupportCoplanarThresholdDegrees;
+    private readonly Func<float> _getContourSupportSpacing;
+    private readonly Func<float> _getContourSupportStartOffset;
+    private readonly Func<float> _getContourSupportFinalOffset;
     private readonly Func<SupportProfile> _createSupportProfile;
+    private readonly Action<float> _contourSupportZHeightSelectedReporter;
+    private readonly Action<bool> _contourSupportClosedStateReporter;
     private IToolOperation? _activeOperation;
 
     /// <summary>
@@ -42,6 +49,13 @@ public class ManualSupportTool : ITool
         Func<float> getRingSupportSpacing,
         Func<float> getLineSupportSpacing,
         Func<bool> getLineSupportPlaceSupportsAtBends,
+        Func<float> getContourSupportZHeight,
+        Func<float> getContourSupportCoplanarThresholdDegrees,
+        Func<float> getContourSupportSpacing,
+        Func<float> getContourSupportStartOffset,
+        Func<float> getContourSupportFinalOffset,
+        Action<float> contourSupportZHeightSelectedReporter,
+        Action<bool> contourSupportClosedStateReporter,
         Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -52,6 +66,13 @@ public class ManualSupportTool : ITool
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
         _getLineSupportSpacing = getLineSupportSpacing ?? throw new ArgumentNullException(nameof(getLineSupportSpacing));
         _getLineSupportPlaceSupportsAtBends = getLineSupportPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getLineSupportPlaceSupportsAtBends));
+        _getContourSupportZHeight = getContourSupportZHeight ?? throw new ArgumentNullException(nameof(getContourSupportZHeight));
+        _getContourSupportCoplanarThresholdDegrees = getContourSupportCoplanarThresholdDegrees ?? throw new ArgumentNullException(nameof(getContourSupportCoplanarThresholdDegrees));
+        _getContourSupportSpacing = getContourSupportSpacing ?? throw new ArgumentNullException(nameof(getContourSupportSpacing));
+        _getContourSupportStartOffset = getContourSupportStartOffset ?? throw new ArgumentNullException(nameof(getContourSupportStartOffset));
+        _getContourSupportFinalOffset = getContourSupportFinalOffset ?? throw new ArgumentNullException(nameof(getContourSupportFinalOffset));
+        _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
+        _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
@@ -164,6 +185,32 @@ public class ManualSupportTool : ITool
             return;
         }
 
+        if (operationKind == ManualSupportOperationKind.Contour)
+        {
+            ContourSupportOperation contourSupportOperation = new ContourSupportOperation(
+                _document,
+                _projectionService,
+                _scene,
+                _commandRunner,
+                _getSelectedModelEntityId,
+                _getContourSupportZHeight,
+                _getContourSupportCoplanarThresholdDegrees,
+                _getContourSupportSpacing,
+                _getContourSupportStartOffset,
+                _getContourSupportFinalOffset,
+                _createSupportProfile,
+                _contourSupportZHeightSelectedReporter,
+                _contourSupportClosedStateReporter,
+                RaiseStatusMessageRequested,
+                RaisePrecisionSelectCursorRequested,
+                RaisePreviewCalculationStateChanged);
+
+            contourSupportOperation.SelectionWindowChanged += RaiseSelectionWindowChanged;
+            _activeOperation = contourSupportOperation;
+            RaiseStatusMessageRequested("Click the selected model to seed contour supports.");
+            return;
+        }
+
         _activeOperation = null;
     }
 
@@ -213,6 +260,12 @@ public class ManualSupportTool : ITool
         if (_activeOperation is RingSupportOperation ringSupportOperation)
         {
             ringSupportOperation.RefreshPreview();
+            return;
+        }
+
+        if (_activeOperation is ContourSupportOperation contourSupportOperation)
+        {
+            contourSupportOperation.RefreshPreview();
         }
     }
 
@@ -231,8 +284,27 @@ public class ManualSupportTool : ITool
             return ringSupportOperation.Apply();
         }
 
+        if (_activeOperation is ContourSupportOperation contourSupportOperation)
+        {
+            return contourSupportOperation.Apply();
+        }
+
         RaiseStatusMessageRequested("Choose a generated support tool before applying supports.");
         return false;
+    }
+
+    /// <summary>
+    /// Requests that the active Contour Support operation capture a new Z height from the next model click.
+    /// </summary>
+    public void BeginPickContourSupportZHeight()
+    {
+        if (_activeOperation is ContourSupportOperation contourSupportOperation)
+        {
+            contourSupportOperation.BeginPickZHeight();
+            return;
+        }
+
+        RaiseStatusMessageRequested("Choose the Contour Support tool before picking a contour Z height.");
     }
 
     /// <summary>
@@ -350,6 +422,27 @@ public class ManualSupportTool : ITool
         if (_activeOperation is LineSupportOperation lineSupportOperation)
         {
             lineSupportOperation.EditExistingLineSupportGroup(supportLayerGroup);
+        }
+    }
+
+    /// <summary>
+    /// Loads an existing Contour Support-generated group into the Contour Support operation.
+    /// </summary>
+    public void EditContourSupportGroup(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        if (ActiveOperationKind != ManualSupportOperationKind.Contour)
+        {
+            SetActiveOperation(ManualSupportOperationKind.Contour);
+        }
+
+        if (_activeOperation is ContourSupportOperation contourSupportOperation)
+        {
+            contourSupportOperation.EditExistingContourSupportGroup(supportLayerGroup);
         }
     }
 

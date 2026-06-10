@@ -30,10 +30,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaion", "Documentaio
 		Documentation\Gui-And-Workflow-Map.md = Documentation\Gui-And-Workflow-Map.md
 		Documentation\GUI.pptx = Documentation\GUI.pptx
 		Documentation\LineSupportTool.md = Documentation\LineSupportTool.md
-		Ring Support Tool behaviours.txt = Ring Support Tool behaviours.txt
 		Documentation\Ring Support Tool behaviours.txt = Documentation\Ring Support Tool behaviours.txt
 		Documentation\SupportFunctionality.md = Documentation\SupportFunctionality.md
-		Tool Behaviour Template.md = Tool Behaviour Template.md
 		Documentation\Tool Behaviour Template.md = Documentation\Tool Behaviour Template.md
 	EndProjectSection
 EndProject
@@ -43,6 +41,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Geometry.SmokeTests", "tests\Pillar.Geometry.SmokeTests\Pillar.Geometry.SmokeTests.csproj", "{8DC51B66-65D7-4C97-8A26-50F8F1ED82B7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tasks", "Tasks", "{84CCF0D0-CB87-4623-9A26-4855DABDA6C2}"
+	ProjectSection(SolutionItems) = preProject
+		Area Support Tool.md = Area Support Tool.md
+		Contour Support Tool.md = Contour Support Tool.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Completed", "Completed", "{614638B5-47A1-4AAB-9F7D-3FB8050198D3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -81,6 +87,10 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{84CCF0D0-CB87-4623-9A26-4855DABDA6C2} = {2CA95D3F-9516-44EB-9F6F-B4C52E48612E}
+		{614638B5-47A1-4AAB-9F7D-3FB8050198D3} = {84CCF0D0-CB87-4623-9A26-4855DABDA6C2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7E64CCF2-ED87-450F-B577-DE4EFDA32C5A}

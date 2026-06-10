@@ -23,6 +23,7 @@ public sealed class GphDocumentSerializer
     private const string SupportTypeName = "support";
     private const string RingSupportGeneratorName = "ringSupport";
     private const string LineSupportGeneratorName = "lineSupport";
+    private const string ContourSupportGeneratorName = "contourSupport";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -229,7 +230,8 @@ public sealed class GphDocumentSerializer
             Color = CreateSupportLayerColorDto(supportLayerGroup.Color),
             GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
             RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings),
-            LineSupport = CreateLineSupportSettingsDto(supportLayerGroup.LineSupportSettings)
+            LineSupport = CreateLineSupportSettingsDto(supportLayerGroup.LineSupportSettings),
+            ContourSupport = CreateContourSupportSettingsDto(supportLayerGroup.ContourSupportSettings)
         };
     }
 
@@ -274,7 +276,8 @@ public sealed class GphDocumentSerializer
                 supportLayerGroupDto.Name,
                 CreateSupportLayerColorOrDefault(supportLayerGroupDto),
                 CreateRingSupportSettingsOrDefault(supportLayerGroupDto),
-                CreateLineSupportSettingsOrDefault(supportLayerGroupDto)));
+                CreateLineSupportSettingsOrDefault(supportLayerGroupDto),
+                CreateContourSupportSettingsOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -531,6 +534,11 @@ public sealed class GphDocumentSerializer
             return LineSupportGeneratorName;
         }
 
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.ContourSupport)
+        {
+            return ContourSupportGeneratorName;
+        }
+
         return null;
     }
 
@@ -575,6 +583,28 @@ public sealed class GphDocumentSerializer
         }
 
         return dto;
+    }
+
+    /// <summary>
+    /// Converts Contour Support settings into their persisted representation when present.
+    /// </summary>
+    private static GphContourSupportSettingsDto? CreateContourSupportSettingsDto(ContourSupportSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphContourSupportSettingsDto
+        {
+            SeedPoint = CreateVectorDto(settings.SeedPoint),
+            SeedTriangleIndex = settings.SeedTriangleIndex,
+            ZHeight = settings.ZHeight,
+            CoplanarThresholdDegrees = settings.CoplanarThresholdDegrees,
+            Spacing = settings.Spacing,
+            StartOffset = settings.StartOffset,
+            FinalOffset = settings.FinalOffset
+        };
     }
 
     /// <summary>
@@ -652,7 +682,8 @@ public sealed class GphDocumentSerializer
 
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -691,7 +722,8 @@ public sealed class GphDocumentSerializer
 
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
-            if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -727,6 +759,47 @@ public sealed class GphDocumentSerializer
             ?? LineSupportSettings.DefaultPlaceSupportsAtBends;
 
         return new LineSupportSettings(points, supportLayerGroupDto.LineSupport.Spacing, placeSupportsAtBends);
+    }
+
+    /// <summary>
+    /// Converts saved generator metadata into Contour Support settings, or null for legacy/plain support groups.
+    /// </summary>
+    private static ContourSupportSettings? CreateContourSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (string.IsNullOrWhiteSpace(supportLayerGroupDto.GeneratorKind))
+        {
+            return null;
+        }
+
+        if (!string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
+        }
+
+        if (supportLayerGroupDto.ContourSupport == null)
+        {
+            throw new InvalidDataException("A Contour Support group is missing its generator settings.");
+        }
+
+        if (supportLayerGroupDto.ContourSupport.SeedPoint == null)
+        {
+            throw new InvalidDataException("A Contour Support group is missing its seed point.");
+        }
+
+        return new ContourSupportSettings(
+            CreateVector(supportLayerGroupDto.ContourSupport.SeedPoint),
+            supportLayerGroupDto.ContourSupport.SeedTriangleIndex,
+            supportLayerGroupDto.ContourSupport.ZHeight,
+            supportLayerGroupDto.ContourSupport.CoplanarThresholdDegrees,
+            supportLayerGroupDto.ContourSupport.Spacing,
+            supportLayerGroupDto.ContourSupport.StartOffset,
+            supportLayerGroupDto.ContourSupport.FinalOffset);
     }
 
     /// <summary>
@@ -883,6 +956,7 @@ public sealed class GphDocumentSerializer
         public string? GeneratorKind { get; set; }
         public GphRingSupportSettingsDto? RingSupport { get; set; }
         public GphLineSupportSettingsDto? LineSupport { get; set; }
+        public GphContourSupportSettingsDto? ContourSupport { get; set; }
     }
 
     /// <summary>
@@ -904,6 +978,20 @@ public sealed class GphDocumentSerializer
         public List<GphVector3Dto?> Points { get; set; } = new List<GphVector3Dto?>();
         public float Spacing { get; set; }
         public bool? PlaceSupportsAtBends { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Contour Support generator settings.
+    /// </summary>
+    private sealed class GphContourSupportSettingsDto
+    {
+        public GphVector3Dto? SeedPoint { get; set; }
+        public int SeedTriangleIndex { get; set; }
+        public float ZHeight { get; set; }
+        public float CoplanarThresholdDegrees { get; set; }
+        public float Spacing { get; set; }
+        public float StartOffset { get; set; }
+        public float FinalOffset { get; set; }
     }
 
     /// <summary>

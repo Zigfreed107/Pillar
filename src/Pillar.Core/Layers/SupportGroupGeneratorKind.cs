@@ -9,5 +9,6 @@ public enum SupportGroupGeneratorKind
 {
     None,
     LineSupport,
-    RingSupport
+    RingSupport,
+    ContourSupport
 }

@@ -128,6 +128,33 @@ public static class SupportGroupTransformRegenerator
                 newLineSupportSettings);
         }
 
+        ContourSupportSettings? oldContourSupportSettings = supportLayerGroup.ContourSupportSettings;
+
+        if (oldContourSupportSettings != null)
+        {
+            ContourSupportSettings newContourSupportSettings = TransformContourSupportSettings(
+                oldContourSupportSettings,
+                oldInverseWorldTransform,
+                newWorldTransform);
+            List<SupportEntity> newContourSupports = CreateContourSupportEntities(
+                mesh,
+                supportLayerGroup.Id,
+                newContourSupportSettings,
+                ChooseSupportProfile(oldSupportEntities),
+                newWorldTransform);
+
+            return new SupportGroupRegeneration(
+                supportLayerGroup,
+                oldSupportEntities,
+                newContourSupports,
+                null,
+                null,
+                null,
+                null,
+                oldContourSupportSettings,
+                newContourSupportSettings);
+        }
+
         if (oldSupportEntities.Count == 0)
         {
             return null;
@@ -296,6 +323,50 @@ public static class SupportGroupTransformRegenerator
     }
 
     /// <summary>
+    /// Rebuilds contour supports from transformed contour settings against the transformed mesh.
+    /// </summary>
+    private static List<SupportEntity> CreateContourSupportEntities(
+        MeshEntity mesh,
+        Guid supportLayerGroupId,
+        ContourSupportSettings settings,
+        SupportProfile supportProfile,
+        Matrix4x4 newWorldTransform)
+    {
+        ContourSupportResult contourResult;
+
+        if (!ContourSupportPattern.TryCreate(mesh, newWorldTransform, settings, out contourResult))
+        {
+            return new List<SupportEntity>();
+        }
+
+        List<SupportEntity> newSupportEntities = new List<SupportEntity>(contourResult.SupportSamples.Count);
+
+        for (int i = 0; i < contourResult.SupportSamples.Count; i++)
+        {
+            ContourSupportSample sample = contourResult.SupportSamples[i];
+            Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(sample.Normal, supportProfile);
+            SupportBranchPlan branchPlan;
+
+            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, sample.Position, headDirection, supportProfile, out branchPlan))
+            {
+                continue;
+            }
+
+            TryAddSupportEntity(
+                newSupportEntities,
+                supportLayerGroupId,
+                sample.Position,
+                branchPlan.BasePosition,
+                headDirection,
+                branchPlan.BranchLength,
+                branchPlan.BranchDirection,
+                supportProfile);
+        }
+
+        return newSupportEntities;
+    }
+
+    /// <summary>
     /// Transforms the three stored ring points with the model, then flattens them back onto the first point's horizontal ring plane.
     /// </summary>
     private static RingSupportSettings TransformRingSupportSettings(
@@ -342,6 +413,34 @@ public static class SupportGroupTransformRegenerator
         }
 
         return new LineSupportSettings(transformedPoints, oldSettings.Spacing, oldSettings.PlaceSupportsAtBends);
+    }
+
+    /// <summary>
+    /// Carries the saved contour seed and horizontal plane anchor through the owning model transform.
+    /// </summary>
+    private static ContourSupportSettings TransformContourSupportSettings(
+        ContourSupportSettings oldSettings,
+        Matrix4x4 oldInverseWorldTransform,
+        Matrix4x4 newWorldTransform)
+    {
+        Vector3 transformedSeedPoint = TransformWorldPointBetweenModelTransforms(
+            oldSettings.SeedPoint,
+            oldInverseWorldTransform,
+            newWorldTransform);
+        Vector3 oldPlaneAnchor = new Vector3(oldSettings.SeedPoint.X, oldSettings.SeedPoint.Y, oldSettings.ZHeight);
+        Vector3 transformedPlaneAnchor = TransformWorldPointBetweenModelTransforms(
+            oldPlaneAnchor,
+            oldInverseWorldTransform,
+            newWorldTransform);
+
+        return new ContourSupportSettings(
+            transformedSeedPoint,
+            oldSettings.SeedTriangleIndex,
+            transformedPlaneAnchor.Z,
+            oldSettings.CoplanarThresholdDegrees,
+            oldSettings.Spacing,
+            oldSettings.StartOffset,
+            oldSettings.FinalOffset);
     }
 
     /// <summary>

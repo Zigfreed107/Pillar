@@ -216,6 +216,16 @@
                                                    Text="Distribute supports around a circular region" />
                                     </StackPanel>
                                 </Button>
+
+                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                        Click="ContourSupportButton_Click">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
+                                                   Text="Contour" />
+                                        <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                                   Text="Trace a connected face contour at a Z height" />
+                                    </StackPanel>
+                                </Button>
                             </primitives:UniformGrid>
                         </StackPanel>
 

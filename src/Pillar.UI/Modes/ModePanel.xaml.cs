@@ -180,6 +180,19 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
+    /// Selects the contour-support operation and shows its options.
+    /// </summary>
+    private void ContourSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        SupportOperationToggleRequested?.Invoke(
+            this,
+            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Contour, true));
+        RaiseToolSelected("Contour Support");
+    }
+
+    /// <summary>
     /// Publishes one selected tool name to the owning shell.
     /// </summary>
     private void RaiseToolSelected(string toolName)
