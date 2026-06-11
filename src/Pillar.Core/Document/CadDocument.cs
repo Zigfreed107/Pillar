@@ -19,6 +19,7 @@ public class CadDocument
     //TODO Spatial grid size is a const value. Make it specified in a config file somewhere?
     private readonly ObservableCollection<CadEntity> _entities = new ObservableCollection<CadEntity>();
     private readonly ObservableCollection<SupportLayerGroup> _supportLayerGroups = new ObservableCollection<SupportLayerGroup>();
+    private readonly Dictionary<Guid, List<SupportEntity>> _supportEntitiesByGroupId = new Dictionary<Guid, List<SupportEntity>>();
 
     public IReadOnlyList<CadEntity> Entities
     {
@@ -67,6 +68,7 @@ public class CadDocument
 
         ValidateEntityOwnership(entity);
 
+        AddSupportEntityToGroupIndex(entity);
         AddEntityToSpatialIndex(entity);
         _entities.Add(entity);
     }
@@ -87,6 +89,7 @@ public class CadDocument
         }
 
         RemoveSupportGroupsForEntity(entity);
+        RemoveSupportEntityFromGroupIndex(entity);
         RemoveEntityFromSpatialIndex(entity);
         _entities.Remove(entity);
 
@@ -254,17 +257,28 @@ public class CadDocument
     /// </summary>
     public IReadOnlyList<SupportEntity> GetSupportEntitiesForGroup(Guid supportLayerGroupId)
     {
-        List<SupportEntity> supportEntities = new List<SupportEntity>();
-
-        foreach (CadEntity entity in _entities)
+        if (!_supportEntitiesByGroupId.TryGetValue(supportLayerGroupId, out List<SupportEntity>? supportEntities))
         {
-            if (entity is SupportEntity supportEntity && supportEntity.SupportLayerGroupId == supportLayerGroupId)
-            {
-                supportEntities.Add(supportEntity);
-            }
+            return Array.Empty<SupportEntity>();
         }
 
-        return supportEntities;
+        return new List<SupportEntity>(supportEntities);
+    }
+
+    /// <summary>
+    /// Adds support entities owned by one support layer group into a caller-owned buffer without scanning all document entities.
+    /// </summary>
+    public void FillSupportEntitiesForGroup(Guid supportLayerGroupId, List<SupportEntity> supportEntities)
+    {
+        if (supportEntities == null)
+        {
+            throw new ArgumentNullException(nameof(supportEntities));
+        }
+
+        if (_supportEntitiesByGroupId.TryGetValue(supportLayerGroupId, out List<SupportEntity>? indexedSupportEntities))
+        {
+            supportEntities.AddRange(indexedSupportEntities);
+        }
     }
 
     /// <summary>
@@ -286,6 +300,48 @@ public class CadDocument
         if (entity is ISnapProvider)
         {
             SpatialGrid.Remove(entity);
+        }
+    }
+
+    /// <summary>
+    /// Adds support entities to the group index used by support-layer operations.
+    /// </summary>
+    private void AddSupportEntityToGroupIndex(CadEntity entity)
+    {
+        if (entity is not SupportEntity supportEntity)
+        {
+            return;
+        }
+
+        if (!_supportEntitiesByGroupId.TryGetValue(supportEntity.SupportLayerGroupId, out List<SupportEntity>? supportEntities))
+        {
+            supportEntities = new List<SupportEntity>();
+            _supportEntitiesByGroupId.Add(supportEntity.SupportLayerGroupId, supportEntities);
+        }
+
+        supportEntities.Add(supportEntity);
+    }
+
+    /// <summary>
+    /// Removes support entities from the group index when they leave the document.
+    /// </summary>
+    private void RemoveSupportEntityFromGroupIndex(CadEntity entity)
+    {
+        if (entity is not SupportEntity supportEntity)
+        {
+            return;
+        }
+
+        if (!_supportEntitiesByGroupId.TryGetValue(supportEntity.SupportLayerGroupId, out List<SupportEntity>? supportEntities))
+        {
+            return;
+        }
+
+        supportEntities.Remove(supportEntity);
+
+        if (supportEntities.Count == 0)
+        {
+            _supportEntitiesByGroupId.Remove(supportEntity.SupportLayerGroupId);
         }
     }
 

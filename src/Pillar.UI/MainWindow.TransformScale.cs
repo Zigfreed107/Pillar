@@ -20,7 +20,10 @@ public partial class MainWindow
 
     private Guid? _activeTransformScaleModelId;
     private Vector3 _activeTransformScaleImportSpaceOrigin;
+    private Transform3DData _activeTransformScaleOriginalTransform;
+    private Transform3DData _activeTransformScalePreviewTransform;
     private bool _isTransformScaleToolActive;
+    private bool _hasPendingTransformScalePreview;
 
     /// <summary>
     /// Opens Transform Scale options for the selected model and shows the scale-origin preview.
@@ -39,7 +42,10 @@ public partial class MainWindow
 
         _activeTransformScaleModelId = selectedMesh.Id;
         _activeTransformScaleImportSpaceOrigin = MeshScaleTransform.CalculateImportSpaceOrigin(selectedMesh);
+        _activeTransformScaleOriginalTransform = selectedMesh.UserTransform;
+        _activeTransformScalePreviewTransform = selectedMesh.UserTransform;
         _isTransformScaleToolActive = true;
+        _hasPendingTransformScalePreview = false;
 
         _scaleToolOptionsControl.SetOriginalSize(MeshScaleTransform.CalculateImportSpaceSize(selectedMesh));
         _scaleToolOptionsControl.SetScaleFactors(selectedMesh.UserTransform.Scale);
@@ -52,7 +58,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies one scale edit from the options panel as an undoable mesh transform change.
+    /// Applies one scale edit from the options panel as a live preview without creating undo history.
     /// </summary>
     private void ScaleToolOptionsControl_OptionsChanged(object? sender, ScaleToolOptionsChangedEventArgs e)
     {
@@ -62,34 +68,24 @@ public partial class MainWindow
 
         if (selectedMesh == null)
         {
+            ClearTransformScaleToolState();
             ShowTransformScaleTool();
             return;
         }
 
-        Transform3DData oldTransform = selectedMesh.UserTransform;
         Transform3DData newTransform = MeshScaleTransform.CreateUserTransformForScale(
             selectedMesh,
             e.ScaleFactors,
             _activeTransformScaleImportSpaceOrigin);
 
-        if (oldTransform == newTransform)
+        if (selectedMesh.UserTransform == newTransform)
         {
             return;
         }
 
-        IReadOnlyList<SupportGroupRegeneration> supportRegenerations = SupportGroupTransformRegenerator.CreateRegenerations(
-            _document,
-            selectedMesh,
-            oldTransform,
-            newTransform);
-
-        _commandRunner.Execute(new SetMeshUserTransformCommand(
-            _document,
-            selectedMesh,
-            oldTransform,
-            newTransform,
-            supportRegenerations,
-            "Scale Model"));
+        selectedMesh.UserTransform = newTransform;
+        _activeTransformScalePreviewTransform = newTransform;
+        _hasPendingTransformScalePreview = _activeTransformScaleOriginalTransform != newTransform;
         ShowScaleOriginPreview(selectedMesh);
         _viewModel.SetStatusText(CreateScaleStatusText(e.ScaleFactors));
     }
@@ -101,6 +97,7 @@ public partial class MainWindow
     {
         _ = sender;
         _ = e;
+        CommitActiveTransformScalePreview();
         HideToolOptionsOverlay();
         _viewModel.SetStatusText("Finished scaling model");
     }
@@ -145,10 +142,79 @@ public partial class MainWindow
             return;
         }
 
+        RevertPendingTransformScalePreview();
         _isTransformScaleToolActive = false;
         _activeTransformScaleModelId = null;
         _activeTransformScaleImportSpaceOrigin = Vector3.Zero;
+        _activeTransformScaleOriginalTransform = Transform3DData.Identity;
+        _activeTransformScalePreviewTransform = Transform3DData.Identity;
+        _hasPendingTransformScalePreview = false;
         _scene.HideScaleOriginPreview();
+    }
+
+    /// <summary>
+    /// Commits the live scale preview as one undoable command and regenerates attached supports once.
+    /// </summary>
+    private void CommitActiveTransformScalePreview()
+    {
+        if (!_isTransformScaleToolActive
+            || !_activeTransformScaleModelId.HasValue
+            || !_hasPendingTransformScalePreview
+            || _activeTransformScaleOriginalTransform == _activeTransformScalePreviewTransform)
+        {
+            return;
+        }
+
+        MeshEntity? selectedMesh = FindEntityById(_activeTransformScaleModelId.Value) as MeshEntity;
+
+        if (selectedMesh == null)
+        {
+            _hasPendingTransformScalePreview = false;
+            return;
+        }
+
+        Transform3DData oldTransform = _activeTransformScaleOriginalTransform;
+        Transform3DData newTransform = _activeTransformScalePreviewTransform;
+        IReadOnlyList<SupportGroupRegeneration> supportRegenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            _document,
+            selectedMesh,
+            oldTransform,
+            newTransform);
+
+        // Return the model to the pre-preview state so the command owns the durable document mutation.
+        selectedMesh.UserTransform = oldTransform;
+        _commandRunner.Execute(new SetMeshUserTransformCommand(
+            _document,
+            selectedMesh,
+            oldTransform,
+            newTransform,
+            supportRegenerations,
+            "Scale Model"));
+
+        _activeTransformScaleOriginalTransform = newTransform;
+        _activeTransformScalePreviewTransform = newTransform;
+        _hasPendingTransformScalePreview = false;
+    }
+
+    /// <summary>
+    /// Restores the model transform when a live scale preview is abandoned before Finish.
+    /// </summary>
+    private void RevertPendingTransformScalePreview()
+    {
+        if (!_hasPendingTransformScalePreview || !_activeTransformScaleModelId.HasValue)
+        {
+            return;
+        }
+
+        MeshEntity? selectedMesh = FindEntityById(_activeTransformScaleModelId.Value) as MeshEntity;
+
+        if (selectedMesh != null)
+        {
+            selectedMesh.UserTransform = _activeTransformScaleOriginalTransform;
+        }
+
+        _activeTransformScalePreviewTransform = _activeTransformScaleOriginalTransform;
+        _hasPendingTransformScalePreview = false;
     }
 
     /// <summary>

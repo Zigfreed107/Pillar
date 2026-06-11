@@ -474,6 +474,17 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Cancels transient tool previews before undo, redo, or destructive document mutations change entity identity.
+    /// </summary>
+    private void CancelActiveDocumentMutationSessions()
+    {
+        _toolManager.CancelActiveTool();
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        HideToolOptionsOverlay();
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+    }
+
+    /// <summary>
     /// Leaves the Ring Support operation and clears all transient Ring Support previews.
     /// </summary>
     private void ExitRingSupportMode()

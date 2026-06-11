@@ -136,6 +136,7 @@ public partial class MainWindow
             return;
         }
 
+        CancelActiveDocumentMutationSessions();
         List<SupportLayerGroup> supportLayerGroups = GetSupportLayerGroupsForModel(selectedModel.Id);
         _commandRunner.Execute(new RemoveModelWithSupportGroupsCommand(_document, selectedModel, supportLayerGroups));
         _layerPanelViewModel.RefreshFromDocument();
@@ -294,6 +295,7 @@ public partial class MainWindow
             return;
         }
 
+        CancelActiveDocumentMutationSessions();
         _commandRunner.Execute(new RemoveSupportLayerGroupCommand(_document, supportLayerGroup));
         _viewModel.SetStatusText($"Removed {supportLayerGroup.Name}");
     }

@@ -36,6 +36,7 @@ public class SceneManager
     private readonly Dictionary<CadEntity, GroupModel3D> _entityToVisual = new Dictionary<CadEntity, GroupModel3D>();
     private readonly Dictionary<Element3D, GroupModel3D> _elementToVisual = new Dictionary<Element3D, GroupModel3D>();
     private readonly Dictionary<Guid, float> _supportLayerGroupOpacityOverrides = new Dictionary<Guid, float>();
+    private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
     private readonly GroupModel3D _entityRoot = new GroupModel3D();
     private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
     private readonly GroupModel3D _previewRoot = new GroupModel3D();
@@ -421,28 +422,36 @@ public class SceneManager
             throw new ArgumentNullException(nameof(selectedEntities));
         }
 
-        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroupId);
+        _supportGroupQueryBuffer.Clear();
+        _document.FillSupportEntitiesForGroup(supportLayerGroupId, _supportGroupQueryBuffer);
 
-        for (int i = 0; i < supportEntities.Count; i++)
+        try
         {
-            SupportEntity supportEntity = supportEntities[i];
-            Rect projectedBounds;
-
-            if (!TryGetProjectedBounds(supportEntity, out projectedBounds))
+            for (int i = 0; i < _supportGroupQueryBuffer.Count; i++)
             {
-                continue;
-            }
+                SupportEntity supportEntity = _supportGroupQueryBuffer[i];
+                Rect projectedBounds;
 
-            if (selectsCrossingEntities && selectionRect.IntersectsWith(projectedBounds))
-            {
-                selectedEntities.Add(supportEntity);
-                continue;
-            }
+                if (!TryGetProjectedBounds(supportEntity, out projectedBounds))
+                {
+                    continue;
+                }
 
-            if (!selectsCrossingEntities && selectionRect.Contains(projectedBounds))
-            {
-                selectedEntities.Add(supportEntity);
+                if (selectsCrossingEntities && selectionRect.IntersectsWith(projectedBounds))
+                {
+                    selectedEntities.Add(supportEntity);
+                    continue;
+                }
+
+                if (!selectsCrossingEntities && selectionRect.Contains(projectedBounds))
+                {
+                    selectedEntities.Add(supportEntity);
+                }
             }
+        }
+        finally
+        {
+            _supportGroupQueryBuffer.Clear();
         }
     }
 
@@ -834,20 +843,30 @@ public class SceneManager
     /// </summary>
     private void ApplySupportLayerGroupMaterial(SupportLayerGroup supportLayerGroup, float opacity)
     {
-        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        _supportGroupQueryBuffer.Clear();
+        _document.FillSupportEntitiesForGroup(supportLayerGroup.Id, _supportGroupQueryBuffer);
+        PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
 
-        foreach (SupportEntity supportEntity in supportEntities)
+        try
         {
-            if (!_entityToVisual.TryGetValue(supportEntity, out GroupModel3D? visual))
+            for (int i = 0; i < _supportGroupQueryBuffer.Count; i++)
             {
-                continue;
-            }
+                SupportEntity supportEntity = _supportGroupQueryBuffer[i];
 
-            PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
-            MeshRenderer.ApplyToSelectableMeshModels(visual, (MeshGeometryModel3D meshModel) =>
-            {
-                meshModel.Material = supportMaterial;
-            });
+                if (!_entityToVisual.TryGetValue(supportEntity, out GroupModel3D? visual))
+                {
+                    continue;
+                }
+
+                MeshRenderer.ApplyToSelectableMeshModels(visual, (MeshGeometryModel3D meshModel) =>
+                {
+                    meshModel.Material = supportMaterial;
+                });
+            }
+        }
+        finally
+        {
+            _supportGroupQueryBuffer.Clear();
         }
     }
 

@@ -133,6 +133,12 @@ public partial class MainWindow
     /// </summary>
     private void UndoLastCommand()
     {
+        if (!_commandRunner.CanUndo)
+        {
+            return;
+        }
+
+        CancelActiveDocumentMutationSessions();
         ICadCommand? command = _commandRunner.Undo();
 
         if (command == null)
@@ -150,6 +156,12 @@ public partial class MainWindow
     /// </summary>
     private void RedoLastCommand()
     {
+        if (!_commandRunner.CanRedo)
+        {
+            return;
+        }
+
+        CancelActiveDocumentMutationSessions();
         ICadCommand? command = _commandRunner.Redo();
 
         if (command == null)
