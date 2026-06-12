@@ -42,10 +42,18 @@ public partial class MainWindow
     /// </summary>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        UpdateFaceSetSelectionModifierFromKeyboard();
+
         if (IsControlShortcut(e, Key.Z))
         {
             if (IsKeyboardFocusInsideEditableControl())
             {
+                return;
+            }
+
+            if (TryHandleFaceSetSelectionUndoRedo(false))
+            {
+                e.Handled = true;
                 return;
             }
 
@@ -58,6 +66,12 @@ public partial class MainWindow
         {
             if (IsKeyboardFocusInsideEditableControl())
             {
+                return;
+            }
+
+            if (TryHandleFaceSetSelectionUndoRedo(true))
+            {
+                e.Handled = true;
                 return;
             }
 
@@ -85,6 +99,12 @@ public partial class MainWindow
             return;
         }
 
+        if (TryExitFaceSetLineSelectionTool())
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (IsLineSupportOperationActive())
         {
             _manualSupportTool.FinalizeActiveLineSupportPolyline();
@@ -95,6 +115,16 @@ public partial class MainWindow
         _toolManager.CancelActiveTool();
         SetActiveMode(WorkspaceModeId.Select);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Restores temporary face-selection modifier button state after Shift or Alt is released.
+    /// </summary>
+    private void Window_KeyUp(object sender, KeyEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        UpdateFaceSetSelectionModifierFromKeyboard();
     }
 
     /// <summary>

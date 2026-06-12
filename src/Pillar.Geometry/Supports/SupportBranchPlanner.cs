@@ -89,8 +89,8 @@ public static class SupportBranchPlanner
         Vector3 clampedHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, profile);
         float usableHeadLength = CalculateUsableHeadLength(tipPosition, 0.0f, clampedHeadDirection, profile.HeadHeight);
         Vector3 headJointPosition = tipPosition - (clampedHeadDirection * usableHeadLength);
-        Vector3 branchDirection = CreateMaximumAngleBranchDirection(clampedHeadDirection, profile);
-        float stemClearanceRadius = profile.ModelClearance + (profile.StemTopDiameter * 0.5f);
+        Vector3 branchDirection = CreateBranchDirection(clampedHeadDirection, profile);
+        float stemCollisionRadius = MathF.Max(profile.StemBottomDiameter, profile.StemTopDiameter) * 0.5f;
         float supportBodyRadius = profile.StemTopDiameter * 0.5f;
 
         if (profile.MaximumBranchLength <= GeometryTolerance)
@@ -104,7 +104,7 @@ public static class SupportBranchPlanner
                 clampedHeadDirection,
                 0.0f,
                 branchDirection,
-                stemClearanceRadius,
+                stemCollisionRadius,
                 supportBodyRadius,
                 out plan);
         }
@@ -118,7 +118,7 @@ public static class SupportBranchPlanner
             clampedHeadDirection,
             0.0f,
             branchDirection,
-            stemClearanceRadius,
+            stemCollisionRadius,
             supportBodyRadius,
             out plan))
         {
@@ -144,7 +144,7 @@ public static class SupportBranchPlanner
                 clampedHeadDirection,
                 branchLength,
                 branchDirection,
-                stemClearanceRadius,
+                stemCollisionRadius,
                 supportBodyRadius,
                 out plan))
             {
@@ -182,7 +182,7 @@ public static class SupportBranchPlanner
         Vector3 headDirection,
         float branchLength,
         Vector3 branchDirection,
-        float stemClearanceRadius,
+        float stemCollisionRadius,
         float supportBodyRadius,
         out SupportBranchPlan plan)
     {
@@ -194,7 +194,7 @@ public static class SupportBranchPlanner
             headJointPosition,
             headDirection,
             branchLength,
-            stemClearanceRadius,
+            stemCollisionRadius,
             supportBodyRadius))
         {
             plan = default;
@@ -216,12 +216,12 @@ public static class SupportBranchPlanner
         Vector3 headJointPosition,
         Vector3 headDirection,
         float branchLength,
-        float stemClearanceRadius,
+        float stemCollisionRadius,
         float supportBodyRadius)
     {
         Vector3 stemStart = new Vector3(stemJointPosition.X, stemJointPosition.Y, 0.0f);
 
-        if (!IsCapsuleClear(mesh, worldTransform, stemStart, stemJointPosition, stemClearanceRadius))
+        if (!IsCapsuleClear(mesh, worldTransform, stemStart, stemJointPosition, stemCollisionRadius))
         {
             return false;
         }
@@ -243,21 +243,16 @@ public static class SupportBranchPlanner
     }
 
     /// <summary>
-    /// Creates a branch direction at the preset's maximum angle using the head direction's horizontal azimuth.
+    /// Creates a branch direction at the preset branch angle using the head direction's horizontal azimuth.
     /// </summary>
-    public static Vector3 CreateMaximumAngleBranchDirection(Vector3 headDirection, SupportProfile profile)
+    public static Vector3 CreateBranchDirection(Vector3 headDirection, SupportProfile profile)
     {
         if (profile == null)
         {
             throw new ArgumentNullException(nameof(profile));
         }
 
-        if (profile.MaxHeadAngleFromVerticalDegrees <= 0.0f)
-        {
-            return Vector3.UnitZ;
-        }
-
-        float angleRadians = profile.MaxHeadAngleFromVerticalDegrees * (MathF.PI / 180.0f);
+        float angleRadians = profile.BranchAngleFromVerticalDegrees * (MathF.PI / 180.0f);
         Vector3 horizontal = new Vector3(headDirection.X, headDirection.Y, 0.0f);
 
         if (horizontal.LengthSquared() <= GeometryTolerance)

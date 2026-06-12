@@ -44,11 +44,15 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Geometry.SmokeTests"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tasks", "Tasks", "{84CCF0D0-CB87-4623-9A26-4855DABDA6C2}"
 	ProjectSection(SolutionItems) = preProject
+		Area Support Tool Implementation.md = Area Support Tool Implementation.md
 		Area Support Tool.md = Area Support Tool.md
-		Contour Support Tool.md = Contour Support Tool.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Completed", "Completed", "{614638B5-47A1-4AAB-9F7D-3FB8050198D3}"
+	ProjectSection(SolutionItems) = preProject
+		Contour Support Tool.md = Contour Support Tool.md
+		Face Set Selection Tool Implementation.md = Face Set Selection Tool Implementation.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

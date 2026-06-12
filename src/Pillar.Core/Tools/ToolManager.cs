@@ -14,12 +14,24 @@ public class ToolManager
     /// </summary>
     public void SetTool(ITool tool)
     {
+        SetTool(tool, true);
+    }
+
+    /// <summary>
+    /// Activates the requested tool and optionally preserves the previous tool's transient state for helper sessions.
+    /// </summary>
+    public void SetTool(ITool tool, bool cancelPreviousTool)
+    {
         if (ReferenceEquals(ActiveTool, tool))
         {
             return;
         }
 
-        ActiveTool?.Cancel();
+        if (cancelPreviousTool)
+        {
+            ActiveTool?.Cancel();
+        }
+
         ActiveTool = tool;
     }
 

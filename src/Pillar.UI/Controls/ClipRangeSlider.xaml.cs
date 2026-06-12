@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace Pillar.UI.Controls;
 
@@ -40,6 +41,34 @@ public partial class ClipRangeSlider : UserControl
             typeof(double),
             typeof(ClipRangeSlider),
             new PropertyMetadata(1.0, OnClipValuePropertyChanged));
+
+    public static readonly DependencyProperty SelectedModelLowerZProperty =
+        DependencyProperty.Register(
+            nameof(SelectedModelLowerZ),
+            typeof(double),
+            typeof(ClipRangeSlider),
+            new PropertyMetadata(0.0, OnSelectedModelBoundsPropertyChanged));
+
+    public static readonly DependencyProperty SelectedModelUpperZProperty =
+        DependencyProperty.Register(
+            nameof(SelectedModelUpperZ),
+            typeof(double),
+            typeof(ClipRangeSlider),
+            new PropertyMetadata(0.0, OnSelectedModelBoundsPropertyChanged));
+
+    public static readonly DependencyProperty IsSelectedModelBoundsVisibleProperty =
+        DependencyProperty.Register(
+            nameof(IsSelectedModelBoundsVisible),
+            typeof(bool),
+            typeof(ClipRangeSlider),
+            new PropertyMetadata(false, OnSelectedModelBoundsPropertyChanged));
+
+    public static readonly DependencyProperty SelectedModelBoundsBrushProperty =
+        DependencyProperty.Register(
+            nameof(SelectedModelBoundsBrush),
+            typeof(Brush),
+            typeof(ClipRangeSlider),
+            new PropertyMetadata(Brushes.Transparent));
 
     private const double HandleHeight = 14.0;
     private const double TrackWidth = 8.0;
@@ -100,6 +129,42 @@ public partial class ClipRangeSlider : UserControl
     }
 
     /// <summary>
+    /// Gets or sets the selected model's lower world-space Z bound represented behind the clipping range.
+    /// </summary>
+    public double SelectedModelLowerZ
+    {
+        get { return (double)GetValue(SelectedModelLowerZProperty); }
+        set { SetValue(SelectedModelLowerZProperty, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the selected model's upper world-space Z bound represented behind the clipping range.
+    /// </summary>
+    public double SelectedModelUpperZ
+    {
+        get { return (double)GetValue(SelectedModelUpperZProperty); }
+        set { SetValue(SelectedModelUpperZProperty, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets whether the selected model bounds rectangle is visible.
+    /// </summary>
+    public bool IsSelectedModelBoundsVisible
+    {
+        get { return (bool)GetValue(IsSelectedModelBoundsVisibleProperty); }
+        set { SetValue(IsSelectedModelBoundsVisibleProperty, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the brush used to draw the selected model height indicator.
+    /// </summary>
+    public Brush SelectedModelBoundsBrush
+    {
+        get { return (Brush)GetValue(SelectedModelBoundsBrushProperty); }
+        set { SetValue(SelectedModelBoundsBrushProperty, value); }
+    }
+
+    /// <summary>
     /// Configures the represented print volume and initial clipping interval in one notification.
     /// </summary>
     public void ConfigureRange(double minimumZ, double maximumZ, double lowerZ, double upperZ)
@@ -128,6 +193,30 @@ public partial class ClipRangeSlider : UserControl
 
         UpdateVisualState();
         RaiseClipRangeChanged();
+    }
+
+    /// <summary>
+    /// Shows the selected model's current world-space Z bounds behind the clipping track.
+    /// </summary>
+    public void ShowSelectedModelBounds(double lowerZ, double upperZ, Brush boundsBrush)
+    {
+        double normalizedLowerZ = ClampToRange(Math.Min(lowerZ, upperZ));
+        double normalizedUpperZ = ClampToRange(Math.Max(lowerZ, upperZ));
+
+        SelectedModelLowerZ = normalizedLowerZ;
+        SelectedModelUpperZ = normalizedUpperZ;
+        SelectedModelBoundsBrush = boundsBrush ?? Brushes.Transparent;
+        IsSelectedModelBoundsVisible = normalizedUpperZ > normalizedLowerZ;
+        UpdateVisualState();
+    }
+
+    /// <summary>
+    /// Hides the selected model height indicator when no single model is selected.
+    /// </summary>
+    public void HideSelectedModelBounds()
+    {
+        IsSelectedModelBoundsVisible = false;
+        UpdateVisualState();
     }
 
     /// <summary>
@@ -244,6 +333,16 @@ public partial class ClipRangeSlider : UserControl
 
         slider.NormalizeCurrentValues();
         slider.RaiseClipRangeChanged();
+    }
+
+    /// <summary>
+    /// Refreshes the selected model height marker when its dependency properties are updated.
+    /// </summary>
+    private static void OnSelectedModelBoundsPropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
+    {
+        _ = e;
+        ClipRangeSlider slider = (ClipRangeSlider)dependencyObject;
+        slider.UpdateVisualState();
     }
 
     /// <summary>
@@ -382,6 +481,8 @@ public partial class ClipRangeSlider : UserControl
         Canvas.SetTop(TrackRectangle, HandleHeight / 2.0);
         TrackRectangle.Height = Math.Max(0.0, SliderCanvas.ActualHeight - HandleHeight);
 
+        UpdateSelectedModelBoundsRectangle(trackLeft);
+
         Canvas.SetLeft(VisibleRangeRectangle, trackLeft);
         Canvas.SetTop(VisibleRangeRectangle, upperCenterY);
         VisibleRangeRectangle.Height = Math.Max(0.0, lowerCenterY - upperCenterY);
@@ -394,9 +495,32 @@ public partial class ClipRangeSlider : UserControl
 
         RangeTextBlock.Text = string.Format(
             CultureInfo.InvariantCulture,
-            "{0:F1} - {1:F1} mm",
+            "{0:F1} - {1:F1}",
             LowerZ,
             UpperZ);
+    }
+
+    /// <summary>
+    /// Draws the selected model's vertical world bounds behind the active clipping range.
+    /// </summary>
+    private void UpdateSelectedModelBoundsRectangle(double trackLeft)
+    {
+        if (!IsSelectedModelBoundsVisible)
+        {
+            SelectedModelBoundsRectangle.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        double upperCenterY = GetCanvasCenterYFromZ(SelectedModelUpperZ);
+        double lowerCenterY = GetCanvasCenterYFromZ(SelectedModelLowerZ);
+        double indicatorWidth = SelectedModelBoundsRectangle.Width;
+
+        Canvas.SetLeft(SelectedModelBoundsRectangle, trackLeft - ((indicatorWidth - TrackWidth) / 2.0));
+        Canvas.SetTop(SelectedModelBoundsRectangle, upperCenterY);
+        SelectedModelBoundsRectangle.Height = Math.Max(0.0, lowerCenterY - upperCenterY);
+        SelectedModelBoundsRectangle.Visibility = SelectedModelBoundsRectangle.Height > 0.0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     /// <summary>

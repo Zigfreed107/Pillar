@@ -1,4 +1,4 @@
-﻿// SupportDefaults.cs
+// SupportDefaults.cs
 // Centralizes the current hard-coded default support geometry used when tools create new supports.
 namespace Pillar.Core.Supports;
 
@@ -13,6 +13,7 @@ public static class SupportDefaults
     public const float DefaultStemTopDiameter = 0.75f;
     public const float DefaultMaximumBranchLength = 0.0f;
     public const float DefaultModelClearance = 3.0f;
+    public const float DefaultBranchAngleFromVerticalDegrees = 30.0f;
     public const float DefaultHeadHeight = 5.20f;
     public const float DefaultHeadPenetrationDepth = 0.30f;
     public const float DefaultHeadTopDiameter = 0.35f;
@@ -30,6 +31,7 @@ public static class SupportDefaults
             stemTopDiameter: DefaultStemTopDiameter,
             maximumBranchLength: DefaultMaximumBranchLength,
             modelClearance: DefaultModelClearance,
+            branchAngleFromVerticalDegrees: DefaultBranchAngleFromVerticalDegrees,
             headHeight: DefaultHeadHeight,
             headPenetrationDepth: DefaultHeadPenetrationDepth,
             headTopDiameter: DefaultHeadTopDiameter,

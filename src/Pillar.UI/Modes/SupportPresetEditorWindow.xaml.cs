@@ -57,6 +57,7 @@ public partial class SupportPresetEditorWindow : Window
         StemTopDiameterInput.Value = profile.StemTopDiameter;
         MaximumBranchLengthInput.Value = profile.MaximumBranchLength;
         ModelClearanceInput.Value = profile.ModelClearance;
+        BranchAngleFromVerticalInput.Value = profile.BranchAngleFromVerticalDegrees;
         HeadHeightInput.Value = profile.HeadHeight;
         HeadPenetrationDepthInput.Value = profile.HeadPenetrationDepth;
         HeadTopDiameterInput.Value = profile.HeadTopDiameter;
@@ -75,6 +76,7 @@ public partial class SupportPresetEditorWindow : Window
             (float)StemTopDiameterInput.Value,
             (float)MaximumBranchLengthInput.Value,
             (float)ModelClearanceInput.Value,
+            (float)BranchAngleFromVerticalInput.Value,
             (float)HeadHeightInput.Value,
             (float)HeadPenetrationDepthInput.Value,
             (float)HeadTopDiameterInput.Value,

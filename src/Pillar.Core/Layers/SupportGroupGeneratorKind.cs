@@ -10,5 +10,6 @@ public enum SupportGroupGeneratorKind
     None,
     LineSupport,
     RingSupport,
-    ContourSupport
+    ContourSupport,
+    AreaSupport
 }

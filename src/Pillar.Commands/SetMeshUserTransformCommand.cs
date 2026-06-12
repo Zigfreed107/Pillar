@@ -166,6 +166,16 @@ public sealed class SetMeshUserTransformCommand : ICadCommand
         if (contourSettings != null)
         {
             supportRegeneration.SupportLayerGroup.SetContourSupportSettings(contourSettings);
+            return;
+        }
+
+        AreaSupportSettings? areaSettings = useNewState
+            ? supportRegeneration.NewAreaSupportSettings
+            : supportRegeneration.OldAreaSupportSettings;
+
+        if (areaSettings != null)
+        {
+            supportRegeneration.SupportLayerGroup.SetAreaSupportSettings(areaSettings);
         }
     }
 }

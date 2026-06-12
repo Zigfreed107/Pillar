@@ -98,6 +98,24 @@ namespace Pillar.UI.Properties {
             }
         }
 
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("#FFB3B3B3")]
+        public string DefaultModelColor {
+            get {
+                return ((string)(this["DefaultModelColor"]));
+            }
+        }
+
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("#CCFFD700")]
+        public string FaceSetSelectionColor {
+            get {
+                return ((string)(this["FaceSetSelectionColor"]));
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]

@@ -162,6 +162,7 @@ public sealed class SupportPresetService
                 StemTopDiameter = preset.Profile.StemTopDiameter,
                 MaximumBranchLength = preset.Profile.MaximumBranchLength,
                 ModelClearance = preset.Profile.ModelClearance,
+                BranchAngleFromVerticalDegrees = preset.Profile.BranchAngleFromVerticalDegrees,
                 HeadHeight = preset.Profile.HeadHeight,
                 HeadPenetrationDepth = preset.Profile.HeadPenetrationDepth,
                 HeadTopDiameter = preset.Profile.HeadTopDiameter,
@@ -208,6 +209,7 @@ public sealed class SupportPresetService
             presetDto.StemTopDiameter,
             presetDto.MaximumBranchLength,
             presetDto.ModelClearance,
+            presetDto.BranchAngleFromVerticalDegrees ?? SupportDefaults.DefaultBranchAngleFromVerticalDegrees,
             presetDto.HeadHeight,
             presetDto.HeadPenetrationDepth,
             presetDto.HeadTopDiameter,
@@ -241,6 +243,7 @@ public sealed class SupportPresetService
         public float StemTopDiameter { get; set; }
         public float MaximumBranchLength { get; set; }
         public float ModelClearance { get; set; }
+        public float? BranchAngleFromVerticalDegrees { get; set; }
         public float HeadHeight { get; set; }
         public float HeadPenetrationDepth { get; set; }
         public float HeadTopDiameter { get; set; }

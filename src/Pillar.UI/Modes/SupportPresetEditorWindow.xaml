@@ -57,6 +57,8 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0"
@@ -137,6 +139,9 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0"
@@ -149,8 +154,8 @@
                                                 Margin="8,0,0,6"
                                                 Minimum="0"
                                                 Maximum="1000"
-                                                Increment="0.1"
-                                                DecimalPlaces="1" />
+                                                Increment="1"
+                                                DecimalPlaces="0" />
 
                         <TextBlock Grid.Row="1"
                                    Grid.Column="0"
@@ -159,11 +164,32 @@
                         <controls:NumericUpDown x:Name="ModelClearanceInput"
                                                 Grid.Row="1"
                                                 Grid.Column="1"
-                                                Margin="8,0,0,0"
+                                                Margin="8,0,0,6"
                                                 Minimum="0"
                                                 Maximum="1000"
-                                                Increment="0.1"
-                                                DecimalPlaces="1" />
+                                                Increment="1"
+                                                DecimalPlaces="0" />
+
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Branch angle from vertical" />
+                        <controls:NumericUpDown x:Name="BranchAngleFromVerticalInput"
+                                                Grid.Row="2"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="15"
+                                                Maximum="45"
+                                                Increment="1"
+                                                DecimalPlaces="0" />
+
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,2,0,0"
+                                   FontStyle="Italic"
+                                   TextWrapping="Wrap"
+                                   Text="Low values may prevent supports from being generated if it prevents the stem from clearing the model." />
                     </Grid>
                 </GroupBox>
 

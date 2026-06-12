@@ -30,6 +30,8 @@ public sealed class SupportGroupRegeneration
             null,
             null,
             null,
+            null,
+            null,
             null)
     {
     }
@@ -54,6 +56,8 @@ public sealed class SupportGroupRegeneration
             oldLineSupportSettings,
             newLineSupportSettings,
             null,
+            null,
+            null,
             null)
     {
     }
@@ -71,6 +75,36 @@ public sealed class SupportGroupRegeneration
         LineSupportSettings? newLineSupportSettings,
         ContourSupportSettings? oldContourSupportSettings,
         ContourSupportSettings? newContourSupportSettings)
+        : this(
+            supportLayerGroup,
+            oldSupportEntities,
+            newSupportEntities,
+            oldRingSupportSettings,
+            newRingSupportSettings,
+            oldLineSupportSettings,
+            newLineSupportSettings,
+            oldContourSupportSettings,
+            newContourSupportSettings,
+            null,
+            null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an immutable support regeneration snapshot for one support group.
+    /// </summary>
+    public SupportGroupRegeneration(
+        SupportLayerGroup supportLayerGroup,
+        IReadOnlyList<SupportEntity> oldSupportEntities,
+        IReadOnlyList<SupportEntity> newSupportEntities,
+        RingSupportSettings? oldRingSupportSettings,
+        RingSupportSettings? newRingSupportSettings,
+        LineSupportSettings? oldLineSupportSettings,
+        LineSupportSettings? newLineSupportSettings,
+        ContourSupportSettings? oldContourSupportSettings,
+        ContourSupportSettings? newContourSupportSettings,
+        AreaSupportSettings? oldAreaSupportSettings,
+        AreaSupportSettings? newAreaSupportSettings)
     {
         SupportLayerGroup = supportLayerGroup ?? throw new ArgumentNullException(nameof(supportLayerGroup));
         OldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
@@ -81,6 +115,8 @@ public sealed class SupportGroupRegeneration
         NewLineSupportSettings = newLineSupportSettings?.Clone();
         OldContourSupportSettings = oldContourSupportSettings?.Clone();
         NewContourSupportSettings = newContourSupportSettings?.Clone();
+        OldAreaSupportSettings = oldAreaSupportSettings?.Clone();
+        NewAreaSupportSettings = newAreaSupportSettings?.Clone();
 
         ValidateSupportOwnership(OldSupportEntities, SupportLayerGroup.Id, nameof(oldSupportEntities));
         ValidateSupportOwnership(NewSupportEntities, SupportLayerGroup.Id, nameof(newSupportEntities));
@@ -130,6 +166,16 @@ public sealed class SupportGroupRegeneration
     /// Gets the Contour Support generator settings transformed for the new model transform, when this is a Contour group.
     /// </summary>
     public ContourSupportSettings? NewContourSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Area Support generator settings present before the transform, when this is an Area group.
+    /// </summary>
+    public AreaSupportSettings? OldAreaSupportSettings { get; }
+
+    /// <summary>
+    /// Gets the Area Support generator settings transformed for the new model transform, when this is an Area group.
+    /// </summary>
+    public AreaSupportSettings? NewAreaSupportSettings { get; }
 
     /// <summary>
     /// Verifies every support entity belongs to the group carried by this regeneration snapshot.

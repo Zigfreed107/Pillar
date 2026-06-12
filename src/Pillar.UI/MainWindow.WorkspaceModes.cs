@@ -133,6 +133,9 @@ public partial class MainWindow
             case ManualSupportOperationKind.Contour:
                 return "Manual support mode: contour support operation active";
 
+            case ManualSupportOperationKind.Area:
+                return "Manual support mode: area support operation active";
+
             case ManualSupportOperationKind.None:
             default:
                 return "Manual support mode: choose an operation";
@@ -211,6 +214,41 @@ public partial class MainWindow
         }
 
         _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
+    /// Refreshes the Area Support preview when one of its options changes.
+    /// </summary>
+    private void AreaSupportToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Area)
+        {
+            return;
+        }
+
+        _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
+    /// Launches reusable face selection for the active Area Support operation.
+    /// </summary>
+    private void AreaSupportToolOptionsControl_SelectFacesRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Area)
+        {
+            _viewModel.SetStatusText("Choose the Area Support tool before selecting faces.");
+            return;
+        }
+
+        _manualSupportTool.BeginAreaSupportFaceSelection();
     }
 
     /// <summary>
@@ -308,6 +346,31 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies the current Area Support preview as a new support group or edited support group.
+    /// </summary>
+    private void AreaSupportToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Area)
+        {
+            _viewModel.SetStatusText("Choose the Area Support tool before applying area supports.");
+            return;
+        }
+
+        bool didApply = _manualSupportTool.ApplyActiveOperation();
+
+        if (!didApply)
+        {
+            return;
+        }
+
+        ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+    }
+
+    /// <summary>
     /// Closes the Ring Support panel without applying supports.
     /// </summary>
     private void RingSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
@@ -362,6 +425,24 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Closes the Area Support panel without applying supports.
+    /// </summary>
+    private void AreaSupportToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Area)
+        {
+            return;
+        }
+
+        _manualSupportTool.Cancel();
+        ExitAreaSupportMode();
+    }
+
+    /// <summary>
     /// Deletes selected supports from the active Ring Support edit using the same path as the Delete key.
     /// </summary>
     private void RingSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
@@ -385,6 +466,16 @@ public partial class MainWindow
     /// Deletes selected supports from the active Contour Support edit using the same path as the Delete key.
     /// </summary>
     private void ContourSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        DeleteSelectedSupportsInActiveEditGroup();
+    }
+
+    /// <summary>
+    /// Deletes selected supports from the active Area Support edit using the same path as the Delete key.
+    /// </summary>
+    private void AreaSupportToolOptionsControl_DeleteRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
@@ -459,6 +550,12 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, "Area Support", StringComparison.Ordinal))
+        {
+            ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            return;
+        }
+
         HideToolOptionsOverlay();
     }
 
@@ -518,6 +615,21 @@ public partial class MainWindow
     /// Leaves the Contour Support operation and clears all transient Contour Support previews.
     /// </summary>
     private void ExitContourSupportMode()
+    {
+        HideToolOptionsOverlay();
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+
+        string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
+        _activeToolStatusText = statusText;
+        _viewModel.SetStatusText(statusText);
+        _viewModel.SetToolPanelText(statusText);
+    }
+
+    /// <summary>
+    /// Leaves the Area Support operation and clears all transient Area Support previews.
+    /// </summary>
+    private void ExitAreaSupportMode()
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -673,6 +785,25 @@ public partial class MainWindow
             return;
         }
 
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.AreaSupport)
+        {
+            AreaSupportSettings? settings = supportLayerGroup.AreaSupportSettings;
+
+            if (settings == null)
+            {
+                HideToolOptionsOverlay();
+                _viewModel.SetStatusText("This support group is missing Area Support settings.");
+                return;
+            }
+
+            SetActiveMode(WorkspaceModeId.ManualSupport);
+            _areaSupportToolOptionsControl.SetAreaSupportSettings(settings);
+            ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+            _manualSupportTool.EditAreaSupportGroup(supportLayerGroup);
+            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Area);
+            return;
+        }
+
         HideToolOptionsOverlay();
         _viewModel.SetStatusText("This support group does not have editable tool settings yet.");
     }
@@ -824,7 +955,8 @@ public partial class MainWindow
     {
         bool canDeleteSelectedSupports = (ToolOptionsHostOverlay.Content == _ringSupportToolOptionsControl
                 || ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl
-                || ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl)
+                || ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl
+                || ToolOptionsHostOverlay.Content == _areaSupportToolOptionsControl)
             && _manualSupportTool.HasSelectedSupportsInActiveEditGroup();
 
         _ringSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
@@ -833,5 +965,7 @@ public partial class MainWindow
             ToolOptionsHostOverlay.Content == _lineSupportToolOptionsControl && canDeleteSelectedSupports);
         _contourSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
             ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl && canDeleteSelectedSupports);
+        _areaSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
+            ToolOptionsHostOverlay.Content == _areaSupportToolOptionsControl && canDeleteSelectedSupports);
     }
 }

@@ -1,33 +1,41 @@
-Add a new support tool (called the Area Supports tool) for creating supports over a area defined by a selection of model faces when viewed from the Z up direction.
+# Area Support Tool
 
-This tool makes use of a reusable sub-tool (called Face Select) that allows the user to select and deselect faces on a model forming a selection set that can be used by the area support tool. The code for this sub-tool should be made so it can be easily reused by other future tools.
+The Area Support tool creates supports over one or more contiguous areas defined by selected model faces when viewed from the Z-up direction. It is intended for broad regions where regular support coverage is faster than placing point, line, ring, or contour supports manually.
 
-# Workflow
-## Creating the supports
-### Step 1 - Starting the tool
-- The user selects the Area Supports button in the Mode Panel in the Supports tab.
-- The settings panel for the tool opens.
-- Underneath that, the support presets panel is displayed.
-### Step 2 - Selecting the area to support. This makes use of the Face Select "sub tool"
-- The user clicks the "Select Area" button. This starts the face select sub tool.
-- A floating window (Face Select controls panel) belonging to the Face Select tool is displayed with buttons allowing the user to select faces on the model.
+## User Workflow
 
+1. The user selects **Area Support** in the Supports tab of the Mode Panel.
+2. The Area Support options panel opens above the Support Presets panel.
+3. The user clicks **Select faces**. The Face Set Selection tool activates and returns the accepted face set.
+4. The tool previews the generated support positions as blue crosses and draws the selected area boundary in yellow.
+5. The user adjusts:
+   - **Spacing**: maximum interior grid spacing, default `3.0`.
+   - **Boundary spacing**: absolute spacing along the offset boundary, default `2.4`.
+   - **Concave angle**: concave corner threshold in degrees, default `30`.
+   - **Show support spacing**: shows transparent blue spacing circles around previewed supports.
+6. The user clicks **Apply**. A support layer group named **Area Support** is created or updated, and the tool enters edit mode.
+7. The user clicks **Close** to exit edit mode.
 
+## Generation Behavior
 
-# GUI
-## Area Support Options panel
+Area Support stores selected `FaceSelectionKey` values plus its numeric settings in `AreaSupportSettings`, so support geometry can be regenerated after edits, save/load, and model transforms.
 
-## Face Select controls panel
-A floating window that provides controls to allow the addition or subtraction of model faces to a selection set.
-- A Select contiguous faces by angle split button.
-	- clicking the down arrow of the split button displays a settings flyout with:
-		- a label "Coplanar threshold"
-		- a numeric entry box (min 0 degrees, max360 degrees).
-	- clicking the enters a mode where when the user clicks on a face, it selects all faces that touch each other as long as the angle between each face's normal is less than the angle "Coplanar threshold".
-- A select by 
-- An "add to selection" button. When pressed, any *************
-- A "subtract from selection" toggle button. When this is toggled on, any face selections are removed from the selection set.
-- The "add to selection" and "subtract from selection" buttons act as a group where only one can be on at a time.
+For each contiguous selected face island:
 
-The face select tool 
+- Boundary edges are extracted from selected triangles and assembled into ordered XY boundary loops.
+- The visible yellow boundary remains the original selected face boundary.
+- Boundary support candidates are placed on an implicit offset boundary that is `Spacing / 2` inward from the original boundary.
+- Boundary candidates are stepped using **Boundary spacing**, not the interior grid spacing.
+- Concave corners are detected from ordered loop winding. If the concave turn angle is greater than **Concave angle**, an extra support is placed on the offset corner.
+- Interior supports are generated on a hexagonal grid.
+- All generated candidates must be inside the selected projected face area and outside the half-spacing boundary exclusion band.
+- Candidates are vertically projected back onto the uppermost selected face below their XY position before support entities are created.
 
+## Code Map
+
+- `src/Pillar.Core/Layers/AreaSupportSettings.cs`: persistent generator settings.
+- `src/Pillar.Geometry/Supports/AreaSupportPattern.cs`: boundary extraction, loop ordering, boundary/corner/grid support placement, and projection.
+- `src/Pillar.Rendering/Tools/AreaSupportOperation.cs`: tool state, preview refresh, Apply/update commands, and edit-mode support selection.
+- `src/Pillar.Rendering/Preview/AreaSupportPreviewRenderer.cs`: yellow boundary, blue support crosses, and optional spacing circles.
+- `src/Pillar.UI/Modes/AreaSupportToolOptionsControl.xaml`: Area Support options UI.
+- `src/Pillar.Core/Persistence/GphDocumentSerializer.cs`: `.gph` persistence for Area Support settings.

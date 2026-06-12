@@ -16,7 +16,8 @@
         Width="1920"
         MinHeight="480"
         MinWidth="900"
-        KeyDown="Window_KeyDown">
+        KeyDown="Window_KeyDown"
+        KeyUp="Window_KeyUp">
 
     <Window.Resources>
         <SolidColorBrush x:Key="SelectionWindowStrokeBrush" Color="#FF007ACC" />
@@ -153,6 +154,15 @@
                             Margin="12,0"
                             Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
 
+                    <Button x:Name="FaceSetSelectionLaunchButton"
+                            MinHeight="28"
+                            Margin="0,0,12,0"
+                            Padding="8,2"
+                            VerticalAlignment="Center"
+                            Content="Face Select"
+                            Click="FaceSetSelectionLaunchButton_Click"
+                            ToolTip="Open the temporary face set selection helper." />
+
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -274,6 +284,14 @@
                             IsHitTestVisible="False">
                         <Rectangle x:Name="SelectionWindowOverlay"
                                    Style="{StaticResource SelectionWindowOverlayStyle}" />
+                        <Line x:Name="FaceSetLineSelectionPreview"
+                              Stroke="{StaticResource SelectionWindowStrokeBrush}"
+                              StrokeThickness="2"
+                              StrokeDashArray="6,3"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round"
+                              Visibility="Collapsed"
+                              IsHitTestVisible="False" />
                     </Canvas>
 
                     <!--
@@ -334,6 +352,13 @@
                                                       Visibility="Collapsed"
                                                       IsHitTestVisible="True" />
                         </StackPanel>
+
+                        <ContentControl x:Name="FaceSetSelectionToolHostOverlay"
+                                        Width="420"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Top"
+                                        Visibility="Collapsed"
+                                        IsHitTestVisible="True" />
                     </Grid>
 
                 </Grid>

@@ -42,10 +42,12 @@ public static class Program
         RunTest(failures, "Joint ball normals point outward", ValidateJointBallNormalsPointOutward);
         RunTest(failures, "Default branch setting creates no branch", ValidateDefaultBranchSettingCreatesNoBranch);
         RunTest(failures, "Branch profile fields validate non-negative values", ValidateBranchProfileFieldsValidateNonNegativeValues);
+        RunTest(failures, "Branch angle is independent from head angle", ValidateBranchAngleIsIndependentFromHeadAngle);
         RunTest(failures, "Branch support mesh is closed with outward balls", ValidateBranchSupportMeshIsClosedWithOutwardBalls);
         RunTest(failures, "Branch is omitted when stem is already clear", ValidateBranchIsOmittedWhenStemIsAlreadyClear);
         RunTest(failures, "Support is skipped when branch cannot clear model", ValidateSupportIsSkippedWhenBranchCannotClearModel);
-        RunTest(failures, "Branch may approach valid contact inside model clearance", ValidateBranchMayApproachValidContactInsideModelClearance);
+        RunTest(failures, "Angled head omits branch inside model clearance", ValidateAngledHeadOmitsBranchInsideModelClearance);
+        RunTest(failures, "Branch is used when vertical stem intersects model", ValidateBranchIsUsedWhenVerticalStemIntersectsModel);
         RunTest(failures, "Support placement rejects crossing angled head", ValidateSupportPlacementRejectsCrossingAngledHead);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Vertical projection handles vertical side faces", ValidateVerticalProjectionHandlesVerticalSideFaces);
@@ -344,6 +346,24 @@ public static class Program
     {
         ValidateProfileThrowsForBranchValues(-0.1f, SupportDefaults.DefaultModelClearance, "maximum branch length");
         ValidateProfileThrowsForBranchValues(SupportDefaults.DefaultMaximumBranchLength, -0.1f, "model clearance");
+        ValidateProfileThrowsForBranchAngle(14.9f);
+        ValidateProfileThrowsForBranchAngle(45.1f);
+    }
+
+    /// <summary>
+    /// Validates that the branch planner uses the branch angle instead of reusing the head angle.
+    /// </summary>
+    private static void ValidateBranchAngleIsIndependentFromHeadAngle()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f, 15.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        Vector3 branchDirection = SupportBranchPlanner.CreateBranchDirection(headDirection, profile);
+        float angleFromVerticalDegrees = MathF.Acos(Vector3.Dot(Vector3.Normalize(branchDirection), Vector3.UnitZ)) * (180.0f / MathF.PI);
+
+        if (MathF.Abs(angleFromVerticalDegrees - 15.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the branch direction to use the branch angle setting.");
+        }
     }
 
     /// <summary>
@@ -355,7 +375,7 @@ public static class Program
         Vector3 tipPosition = new Vector3(4.0f, 1.0f, 12.0f);
         Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
         Vector3 headJointPosition = tipPosition - (headDirection * profile.HeadHeight);
-        Vector3 branchDirection = SupportBranchPlanner.CreateMaximumAngleBranchDirection(headDirection, profile);
+        Vector3 branchDirection = SupportBranchPlanner.CreateBranchDirection(headDirection, profile);
         float branchLength = 2.0f;
         Vector3 stemJointPosition = headJointPosition - (branchDirection * branchLength);
         Vector3 basePosition = new Vector3(stemJointPosition.X, stemJointPosition.Y, 0.0f);
@@ -411,9 +431,9 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that the branch may approach the model contact while the vertical stem still observes model clearance.
+    /// Validates that a clear angled head does not need a branch just because it sits inside model clearance.
     /// </summary>
-    private static void ValidateBranchMayApproachValidContactInsideModelClearance()
+    private static void ValidateAngledHeadOmitsBranchInsideModelClearance()
     {
         SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
         MeshEntity mesh = CreateSideContactPanelMesh();
@@ -421,12 +441,35 @@ public static class Program
 
         if (!SupportPlacementPlanner.TryCreatePlacement(mesh, new Vector3(0.0f, 5.0f, 10.0f), Vector3.UnitX, profile, out placementPlan))
         {
-            throw new InvalidOperationException("Expected a branch to move the vertical stem clear while still approaching the model contact.");
+            throw new InvalidOperationException("Expected a clear angled head support to remain valid.");
+        }
+
+        if (placementPlan.BranchLength != 0.0f)
+        {
+            throw new InvalidOperationException("Expected the planner to omit the branch when only model clearance is violated.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that the planner still creates a branch when the direct vertical stem physically intersects the model.
+    /// </summary>
+    private static void ValidateBranchIsUsedWhenVerticalStemIntersectsModel()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 6.0f, 4.0f);
+        Vector3 tipPosition = new Vector3(0.0f, 5.0f, 10.0f);
+        Vector3 headDirection = SupportHeadDirectionCalculator.CreateHeadDirectionFromSurfaceNormal(Vector3.UnitX, profile);
+        Vector3 headJointPosition = tipPosition - (headDirection * profile.HeadHeight);
+        MeshEntity mesh = CreateStemBlockingPanelMesh(headJointPosition.X);
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(mesh, tipPosition, Vector3.UnitX, profile, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected the planner to find a branch that moves the vertical stem clear.");
         }
 
         if (placementPlan.BranchLength <= 0.0f)
         {
-            throw new InvalidOperationException("Expected this placement to require a branch.");
+            throw new InvalidOperationException("Expected the planner to use a branch when the vertical stem intersects the model.");
         }
     }
 
@@ -1433,6 +1476,7 @@ public static class Program
             SupportDefaults.DefaultStemTopDiameter,
             SupportDefaults.DefaultMaximumBranchLength,
             SupportDefaults.DefaultModelClearance,
+            SupportDefaults.DefaultBranchAngleFromVerticalDegrees,
             SupportDefaults.DefaultHeadHeight,
             SupportDefaults.DefaultHeadPenetrationDepth,
             SupportDefaults.DefaultHeadTopDiameter,
@@ -1444,6 +1488,18 @@ public static class Program
     /// </summary>
     private static SupportProfile CreateBranchProfile(float maxHeadAngleFromVerticalDegrees, float maximumBranchLength, float modelClearance)
     {
+        return CreateBranchProfile(maxHeadAngleFromVerticalDegrees, maximumBranchLength, modelClearance, maxHeadAngleFromVerticalDegrees);
+    }
+
+    /// <summary>
+    /// Creates one support profile with independently configurable head and branch angle settings.
+    /// </summary>
+    private static SupportProfile CreateBranchProfile(
+        float maxHeadAngleFromVerticalDegrees,
+        float maximumBranchLength,
+        float modelClearance,
+        float branchAngleFromVerticalDegrees)
+    {
         return new SupportProfile(
             SupportDefaults.DefaultBaseBottomRadius,
             SupportDefaults.DefaultBaseHeight,
@@ -1451,6 +1507,7 @@ public static class Program
             SupportDefaults.DefaultStemTopDiameter,
             maximumBranchLength,
             modelClearance,
+            branchAngleFromVerticalDegrees,
             SupportDefaults.DefaultHeadHeight,
             SupportDefaults.DefaultHeadPenetrationDepth,
             SupportDefaults.DefaultHeadTopDiameter,
@@ -1473,6 +1530,24 @@ public static class Program
         }
 
         throw new InvalidOperationException($"Expected negative {fieldName} to be rejected.");
+    }
+
+    /// <summary>
+    /// Validates that invalid branch angle values throw the expected exception.
+    /// </summary>
+    private static void ValidateProfileThrowsForBranchAngle(float branchAngleFromVerticalDegrees)
+    {
+        try
+        {
+            SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f, branchAngleFromVerticalDegrees);
+            _ = profile;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("Expected invalid branch angle to be rejected.");
     }
 
     /// <summary>
@@ -1540,6 +1615,33 @@ public static class Program
                 new Vector3(2.0f, 1.0f, 6.5f),
                 new Vector3(2.0f, 1.0f, 9.0f),
                 new Vector3(2.0f, -1.0f, 9.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a short panel through the direct vertical stem path while leaving room for a branch to move clear.
+    /// </summary>
+    private static MeshEntity CreateStemBlockingPanelMesh(float stemX)
+    {
+        return new MeshEntity(
+            "Stem blocking panel",
+            new List<Vector3>
+            {
+                new Vector3(stemX, 4.5f, 0.0f),
+                new Vector3(stemX, 5.5f, 0.0f),
+                new Vector3(stemX, 5.5f, 5.5f),
+                new Vector3(stemX, 4.5f, 5.5f)
             },
             new List<int>
             {

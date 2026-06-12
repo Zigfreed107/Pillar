@@ -6,6 +6,8 @@ using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
+using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
 using Pillar.Rendering.BackgroundGrid;
 using Pillar.Rendering.EntityRenderers;
@@ -28,6 +30,7 @@ public class SceneManager
 {
     private const string MeshHighlightPostEffect = "highlight";
     private const float FullyOpaqueSupportOpacity = 1.0f;
+    private const float FaceLineSelectionSampleSpacingPixels = 2.0f;
     private static readonly MediaColor DefaultSelectionOutlineColor = MediaColor.FromRgb(255, 215, 0);
 
     private readonly Viewport3DX _viewport;
@@ -46,6 +49,7 @@ public class SceneManager
     private readonly RingSupportPreviewRenderer _ringSupportPreviewRenderer;
     private readonly LineSupportPreviewRenderer _lineSupportPreviewRenderer;
     private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
+    private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
     private readonly SelectionManager _selectionManager;
@@ -54,6 +58,7 @@ public class SceneManager
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly MediaColor _selectionOutlineColor;
     private readonly PhongMaterial _highlightMaterial;
+    private readonly Dictionary<Guid, List<int>> _faceSelectionByMeshId = new Dictionary<Guid, List<int>>();
     private bool _isFaceAngleHighlightEnabled;
     private double _faceAngleThresholdDegrees = 45.0;
     private Color4 _faceAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.65f);
@@ -111,11 +116,26 @@ public class SceneManager
         int supportSides,
         MediaColor selectionOutlineColor,
         BackgroundGridDefinition backgroundGridDefinition)
+        : this(viewport, document, supportSides, selectionOutlineColor, backgroundGridDefinition, MeshRenderer.CreateDefaultMaterial())
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
+    /// </summary>
+    public SceneManager(
+        Viewport3DX viewport,
+        CadDocument document,
+        int supportSides,
+        MediaColor selectionOutlineColor,
+        BackgroundGridDefinition backgroundGridDefinition,
+        PhongMaterial defaultMeshMaterial)
     {
         _viewport = viewport;
         _document = document;
         _supportSides = supportSides;
         _selectionOutlineColor = selectionOutlineColor;
+        _defaultMeshMaterial = defaultMeshMaterial ?? throw new ArgumentNullException(nameof(defaultMeshMaterial));
         _highlightMaterial = CreateSelectionMaterial(_selectionOutlineColor);
         _selectionManager = new SelectionManager(_document);
         BackgroundGridDefinition resolvedBackgroundGridDefinition = backgroundGridDefinition ?? throw new ArgumentNullException(nameof(backgroundGridDefinition));
@@ -135,6 +155,7 @@ public class SceneManager
         _ringSupportPreviewRenderer = new RingSupportPreviewRenderer(_previewRoot);
         _lineSupportPreviewRenderer = new LineSupportPreviewRenderer(_previewRoot);
         _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
+        _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
@@ -464,6 +485,22 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Shows transient Area Support boundary, marker, and optional spacing previews.
+    /// </summary>
+    public void ShowAreaSupportPreview(AreaSupportResult areaSupportResult, float spacing, bool showSupportSpacing)
+    {
+        _areaSupportPreviewRenderer.Show(areaSupportResult, spacing, showSupportSpacing);
+    }
+
+    /// <summary>
+    /// Hides all transient Area Support preview geometry.
+    /// </summary>
+    public void HideAreaSupportPreview()
+    {
+        _areaSupportPreviewRenderer.Hide();
+    }
+
+    /// <summary>
     /// Shows the visual-only Transform Scale origin marker at the supplied world-space position.
     /// </summary>
     public void ShowScaleOriginPreview(Vector3 origin, float radius)
@@ -664,6 +701,141 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Updates the visual-only selected-face overlay from a temporary face selection set.
+    /// </summary>
+    public void ConfigureFaceSelection(IReadOnlyCollection<FaceSelectionKey> selectedFaces, Color4 selectionColor)
+    {
+        if (selectedFaces == null)
+        {
+            throw new ArgumentNullException(nameof(selectedFaces));
+        }
+
+        _faceSelectionByMeshId.Clear();
+
+        foreach (FaceSelectionKey selectedFace in selectedFaces)
+        {
+            if (!_faceSelectionByMeshId.TryGetValue(selectedFace.MeshEntityId, out List<int>? triangleIndices))
+            {
+                triangleIndices = new List<int>();
+                _faceSelectionByMeshId.Add(selectedFace.MeshEntityId, triangleIndices);
+            }
+
+            triangleIndices.Add(selectedFace.TriangleIndex);
+        }
+
+        foreach (KeyValuePair<CadEntity, GroupModel3D> visualPair in _entityToVisual)
+        {
+            if (visualPair.Key is not MeshEntity mesh)
+            {
+                continue;
+            }
+
+            if (!_faceSelectionByMeshId.TryGetValue(mesh.Id, out List<int>? triangleIndices))
+            {
+                triangleIndices = new List<int>();
+            }
+
+            MeshRenderer.ApplyFaceSelection(visualPair.Value, mesh, triangleIndices, selectionColor);
+            MeshGeometryModel3D? faceSelectionModel = MeshRenderer.GetFaceSelectionModel(visualPair.Value);
+
+            if (faceSelectionModel != null)
+            {
+                _elementToVisual[faceSelectionModel] = visualPair.Value;
+            }
+
+            ApplyModelClipRangeIfConfigured(visualPair.Value);
+        }
+    }
+
+    /// <summary>
+    /// Clears the visual-only selected-face overlay from every mesh.
+    /// </summary>
+    public void ClearFaceSelection()
+    {
+        ConfigureFaceSelection(Array.Empty<FaceSelectionKey>(), new Color4(1.0f, 1.0f, 0.0f, 0.65f));
+    }
+
+    /// <summary>
+    /// Hit-tests the viewport and returns the mesh face under the screen position.
+    /// </summary>
+    public bool TryHitMeshFace(Vector2 screenPosition, out MeshEntity mesh, out int triangleIndex)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is not Element3D hitModel || GetEntityFromVisual(hitModel) is not MeshEntity hitMesh)
+            {
+                continue;
+            }
+
+            Vector3 hitPosition = new Vector3(hits[i].PointHit.X, hits[i].PointHit.Y, hits[i].PointHit.Z);
+
+            if (FaceSetSelectionAnalyzer.TryFindContainingTriangleIndex(hitMesh, hitPosition, out triangleIndex))
+            {
+                mesh = hitMesh;
+                return true;
+            }
+        }
+
+        mesh = null!;
+        triangleIndex = -1;
+        return false;
+    }
+
+    /// <summary>
+    /// Samples a screen-space line and fills only the visible mesh faces hit from the current camera viewpoint.
+    /// </summary>
+    public void FillVisibleMeshFacesCrossedByScreenLine(
+        Vector2 screenStart,
+        Vector2 screenEnd,
+        ICollection<FaceSelectionKey> selectedFaces)
+    {
+        if (selectedFaces == null)
+        {
+            throw new ArgumentNullException(nameof(selectedFaces));
+        }
+
+        float segmentLength = Vector2.Distance(screenStart, screenEnd);
+
+        if (segmentLength <= float.Epsilon)
+        {
+            AddVisibleMeshFaceAtScreenPoint(screenStart, selectedFaces);
+            return;
+        }
+
+        int segmentCount = global::System.Math.Max(1, (int)MathF.Ceiling(segmentLength / FaceLineSelectionSampleSpacingPixels));
+
+        for (int i = 0; i <= segmentCount; i++)
+        {
+            float t = i / (float)segmentCount;
+            Vector2 samplePoint = Vector2.Lerp(screenStart, screenEnd, t);
+            AddVisibleMeshFaceAtScreenPoint(samplePoint, selectedFaces);
+        }
+    }
+
+    /// <summary>
+    /// Projects a world-space point into viewport pixel coordinates for screen-space face selection tools.
+    /// </summary>
+    public bool TryProjectWorldPointToScreen(Vector3 worldPoint, out Point screenPoint)
+    {
+        return TryProjectWorldPoint(worldPoint, out screenPoint);
+    }
+
+    /// <summary>
+    /// Adds the front-most visible mesh face under one screen point to the supplied collection.
+    /// </summary>
+    private void AddVisibleMeshFaceAtScreenPoint(Vector2 screenPosition, ICollection<FaceSelectionKey> selectedFaces)
+    {
+        if (!TryHitMeshFace(screenPosition, out MeshEntity mesh, out int triangleIndex))
+        {
+            return;
+        }
+
+        selectedFaces.Add(new FaceSelectionKey(mesh.Id, triangleIndex));
+    }
+
+    /// <summary>
     /// Applies render-only horizontal clipping planes to mesh-based entity visuals.
     /// </summary>
     public void ConfigureModelClipRange(float lowerZ, float upperZ)
@@ -691,7 +863,7 @@ public class SceneManager
 
         if (entity is MeshEntity mesh)
         {
-            return MeshRenderer.Create(mesh);
+            return MeshRenderer.Create(mesh, _defaultMeshMaterial);
         }
 
         if (entity is SupportEntity support)

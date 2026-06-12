@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private readonly RingSupportToolOptionsControl _ringSupportToolOptionsControl;
     private readonly LineSupportToolOptionsControl _lineSupportToolOptionsControl;
     private readonly ContourSupportToolOptionsControl _contourSupportToolOptionsControl;
+    private readonly AreaSupportToolOptionsControl _areaSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
     private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
@@ -76,6 +77,7 @@ public partial class MainWindow : Window
         _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
         _lineSupportToolOptionsControl = new LineSupportToolOptionsControl();
         _contourSupportToolOptionsControl = new ContourSupportToolOptionsControl();
+        _areaSupportToolOptionsControl = new AreaSupportToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
@@ -98,7 +100,8 @@ public partial class MainWindow : Window
             _document,
             Properties.Settings.Default.SupportSides,
             ReadSelectionOutlineColor(),
-            backgroundGridDefinition);
+            backgroundGridDefinition,
+            ReadDefaultModelMaterial());
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
@@ -122,8 +125,13 @@ public partial class MainWindow : Window
             GetContourSupportSpacingOrDefault,
             GetContourSupportStartOffsetOrDefault,
             GetContourSupportFinalOffsetOrDefault,
+            GetAreaSupportSpacingOrDefault,
+            GetAreaSupportBoundarySpacingOrDefault,
+            GetAreaSupportConcaveCornerAngleOrDefault,
+            GetAreaSupportShowSpacing,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
+            StartAreaSupportFaceSelectionSession,
             GetSelectedSupportProfile);
         _stlImporter = new StlImporter();
         WireLayerPanel();
@@ -199,12 +207,14 @@ public partial class MainWindow : Window
     {
         _ = sender;
         _ = e;
+        CloseFaceSetSelectionSession(false);
         SetPrecisionSelectCursor(false);
         _scene.HideScaledCursorPreview();
         _manualSupportTool.SelectionWindowChanged -= _selectionWindowOverlay.Update;
         _manualSupportTool.PrecisionSelectCursorRequested -= ManualSupportTool_PrecisionSelectCursorRequested;
         _manualSupportTool.PreviewCalculationStateChanged -= ManualSupportTool_PreviewCalculationStateChanged;
         ClipRangeSliderOverlay.ClipRangeChanged -= ClipRangeSliderOverlay_ClipRangeChanged;
+        SetSelectedModelBoundsClipIndicatorMesh(null);
         DisposeViewportPostProcessingOptions();
         ClearPreviewCalculationCursor();
         _viewportCameraService.Dispose();
@@ -301,6 +311,11 @@ public partial class MainWindow : Window
         _contourSupportToolOptionsControl.ApplyRequested += ContourSupportToolOptionsControl_ApplyRequested;
         _contourSupportToolOptionsControl.CloseRequested += ContourSupportToolOptionsControl_CloseRequested;
         _contourSupportToolOptionsControl.DeleteRequested += ContourSupportToolOptionsControl_DeleteRequested;
+        _areaSupportToolOptionsControl.OptionsChanged += AreaSupportToolOptionsControl_OptionsChanged;
+        _areaSupportToolOptionsControl.SelectFacesRequested += AreaSupportToolOptionsControl_SelectFacesRequested;
+        _areaSupportToolOptionsControl.ApplyRequested += AreaSupportToolOptionsControl_ApplyRequested;
+        _areaSupportToolOptionsControl.CloseRequested += AreaSupportToolOptionsControl_CloseRequested;
+        _areaSupportToolOptionsControl.DeleteRequested += AreaSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
@@ -456,6 +471,56 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Contour support final offset is invalid; using 0.00 mm.");
         return ContourSupportToolOptionsControl.DefaultFinalOffset;
+    }
+
+    /// <summary>
+    /// Reads Area Support spacing from the active Area Support options panel.
+    /// </summary>
+    private float GetAreaSupportSpacingOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetSpacing(out float spacing))
+        {
+            return spacing;
+        }
+
+        _viewModel.SetStatusText("Area support spacing is invalid; using 3.0 mm.");
+        return AreaSupportToolOptionsControl.DefaultAreaSupportSpacing;
+    }
+
+    /// <summary>
+    /// Reads Area Support boundary spacing from the active Area Support options panel.
+    /// </summary>
+    private float GetAreaSupportBoundarySpacingOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetBoundarySpacing(out float boundarySpacing))
+        {
+            return boundarySpacing;
+        }
+
+        _viewModel.SetStatusText("Area support boundary spacing is invalid; using 2.4 mm.");
+        return AreaSupportToolOptionsControl.DefaultAreaSupportBoundarySpacing;
+    }
+
+    /// <summary>
+    /// Reads Area Support concave corner angle from the active Area Support options panel.
+    /// </summary>
+    private float GetAreaSupportConcaveCornerAngleOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetConcaveCornerAngleDegrees(out float angleDegrees))
+        {
+            return angleDegrees;
+        }
+
+        _viewModel.SetStatusText("Area support concave corner angle is invalid; using 30 degrees.");
+        return AreaSupportToolOptionsControl.DefaultConcaveCornerAngleDegrees;
+    }
+
+    /// <summary>
+    /// Reads whether Area Support should show spacing circles in the transient preview.
+    /// </summary>
+    private bool GetAreaSupportShowSpacing()
+    {
+        return _areaSupportToolOptionsControl.GetShowSupportSpacing();
     }
 
     /// <summary>

@@ -25,11 +25,20 @@ public static class MeshRenderer
     private const int StandardMeshChildIndex = 0;
     private const int ClippedMeshChildIndex = 1;
     private const int FaceHighlightChildIndex = 2;
+    private const int FaceSelectionChildIndex = 3;
 
     /// <summary>
     /// Creates one mesh visual that keeps geometry in local space and applies placement through a visual transform.
     /// </summary>
     public static GroupModel3D Create(MeshEntity mesh)
+    {
+        return Create(mesh, CreateDefaultMaterial());
+    }
+
+    /// <summary>
+    /// Creates one mesh visual with the supplied material so application-level appearance settings stay outside domain entities.
+    /// </summary>
+    public static GroupModel3D Create(MeshEntity mesh, PhongMaterial material)
     {
         MeshGeometry3D geometry = new MeshGeometry3D
         {
@@ -40,7 +49,7 @@ public static class MeshRenderer
                 : null
         };
 
-        GroupModel3D group = CreateSelectableMeshGroup(geometry, CreateDefaultMaterial());
+        GroupModel3D group = CreateSelectableMeshGroup(geometry, material);
 
         ApplyTransform(group, mesh);
         return group;
@@ -183,6 +192,19 @@ public static class MeshRenderer
     }
 
     /// <summary>
+    /// Gets the optional visual-only selected-face overlay from a grouped mesh visual.
+    /// </summary>
+    public static MeshGeometryModel3D? GetFaceSelectionModel(GroupModel3D visual)
+    {
+        if (visual.Children.Count <= FaceSelectionChildIndex)
+        {
+            return null;
+        }
+
+        return visual.Children[FaceSelectionChildIndex] as MeshGeometryModel3D;
+    }
+
+    /// <summary>
     /// Creates or updates the visual overlay used to highlight faces near the horizontal build plate angle.
     /// </summary>
     public static void ApplyFaceAngleHighlight(
@@ -241,6 +263,81 @@ public static class MeshRenderer
     }
 
     /// <summary>
+    /// Creates or updates the visual overlay used to highlight the temporary face selection set.
+    /// </summary>
+    public static void ApplyFaceSelection(
+        GroupModel3D visual,
+        MeshEntity mesh,
+        IReadOnlyCollection<int> selectedTriangleIndices,
+        Color4 selectionColor)
+    {
+        if (visual == null)
+        {
+            throw new ArgumentNullException(nameof(visual));
+        }
+
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        if (selectedTriangleIndices == null)
+        {
+            throw new ArgumentNullException(nameof(selectedTriangleIndices));
+        }
+
+        MeshGeometryModel3D? selectionModel = GetFaceSelectionModel(visual);
+
+        if (selectedTriangleIndices.Count == 0)
+        {
+            if (selectionModel != null)
+            {
+                ClearFaceHighlightSelectionState(selectionModel);
+                selectionModel.Visibility = System.Windows.Visibility.Collapsed;
+            }
+
+            return;
+        }
+
+        if (selectionModel == null)
+        {
+            EnsureFaceHighlightSlot(visual, selectionColor);
+            selectionModel = CreateFaceHighlightModel(selectionColor);
+            visual.Children.Add(selectionModel);
+        }
+
+        List<int> selectedMeshIndices = new List<int>(selectedTriangleIndices.Count * 3);
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+
+        foreach (int triangleIndex in selectedTriangleIndices)
+        {
+            if (triangleIndex < 0 || triangleIndex >= triangleCount)
+            {
+                continue;
+            }
+
+            int baseIndex = triangleIndex * 3;
+            selectedMeshIndices.Add(mesh.TriangleIndices[baseIndex]);
+            selectedMeshIndices.Add(mesh.TriangleIndices[baseIndex + 1]);
+            selectedMeshIndices.Add(mesh.TriangleIndices[baseIndex + 2]);
+        }
+
+        ClearFaceHighlightSelectionState(selectionModel);
+        selectionModel.Material = CreateFaceHighlightMaterial(selectionColor);
+        selectionModel.Geometry = new MeshGeometry3D
+        {
+            Positions = new Vector3Collection(mesh.Vertices),
+            Indices = new IntCollection(selectedMeshIndices),
+            Normals = mesh.Normals.Count == mesh.Vertices.Count
+                ? new Vector3Collection(mesh.Normals)
+                : null
+        };
+        selectionModel.Visibility = selectedMeshIndices.Count == 0
+            ? System.Windows.Visibility.Collapsed
+            : System.Windows.Visibility.Visible;
+    }
+
+    /// <summary>
     /// Applies the mesh's composed world transform to the render visual.
     /// </summary>
     public static void ApplyTransform(GroupModel3D visual, MeshEntity mesh)
@@ -253,10 +350,18 @@ public static class MeshRenderer
     /// </summary>
     public static PhongMaterial CreateDefaultMaterial()
     {
+        return CreateMaterial(DefaultDiffuseColor);
+    }
+
+    /// <summary>
+    /// Creates a material for imported model meshes from an application-configured diffuse color.
+    /// </summary>
+    public static PhongMaterial CreateMaterial(Color4 diffuseColor)
+    {
         return new PhongMaterial
         {
-            AmbientColor = DefaultDiffuseColor,
-            DiffuseColor = DefaultDiffuseColor,
+            AmbientColor = diffuseColor,
+            DiffuseColor = diffuseColor,
             SpecularColor = DefaultSpecularColor,
             SpecularShininess = DefaultSpecularShininess
         };
@@ -292,6 +397,21 @@ public static class MeshRenderer
 
         ClearFaceHighlightSelectionState(highlightModel);
         return highlightModel;
+    }
+
+    /// <summary>
+    /// Reserves the lower optional face-overlay slot so selected-face overlays keep a stable child index.
+    /// </summary>
+    private static void EnsureFaceHighlightSlot(GroupModel3D visual, Color4 fallbackColor)
+    {
+        if (visual.Children.Count > FaceHighlightChildIndex)
+        {
+            return;
+        }
+
+        MeshGeometryModel3D placeholder = CreateFaceHighlightModel(fallbackColor);
+        placeholder.Visibility = Visibility.Collapsed;
+        visual.Children.Add(placeholder);
     }
 
     /// <summary>

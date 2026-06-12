@@ -193,6 +193,19 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
+    /// Selects the area-support operation and shows its options.
+    /// </summary>
+    private void AreaSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        SupportOperationToggleRequested?.Invoke(
+            this,
+            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Area, true));
+        RaiseToolSelected("Area Support");
+    }
+
+    /// <summary>
     /// Publishes one selected tool name to the owning shell.
     /// </summary>
     private void RaiseToolSelected(string toolName)

@@ -3,6 +3,7 @@
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
@@ -24,6 +25,7 @@ public sealed class GphDocumentSerializer
     private const string RingSupportGeneratorName = "ringSupport";
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
+    private const string AreaSupportGeneratorName = "areaSupport";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -231,7 +233,8 @@ public sealed class GphDocumentSerializer
             GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
             RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings),
             LineSupport = CreateLineSupportSettingsDto(supportLayerGroup.LineSupportSettings),
-            ContourSupport = CreateContourSupportSettingsDto(supportLayerGroup.ContourSupportSettings)
+            ContourSupport = CreateContourSupportSettingsDto(supportLayerGroup.ContourSupportSettings),
+            AreaSupport = CreateAreaSupportSettingsDto(supportLayerGroup.AreaSupportSettings)
         };
     }
 
@@ -277,7 +280,8 @@ public sealed class GphDocumentSerializer
                 CreateSupportLayerColorOrDefault(supportLayerGroupDto),
                 CreateRingSupportSettingsOrDefault(supportLayerGroupDto),
                 CreateLineSupportSettingsOrDefault(supportLayerGroupDto),
-                CreateContourSupportSettingsOrDefault(supportLayerGroupDto)));
+                CreateContourSupportSettingsOrDefault(supportLayerGroupDto),
+                CreateAreaSupportSettingsOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -499,6 +503,7 @@ public sealed class GphDocumentSerializer
             StemTopDiameter = profile.StemTopDiameter,
             MaximumBranchLength = profile.MaximumBranchLength,
             ModelClearance = profile.ModelClearance,
+            BranchAngleFromVerticalDegrees = profile.BranchAngleFromVerticalDegrees,
             HeadHeight = profile.HeadHeight,
             HeadPenetrationDepth = profile.HeadPenetrationDepth,
             HeadTopDiameter = profile.HeadTopDiameter,
@@ -537,6 +542,11 @@ public sealed class GphDocumentSerializer
         if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.ContourSupport)
         {
             return ContourSupportGeneratorName;
+        }
+
+        if (supportLayerGroup.GeneratorKind == SupportGroupGeneratorKind.AreaSupport)
+        {
+            return AreaSupportGeneratorName;
         }
 
         return null;
@@ -608,6 +618,36 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts Area Support settings into their persisted representation when present.
+    /// </summary>
+    private static GphAreaSupportSettingsDto? CreateAreaSupportSettingsDto(AreaSupportSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        GphAreaSupportSettingsDto dto = new GphAreaSupportSettingsDto
+        {
+            Spacing = settings.Spacing,
+            BoundarySpacing = settings.BoundarySpacing,
+            ConcaveCornerAngleDegrees = settings.ConcaveCornerAngleDegrees
+        };
+
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            FaceSelectionKey selectedFace = settings.SelectedFaces[i];
+            dto.SelectedFaces.Add(new GphFaceSelectionDto
+            {
+                MeshEntityId = selectedFace.MeshEntityId,
+                TriangleIndex = selectedFace.TriangleIndex
+            });
+        }
+
+        return dto;
+    }
+
+    /// <summary>
     /// Converts one runtime transform into a serializable DTO payload.
     /// </summary>
     private static GphTransform3DDto CreateTransformDto(Transform3DData transform)
@@ -648,6 +688,7 @@ public sealed class GphDocumentSerializer
             supportProfileDto.StemTopDiameter,
             supportProfileDto.MaximumBranchLength,
             supportProfileDto.ModelClearance,
+            supportProfileDto.BranchAngleFromVerticalDegrees ?? SupportDefaults.DefaultBranchAngleFromVerticalDegrees,
             supportProfileDto.HeadHeight,
             supportProfileDto.HeadPenetrationDepth,
             supportProfileDto.HeadTopDiameter,
@@ -683,7 +724,8 @@ public sealed class GphDocumentSerializer
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, AreaSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -723,7 +765,8 @@ public sealed class GphDocumentSerializer
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, AreaSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -774,7 +817,8 @@ public sealed class GphDocumentSerializer
         if (!string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, AreaSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -800,6 +844,64 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.ContourSupport.Spacing,
             supportLayerGroupDto.ContourSupport.StartOffset,
             supportLayerGroupDto.ContourSupport.FinalOffset);
+    }
+
+    /// <summary>
+    /// Converts saved generator metadata into Area Support settings, or null for legacy/plain support groups.
+    /// </summary>
+    private static AreaSupportSettings? CreateAreaSupportSettingsOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (string.IsNullOrWhiteSpace(supportLayerGroupDto.GeneratorKind))
+        {
+            return null;
+        }
+
+        if (!string.Equals(supportLayerGroupDto.GeneratorKind, AreaSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(supportLayerGroupDto.GeneratorKind, RingSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, LineSupportGeneratorName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(supportLayerGroupDto.GeneratorKind, ContourSupportGeneratorName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            throw new InvalidDataException($"Support group generator '{supportLayerGroupDto.GeneratorKind}' is not supported.");
+        }
+
+        if (supportLayerGroupDto.AreaSupport == null)
+        {
+            throw new InvalidDataException("An Area Support group is missing its generator settings.");
+        }
+
+        if (supportLayerGroupDto.AreaSupport.SelectedFaces == null || supportLayerGroupDto.AreaSupport.SelectedFaces.Count == 0)
+        {
+            throw new InvalidDataException("An Area Support group is missing its selected faces.");
+        }
+
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(supportLayerGroupDto.AreaSupport.SelectedFaces.Count);
+
+        for (int i = 0; i < supportLayerGroupDto.AreaSupport.SelectedFaces.Count; i++)
+        {
+            GphFaceSelectionDto? selectedFace = supportLayerGroupDto.AreaSupport.SelectedFaces[i];
+
+            if (selectedFace == null)
+            {
+                throw new InvalidDataException($"An Area Support group has a null selected face at index {i}.");
+            }
+
+            selectedFaces.Add(new FaceSelectionKey(selectedFace.MeshEntityId, selectedFace.TriangleIndex));
+        }
+
+        float boundarySpacing = supportLayerGroupDto.AreaSupport.BoundarySpacing
+            ?? AreaSupportSettings.CalculateDefaultBoundarySpacing(supportLayerGroupDto.AreaSupport.Spacing);
+        float concaveCornerAngleDegrees = supportLayerGroupDto.AreaSupport.ConcaveCornerAngleDegrees
+            ?? AreaSupportSettings.DefaultConcaveCornerAngleDegrees;
+
+        return new AreaSupportSettings(
+            selectedFaces,
+            supportLayerGroupDto.AreaSupport.Spacing,
+            boundarySpacing,
+            concaveCornerAngleDegrees);
     }
 
     /// <summary>
@@ -938,6 +1040,7 @@ public sealed class GphDocumentSerializer
         public float StemTopDiameter { get; set; }
         public float MaximumBranchLength { get; set; }
         public float ModelClearance { get; set; }
+        public float? BranchAngleFromVerticalDegrees { get; set; }
         public float HeadHeight { get; set; }
         public float HeadPenetrationDepth { get; set; }
         public float HeadTopDiameter { get; set; }
@@ -957,6 +1060,7 @@ public sealed class GphDocumentSerializer
         public GphRingSupportSettingsDto? RingSupport { get; set; }
         public GphLineSupportSettingsDto? LineSupport { get; set; }
         public GphContourSupportSettingsDto? ContourSupport { get; set; }
+        public GphAreaSupportSettingsDto? AreaSupport { get; set; }
     }
 
     /// <summary>
@@ -992,6 +1096,26 @@ public sealed class GphDocumentSerializer
         public float Spacing { get; set; }
         public float StartOffset { get; set; }
         public float FinalOffset { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Area Support generator settings.
+    /// </summary>
+    private sealed class GphAreaSupportSettingsDto
+    {
+        public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
+        public float Spacing { get; set; }
+        public float? BoundarySpacing { get; set; }
+        public float? ConcaveCornerAngleDegrees { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for one persisted selected mesh face.
+    /// </summary>
+    private sealed class GphFaceSelectionDto
+    {
+        public Guid MeshEntityId { get; set; }
+        public int TriangleIndex { get; set; }
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Math;
@@ -32,9 +33,14 @@ public class ManualSupportTool : ITool
     private readonly Func<float> _getContourSupportSpacing;
     private readonly Func<float> _getContourSupportStartOffset;
     private readonly Func<float> _getContourSupportFinalOffset;
+    private readonly Func<float> _getAreaSupportSpacing;
+    private readonly Func<float> _getAreaSupportBoundarySpacing;
+    private readonly Func<float> _getAreaSupportConcaveCornerAngleDegrees;
+    private readonly Func<bool> _getAreaSupportShowSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<float> _contourSupportZHeightSelectedReporter;
     private readonly Action<bool> _contourSupportClosedStateReporter;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
     private IToolOperation? _activeOperation;
 
     /// <summary>
@@ -54,8 +60,13 @@ public class ManualSupportTool : ITool
         Func<float> getContourSupportSpacing,
         Func<float> getContourSupportStartOffset,
         Func<float> getContourSupportFinalOffset,
+        Func<float> getAreaSupportSpacing,
+        Func<float> getAreaSupportBoundarySpacing,
+        Func<float> getAreaSupportConcaveCornerAngleDegrees,
+        Func<bool> getAreaSupportShowSpacing,
         Action<float> contourSupportZHeightSelectedReporter,
         Action<bool> contourSupportClosedStateReporter,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
         Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -71,8 +82,13 @@ public class ManualSupportTool : ITool
         _getContourSupportSpacing = getContourSupportSpacing ?? throw new ArgumentNullException(nameof(getContourSupportSpacing));
         _getContourSupportStartOffset = getContourSupportStartOffset ?? throw new ArgumentNullException(nameof(getContourSupportStartOffset));
         _getContourSupportFinalOffset = getContourSupportFinalOffset ?? throw new ArgumentNullException(nameof(getContourSupportFinalOffset));
+        _getAreaSupportSpacing = getAreaSupportSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportSpacing));
+        _getAreaSupportBoundarySpacing = getAreaSupportBoundarySpacing ?? throw new ArgumentNullException(nameof(getAreaSupportBoundarySpacing));
+        _getAreaSupportConcaveCornerAngleDegrees = getAreaSupportConcaveCornerAngleDegrees ?? throw new ArgumentNullException(nameof(getAreaSupportConcaveCornerAngleDegrees));
+        _getAreaSupportShowSpacing = getAreaSupportShowSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportShowSpacing));
         _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
         _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
+        _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
@@ -211,6 +227,28 @@ public class ManualSupportTool : ITool
             return;
         }
 
+        if (operationKind == ManualSupportOperationKind.Area)
+        {
+            AreaSupportOperation areaSupportOperation = new AreaSupportOperation(
+                _document,
+                _scene,
+                _commandRunner,
+                _getSelectedModelEntityId,
+                _getAreaSupportSpacing,
+                _getAreaSupportBoundarySpacing,
+                _getAreaSupportConcaveCornerAngleDegrees,
+                _getAreaSupportShowSpacing,
+                _createSupportProfile,
+                _faceSelectionSessionStarter,
+                RaiseStatusMessageRequested,
+                RaisePreviewCalculationStateChanged);
+
+            areaSupportOperation.SelectionWindowChanged += RaiseSelectionWindowChanged;
+            _activeOperation = areaSupportOperation;
+            RaiseStatusMessageRequested("Use Select faces to choose an area for supports.");
+            return;
+        }
+
         _activeOperation = null;
     }
 
@@ -266,6 +304,12 @@ public class ManualSupportTool : ITool
         if (_activeOperation is ContourSupportOperation contourSupportOperation)
         {
             contourSupportOperation.RefreshPreview();
+            return;
+        }
+
+        if (_activeOperation is AreaSupportOperation areaSupportOperation)
+        {
+            areaSupportOperation.RefreshPreview();
         }
     }
 
@@ -289,6 +333,11 @@ public class ManualSupportTool : ITool
             return contourSupportOperation.Apply();
         }
 
+        if (_activeOperation is AreaSupportOperation areaSupportOperation)
+        {
+            return areaSupportOperation.Apply();
+        }
+
         RaiseStatusMessageRequested("Choose a generated support tool before applying supports.");
         return false;
     }
@@ -305,6 +354,20 @@ public class ManualSupportTool : ITool
         }
 
         RaiseStatusMessageRequested("Choose the Contour Support tool before picking a contour Z height.");
+    }
+
+    /// <summary>
+    /// Requests that the active Area Support operation launch the reusable face-selection helper.
+    /// </summary>
+    public void BeginAreaSupportFaceSelection()
+    {
+        if (_activeOperation is AreaSupportOperation areaSupportOperation)
+        {
+            areaSupportOperation.BeginFaceSelection();
+            return;
+        }
+
+        RaiseStatusMessageRequested("Choose the Area Support tool before selecting faces.");
     }
 
     /// <summary>
@@ -443,6 +506,27 @@ public class ManualSupportTool : ITool
         if (_activeOperation is ContourSupportOperation contourSupportOperation)
         {
             contourSupportOperation.EditExistingContourSupportGroup(supportLayerGroup);
+        }
+    }
+
+    /// <summary>
+    /// Loads an existing Area Support-generated group into the Area Support operation.
+    /// </summary>
+    public void EditAreaSupportGroup(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup == null)
+        {
+            throw new ArgumentNullException(nameof(supportLayerGroup));
+        }
+
+        if (ActiveOperationKind != ManualSupportOperationKind.Area)
+        {
+            SetActiveOperation(ManualSupportOperationKind.Area);
+        }
+
+        if (_activeOperation is AreaSupportOperation areaSupportOperation)
+        {
+            areaSupportOperation.EditExistingAreaSupportGroup(supportLayerGroup);
         }
     }
 

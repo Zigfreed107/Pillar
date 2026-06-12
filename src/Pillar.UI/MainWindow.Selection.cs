@@ -18,6 +18,7 @@ public partial class MainWindow
         _ = addedIds;
         _ = removedIds;
         _layerPanelViewModel.SetSelectedModelCount(GetSelectedMeshEntityCount());
+        UpdateSelectedModelBoundsClipIndicator();
         UpdateGeneratedSupportDeleteButtonState();
 
         if (_scene.SelectionManager.SelectedCount == 1)

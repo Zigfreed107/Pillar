@@ -155,6 +155,32 @@ public static class SupportGroupTransformRegenerator
                 newContourSupportSettings);
         }
 
+        AreaSupportSettings? oldAreaSupportSettings = supportLayerGroup.AreaSupportSettings;
+
+        if (oldAreaSupportSettings != null)
+        {
+            AreaSupportSettings newAreaSupportSettings = oldAreaSupportSettings.Clone();
+            List<SupportEntity> newAreaSupports = CreateAreaSupportEntities(
+                mesh,
+                supportLayerGroup.Id,
+                newAreaSupportSettings,
+                ChooseSupportProfile(oldSupportEntities),
+                newWorldTransform);
+
+            return new SupportGroupRegeneration(
+                supportLayerGroup,
+                oldSupportEntities,
+                newAreaSupports,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                oldAreaSupportSettings,
+                newAreaSupportSettings);
+        }
+
         if (oldSupportEntities.Count == 0)
         {
             return null;
@@ -332,6 +358,49 @@ public static class SupportGroupTransformRegenerator
         for (int i = 0; i < contourResult.SupportSamples.Count; i++)
         {
             ContourSupportSample sample = contourResult.SupportSamples[i];
+            SupportPlacementPlan placementPlan;
+
+            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, newWorldTransform, sample.Position, sample.Normal, supportProfile, out placementPlan))
+            {
+                continue;
+            }
+
+            TryAddSupportEntity(
+                newSupportEntities,
+                supportLayerGroupId,
+                sample.Position,
+                placementPlan.BasePosition,
+                placementPlan.HeadDirection,
+                placementPlan.BranchLength,
+                placementPlan.BranchDirection,
+                supportProfile);
+        }
+
+        return newSupportEntities;
+    }
+
+    /// <summary>
+    /// Rebuilds area supports from saved face-area settings against the transformed mesh.
+    /// </summary>
+    private static List<SupportEntity> CreateAreaSupportEntities(
+        MeshEntity mesh,
+        Guid supportLayerGroupId,
+        AreaSupportSettings settings,
+        SupportProfile supportProfile,
+        Matrix4x4 newWorldTransform)
+    {
+        AreaSupportResult areaSupportResult;
+
+        if (!AreaSupportPattern.TryCreate(mesh, newWorldTransform, settings, out areaSupportResult))
+        {
+            return new List<SupportEntity>();
+        }
+
+        List<SupportEntity> newSupportEntities = new List<SupportEntity>(areaSupportResult.SupportSamples.Count);
+
+        for (int i = 0; i < areaSupportResult.SupportSamples.Count; i++)
+        {
+            AreaSupportSample sample = areaSupportResult.SupportSamples[i];
             SupportPlacementPlan placementPlan;
 
             if (!SupportPlacementPlanner.TryCreatePlacement(mesh, newWorldTransform, sample.Position, sample.Normal, supportProfile, out placementPlan))

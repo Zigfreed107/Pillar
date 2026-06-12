@@ -17,6 +17,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     private LineSupportSettings? _lineSupportSettings;
     private RingSupportSettings? _ringSupportSettings;
     private ContourSupportSettings? _contourSupportSettings;
+    private AreaSupportSettings? _areaSupportSettings;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
@@ -167,6 +168,19 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets a copy of the Area Support settings when this group is Area-tool generated.
+    /// </summary>
+    public AreaSupportSettings? AreaSupportSettings
+    {
+        get { return _areaSupportSettings?.Clone(); }
+        private set
+        {
+            _areaSupportSettings = value?.Clone();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
@@ -214,6 +228,22 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         LineSupportSettings? lineSupportSettings,
         ContourSupportSettings? contourSupportSettings)
     {
+        return CreateLoaded(id, modelEntityId, name, color, ringSupportSettings, lineSupportSettings, contourSupportSettings, null);
+    }
+
+    /// <summary>
+    /// Recreates a saved support group with generated support metadata.
+    /// </summary>
+    public static SupportLayerGroup CreateLoaded(
+        Guid id,
+        Guid modelEntityId,
+        string name,
+        SupportLayerColor? color,
+        RingSupportSettings? ringSupportSettings,
+        LineSupportSettings? lineSupportSettings,
+        ContourSupportSettings? contourSupportSettings,
+        AreaSupportSettings? areaSupportSettings)
+    {
         SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
 
         if (ringSupportSettings != null)
@@ -227,6 +257,10 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         else if (contourSupportSettings != null)
         {
             supportLayerGroup.SetContourSupportSettings(contourSupportSettings);
+        }
+        else if (areaSupportSettings != null)
+        {
+            supportLayerGroup.SetAreaSupportSettings(areaSupportSettings);
         }
 
         return supportLayerGroup;
@@ -260,6 +294,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
 
         LineSupportSettings = null;
         ContourSupportSettings = null;
+        AreaSupportSettings = null;
         RingSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.RingSupport;
     }
@@ -276,6 +311,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
 
         RingSupportSettings = null;
         ContourSupportSettings = null;
+        AreaSupportSettings = null;
         LineSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.LineSupport;
     }
@@ -292,8 +328,26 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
 
         RingSupportSettings = null;
         LineSupportSettings = null;
+        AreaSupportSettings = null;
         ContourSupportSettings = settings;
         GeneratorKind = SupportGroupGeneratorKind.ContourSupport;
+    }
+
+    /// <summary>
+    /// Marks this group as Area Support generated and stores the editable generator settings.
+    /// </summary>
+    public void SetAreaSupportSettings(AreaSupportSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        RingSupportSettings = null;
+        LineSupportSettings = null;
+        ContourSupportSettings = null;
+        AreaSupportSettings = settings;
+        GeneratorKind = SupportGroupGeneratorKind.AreaSupport;
     }
 
     /// <summary>
@@ -304,6 +358,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         LineSupportSettings = null;
         RingSupportSettings = null;
         ContourSupportSettings = null;
+        AreaSupportSettings = null;
         GeneratorKind = SupportGroupGeneratorKind.None;
     }
 

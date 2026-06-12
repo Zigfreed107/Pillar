@@ -1,4 +1,4 @@
-﻿// SupportProfile.cs
+// SupportProfile.cs
 // Defines the editable geometric dimensions that describe one procedural resin-print support in the domain layer.
 using System;
 
@@ -19,6 +19,7 @@ public sealed class SupportProfile
         float stemTopDiameter,
         float maximumBranchLength,
         float modelClearance,
+        float branchAngleFromVerticalDegrees,
         float headHeight,
         float headPenetrationDepth,
         float headTopDiameter,
@@ -30,6 +31,7 @@ public sealed class SupportProfile
         StemTopDiameter = ValidatePositiveDimension(stemTopDiameter, nameof(stemTopDiameter));
         MaximumBranchLength = ValidateNonNegativeDimension(maximumBranchLength, nameof(maximumBranchLength));
         ModelClearance = ValidateNonNegativeDimension(modelClearance, nameof(modelClearance));
+        BranchAngleFromVerticalDegrees = ValidateBranchAngle(branchAngleFromVerticalDegrees, nameof(branchAngleFromVerticalDegrees));
         HeadHeight = ValidatePositiveDimension(headHeight, nameof(headHeight));
         HeadPenetrationDepth = ValidatePositiveDimension(headPenetrationDepth, nameof(headPenetrationDepth));
         HeadTopDiameter = ValidatePositiveDimension(headTopDiameter, nameof(headTopDiameter));
@@ -75,6 +77,11 @@ public sealed class SupportProfile
     public float ModelClearance { get; }
 
     /// <summary>
+    /// Gets the fixed angle the optional branch may lean away from vertical.
+    /// </summary>
+    public float BranchAngleFromVerticalDegrees { get; }
+
+    /// <summary>
     /// Gets the desired head height from the model intersection down to the stem or base.
     /// </summary>
     public float HeadHeight { get; }
@@ -106,6 +113,7 @@ public sealed class SupportProfile
             StemTopDiameter,
             MaximumBranchLength,
             ModelClearance,
+            BranchAngleFromVerticalDegrees,
             HeadHeight,
             HeadPenetrationDepth,
             HeadTopDiameter,
@@ -146,6 +154,19 @@ public sealed class SupportProfile
         if (float.IsNaN(value) || float.IsInfinity(value) || value < 0.0f || value > 90.0f)
         {
             throw new ArgumentOutOfRangeException(parameterName, "Support head angle must be between 0 and 90 degrees.");
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Rejects branch angles that are too vertical to be useful or too horizontal for printable support strength.
+    /// </summary>
+    private static float ValidateBranchAngle(float value, string parameterName)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 15.0f || value > 45.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Support branch angle must be between 15 and 45 degrees from vertical.");
         }
 
         return value;

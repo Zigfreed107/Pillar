@@ -226,6 +226,16 @@
                                                    Text="Trace a connected face contour at a Z height" />
                                     </StackPanel>
                                 </Button>
+
+                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                        Click="AreaSupportButton_Click">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
+                                                   Text="Area Support" />
+                                        <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                                   Text="Fill selected face areas with supports" />
+                                    </StackPanel>
+                                </Button>
                             </primitives:UniformGrid>
                         </StackPanel>
 

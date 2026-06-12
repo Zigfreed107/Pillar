@@ -11,5 +11,6 @@ public enum ManualSupportOperationKind
     Point,
     Line,
     Ring,
-    Contour
+    Contour,
+    Area
 }
