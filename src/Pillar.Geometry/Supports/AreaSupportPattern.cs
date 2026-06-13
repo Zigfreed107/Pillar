@@ -70,10 +70,12 @@ public sealed class AreaSupportResult
     /// </summary>
     public AreaSupportResult(
         IReadOnlyList<AreaSupportBoundarySegment> boundarySegments,
+        IReadOnlyList<AreaSupportBoundarySegment> offsetBoundarySegments,
         IReadOnlyList<AreaSupportSample> supportSamples,
         AreaSupportDiagnostics diagnostics)
     {
         BoundarySegments = new ReadOnlyCollection<AreaSupportBoundarySegment>(new List<AreaSupportBoundarySegment>(boundarySegments));
+        OffsetBoundarySegments = new ReadOnlyCollection<AreaSupportBoundarySegment>(new List<AreaSupportBoundarySegment>(offsetBoundarySegments));
         SupportSamples = new ReadOnlyCollection<AreaSupportSample>(new List<AreaSupportSample>(supportSamples));
         Diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
     }
@@ -82,6 +84,11 @@ public sealed class AreaSupportResult
     /// Gets topmost yellow boundary segments around selected face islands.
     /// </summary>
     public IReadOnlyList<AreaSupportBoundarySegment> BoundarySegments { get; }
+
+    /// <summary>
+    /// Gets topmost dotted preview segments for the inward half-spacing boundary offset.
+    /// </summary>
+    public IReadOnlyList<AreaSupportBoundarySegment> OffsetBoundarySegments { get; }
 
     /// <summary>
     /// Gets support samples generated inside the selected face areas.
@@ -185,6 +192,7 @@ public static class AreaSupportPattern
         Vector3[] triangleNormals = CreateTriangleNormals(mesh, worldVertices);
         List<int>[] adjacency = CreateSelectedTriangleAdjacency(mesh, selectedTriangleIndices);
         List<AreaSupportBoundarySegment> boundarySegments = new List<AreaSupportBoundarySegment>();
+        List<AreaSupportBoundarySegment> offsetBoundarySegments = new List<AreaSupportBoundarySegment>();
         List<AreaSupportSample> supportSamples = new List<AreaSupportSample>();
         List<Vector2> acceptedSamplePoints = new List<Vector2>();
         int rejectedCandidateCount = 0;
@@ -205,6 +213,7 @@ public static class AreaSupportPattern
             List<BoundaryLoop> boundaryLoops = CreateBoundaryLoops(islandBoundaryEdges);
 
             AppendBoundarySegments(islandBoundaryEdges, boundarySegments);
+            AppendOffsetBoundarySegments(settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, offsetBoundarySegments);
             FillBoundaryCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
             FillHexGridCandidates(mesh, worldVertices, triangleNormals, settings.Spacing, projectedTriangles, islandBoundaryEdges, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
         }
@@ -220,7 +229,7 @@ public static class AreaSupportPattern
             islandCount,
             rejectedCandidateCount,
             duplicateCandidateCount);
-        result = new AreaSupportResult(boundarySegments, supportSamples, diagnostics);
+        result = new AreaSupportResult(boundarySegments, offsetBoundarySegments, supportSamples, diagnostics);
         return true;
     }
 
@@ -474,6 +483,44 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
+    /// Creates preview segments for the inward half-spacing boundary offset used by the support filters.
+    /// </summary>
+    private static void AppendOffsetBoundarySegments(
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        IReadOnlyList<BoundaryLoop> boundaryLoops,
+        List<AreaSupportBoundarySegment> offsetBoundarySegments)
+    {
+        float boundaryOffset = settings.Spacing * 0.5f;
+        _ = boundaryEdges;
+
+        for (int loopIndex = 0; loopIndex < boundaryLoops.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; loopIndex++)
+        {
+            BoundaryLoop boundaryLoop = boundaryLoops[loopIndex];
+            bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
+            List<Vector2> offsetBoundaryPoints = CreateOffsetBoundaryPoints(boundaryLoop, boundaryOffset, isCounterClockwise);
+
+            for (int edgeIndex = 0; edgeIndex < offsetBoundaryPoints.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; edgeIndex++)
+            {
+                Vector2 offsetStart = offsetBoundaryPoints[edgeIndex];
+                Vector2 offsetEnd = offsetBoundaryPoints[(edgeIndex + 1) % offsetBoundaryPoints.Count];
+
+                if (Vector2.DistanceSquared(offsetStart, offsetEnd) <= DegenerateTolerance)
+                {
+                    continue;
+                }
+
+                if (TryProjectToSelectedArea(offsetStart, projectedTriangles, out AreaSupportSample startSample)
+                    && TryProjectToSelectedArea(offsetEnd, projectedTriangles, out AreaSupportSample endSample))
+                {
+                    offsetBoundarySegments.Add(new AreaSupportBoundarySegment(startSample.Position, endSample.Position));
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Adds support candidates half a spacing inward from the boundary segments.
     /// </summary>
     private static void FillBoundaryCandidates(
@@ -582,7 +629,7 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Adds regularly spaced supports along each ordered offset boundary loop.
+    /// Adds supports at closed-loop half-cell intervals without exceeding the configured spacing cap.
     /// </summary>
     private static void AddBoundaryLoopSpacingCandidates(
         MeshEntity mesh,
@@ -606,41 +653,32 @@ public static class AreaSupportPattern
         }
 
         bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
+        List<Vector2> offsetBoundaryPoints = CreateOffsetBoundaryPoints(boundaryLoop, boundaryOffset, isCounterClockwise);
+        float perimeter = CalculateLoopPerimeter(offsetBoundaryPoints);
 
-        for (int edgeIndex = 0; edgeIndex < boundaryLoop.Points.Count && supportSamples.Count < MaximumSupportCount; edgeIndex++)
+        if (perimeter <= DegenerateTolerance)
         {
-            Vector2 start = boundaryLoop.Points[edgeIndex];
-            Vector2 end = boundaryLoop.Points[(edgeIndex + 1) % boundaryLoop.Points.Count];
-            float length = Vector2.Distance(start, end);
+            return;
+        }
 
-            if (length <= DegenerateTolerance)
+        int supportCount = Math.Max(1, (int)MathF.Ceiling(perimeter / settings.BoundarySpacing));
+        float actualSpacing = perimeter / supportCount;
+
+        for (int supportIndex = 0; supportIndex < supportCount && supportSamples.Count < MaximumSupportCount; supportIndex++)
+        {
+            float distanceAlongLoop = (supportIndex + 0.5f) * actualSpacing;
+
+            if (!TryGetLoopPointAtDistance(offsetBoundaryPoints, distanceAlongLoop, out Vector2 candidatePoint))
             {
                 continue;
             }
 
-            Vector2 inwardDirection = CalculateInwardNormal(start, end, isCounterClockwise);
-            int supportCount = Math.Max(1, (int)MathF.Floor(length / settings.BoundarySpacing) + 1);
-            float firstDistance = Math.Min(boundaryOffset, length * 0.5f);
-
-            for (int supportIndex = 0; supportIndex < supportCount && supportSamples.Count < MaximumSupportCount; supportIndex++)
+            if (!IsInsideBoundaryOffset(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset))
             {
-                float distance = firstDistance + (supportIndex * settings.BoundarySpacing);
-
-                if (distance > length)
-                {
-                    break;
-                }
-
-                Vector2 boundaryPoint = Vector2.Lerp(start, end, Math.Clamp(distance / length, 0.0f, 1.0f));
-                Vector2 candidatePoint = boundaryPoint + (inwardDirection * boundaryOffset);
-
-                if (!IsInsideBoundaryOffset(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset))
-                {
-                    candidatePoint = MoveTowardOffsetInterior(boundaryPoint, centroid, boundaryOffset, projectedTriangles, boundaryEdges);
-                }
-
-                TryAddProjectedBoundarySample(mesh, worldVertices, triangleNormals, candidatePoint, settings, boundaryOffset, projectedTriangles, boundaryEdges, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+                candidatePoint = MoveTowardOffsetInterior(candidatePoint, centroid, boundaryOffset, projectedTriangles, boundaryEdges);
             }
+
+            TryAddProjectedBoundarySample(mesh, worldVertices, triangleNormals, candidatePoint, settings, boundaryOffset, projectedTriangles, boundaryEdges, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
         }
     }
 
@@ -662,7 +700,8 @@ public static class AreaSupportPattern
         ref int rejectedCandidateCount,
         ref int duplicateCandidateCount)
     {
-        float boundarySpacingDistanceSquared = Math.Max(0.0f, settings.BoundarySpacing - PointInsideTolerance);
+        float boundaryDuplicateDistance = Math.Min(settings.BoundarySpacing, settings.Spacing) * DuplicateSpacingFactor;
+        float boundarySpacingDistanceSquared = Math.Max(0.0f, boundaryDuplicateDistance - PointInsideTolerance);
         boundarySpacingDistanceSquared *= boundarySpacingDistanceSquared;
 
         for (int i = 0; i < acceptedBoundaryPoints.Count; i++)
@@ -693,6 +732,116 @@ public static class AreaSupportPattern
         {
             acceptedBoundaryPoints.Add(candidatePoint);
         }
+    }
+
+    /// <summary>
+    /// Calculates the closed perimeter length of an ordered XY boundary loop.
+    /// </summary>
+    private static float CalculateLoopPerimeter(IReadOnlyList<Vector2> points)
+    {
+        float perimeter = 0.0f;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector2 start = points[i];
+            Vector2 end = points[(i + 1) % points.Count];
+            perimeter += Vector2.Distance(start, end);
+        }
+
+        return perimeter;
+    }
+
+    /// <summary>
+    /// Finds a point at a loop distance measured around a closed XY polyline.
+    /// </summary>
+    private static bool TryGetLoopPointAtDistance(
+        IReadOnlyList<Vector2> points,
+        float distanceAlongLoop,
+        out Vector2 point)
+    {
+        float remainingDistance = distanceAlongLoop;
+
+        for (int edgeIndex = 0; edgeIndex < points.Count; edgeIndex++)
+        {
+            Vector2 start = points[edgeIndex];
+            Vector2 end = points[(edgeIndex + 1) % points.Count];
+            float edgeLength = Vector2.Distance(start, end);
+
+            if (edgeLength <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            if (remainingDistance <= edgeLength || edgeIndex == points.Count - 1)
+            {
+                float edgeFraction = Math.Clamp(remainingDistance / edgeLength, 0.0f, 1.0f);
+                point = Vector2.Lerp(start, end, edgeFraction);
+                return true;
+            }
+
+            remainingDistance -= edgeLength;
+        }
+
+        point = Vector2.Zero;
+        return false;
+    }
+
+    /// <summary>
+    /// Builds the true inward offset loop by intersecting adjacent offset boundary-edge lines.
+    /// </summary>
+    private static List<Vector2> CreateOffsetBoundaryPoints(BoundaryLoop boundaryLoop, float boundaryOffset, bool isCounterClockwise)
+    {
+        List<Vector2> offsetPoints = new List<Vector2>(boundaryLoop.Points.Count);
+
+        for (int i = 0; i < boundaryLoop.Points.Count; i++)
+        {
+            Vector2 previous = boundaryLoop.Points[(i + boundaryLoop.Points.Count - 1) % boundaryLoop.Points.Count];
+            Vector2 current = boundaryLoop.Points[i];
+            Vector2 next = boundaryLoop.Points[(i + 1) % boundaryLoop.Points.Count];
+            Vector2 previousInwardNormal = CalculateInwardNormal(previous, current, isCounterClockwise);
+            Vector2 nextInwardNormal = CalculateInwardNormal(current, next, isCounterClockwise);
+            Vector2 previousOffsetStart = previous + (previousInwardNormal * boundaryOffset);
+            Vector2 previousOffsetEnd = current + (previousInwardNormal * boundaryOffset);
+            Vector2 nextOffsetStart = current + (nextInwardNormal * boundaryOffset);
+            Vector2 nextOffsetEnd = next + (nextInwardNormal * boundaryOffset);
+            Vector2 offsetPoint;
+
+            if (!TryIntersectLines(previousOffsetStart, previousOffsetEnd, nextOffsetStart, nextOffsetEnd, out offsetPoint))
+            {
+                Vector2 averageInwardNormal = previousInwardNormal + nextInwardNormal;
+
+                if (averageInwardNormal.LengthSquared() <= DegenerateTolerance)
+                {
+                    averageInwardNormal = nextInwardNormal;
+                }
+
+                offsetPoint = current + (Vector2.Normalize(averageInwardNormal) * boundaryOffset);
+            }
+
+            offsetPoints.Add(offsetPoint);
+        }
+
+        return offsetPoints;
+    }
+
+    /// <summary>
+    /// Intersects two infinite XY lines expressed by two points on each line.
+    /// </summary>
+    private static bool TryIntersectLines(Vector2 firstStart, Vector2 firstEnd, Vector2 secondStart, Vector2 secondEnd, out Vector2 intersection)
+    {
+        Vector2 firstDirection = firstEnd - firstStart;
+        Vector2 secondDirection = secondEnd - secondStart;
+        float denominator = Cross(firstDirection, secondDirection);
+
+        if (MathF.Abs(denominator) <= DegenerateTolerance)
+        {
+            intersection = Vector2.Zero;
+            return false;
+        }
+
+        float t = Cross(secondStart - firstStart, secondDirection) / denominator;
+        intersection = firstStart + (firstDirection * t);
+        return true;
     }
 
     /// <summary>
