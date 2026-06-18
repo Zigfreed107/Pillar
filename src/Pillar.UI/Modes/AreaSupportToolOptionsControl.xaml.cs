@@ -19,6 +19,8 @@ public partial class AreaSupportToolOptionsControl : UserControl
     public const float DefaultAreaSupportBoundarySpacing = AreaSupportSettings.DefaultBoundarySpacing;
     public const float DefaultConcaveCornerAngleDegrees = AreaSupportSettings.DefaultConcaveCornerAngleDegrees;
     public const float DefaultMinimumThinRegionThickness = AreaSupportSettings.DefaultMinimumThinRegionThickness;
+    public const AreaSupportFillMode DefaultFillMode = AreaSupportSettings.DefaultFillMode;
+    public const int DefaultAdditionalOffsetCount = AreaSupportSettings.DefaultAdditionalOffsetCount;
 
     private readonly DispatcherTimer _optionsChangedTimer;
     private bool _isSynchronizingOptions;
@@ -60,6 +62,9 @@ public partial class AreaSupportToolOptionsControl : UserControl
         };
         _optionsChangedTimer.Tick += OptionsChangedTimer_Tick;
         InitializeComponent();
+        AdditionalOffsetCountNumericUpDown.Maximum = AreaSupportSettings.MaximumAdditionalOffsetCount;
+        AdditionalOffsetCountNumericUpDown.Value = DefaultAdditionalOffsetCount;
+        UpdateFillModeControlVisibility();
         _isSynchronizingOptions = false;
     }
 
@@ -144,6 +149,36 @@ public partial class AreaSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Gets the selected interior support distribution strategy.
+    /// </summary>
+    public AreaSupportFillMode GetFillMode()
+    {
+        return BoundaryOffsetsFillRadioButton.IsChecked == true
+            ? AreaSupportFillMode.BoundaryOffsets
+            : AreaSupportFillMode.HexGrid;
+    }
+
+    /// <summary>
+    /// Attempts to read how many inward rings should follow the original offset boundary.
+    /// </summary>
+    public bool TryGetAdditionalOffsetCount(out int additionalOffsetCount)
+    {
+        double value = AdditionalOffsetCountNumericUpDown.Value;
+
+        if (!double.IsNaN(value)
+            && !double.IsInfinity(value)
+            && value >= 0.0
+            && value <= AreaSupportSettings.MaximumAdditionalOffsetCount)
+        {
+            additionalOffsetCount = (int)Math.Round(value);
+            return true;
+        }
+
+        additionalOffsetCount = DefaultAdditionalOffsetCount;
+        return false;
+    }
+
+    /// <summary>
     /// Gets whether support spacing circles should be displayed in the preview.
     /// </summary>
     public bool GetShowSupportSpacing()
@@ -172,7 +207,10 @@ public partial class AreaSupportToolOptionsControl : UserControl
             ConcaveCornerAngleNumericUpDown.Value = settings.ConcaveCornerAngleDegrees;
             SupportThinRegionsCheckBox.IsChecked = settings.SupportThinRegions;
             MinimumThinRegionThicknessNumericUpDown.Value = settings.MinimumThinRegionThickness;
-            MinimumThinRegionThicknessNumericUpDown.IsEnabled = settings.SupportThinRegions;
+            HexGridFillRadioButton.IsChecked = settings.FillMode == AreaSupportFillMode.HexGrid;
+            BoundaryOffsetsFillRadioButton.IsChecked = settings.FillMode == AreaSupportFillMode.BoundaryOffsets;
+            AdditionalOffsetCountNumericUpDown.Value = settings.AdditionalOffsetCount;
+            UpdateFillModeControlVisibility();
         }
         finally
         {
@@ -261,6 +299,47 @@ public partial class AreaSupportToolOptionsControl : UserControl
         }
 
         OptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Switches mode-specific controls and refreshes the generated preview.
+    /// </summary>
+    private void FillModeRadioButton_Checked(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (SupportThinRegionsCheckBox == null || AdditionalOffsetCountNumericUpDown == null)
+        {
+            return;
+        }
+
+        UpdateFillModeControlVisibility();
+
+        if (_isSynchronizingOptions)
+        {
+            return;
+        }
+
+        OptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Shows only the controls that affect the selected fill strategy.
+    /// </summary>
+    private void UpdateFillModeControlVisibility()
+    {
+        bool isHexGrid = HexGridFillRadioButton.IsChecked == true;
+        Visibility hexVisibility = isHexGrid ? Visibility.Visible : Visibility.Collapsed;
+        Visibility boundaryOffsetVisibility = isHexGrid ? Visibility.Collapsed : Visibility.Visible;
+
+        SupportThinRegionsCheckBox.Visibility = hexVisibility;
+        MinimumThinRegionThicknessLabel.Visibility = hexVisibility;
+        MinimumThinRegionThicknessNumericUpDown.Visibility = hexVisibility;
+        MinimumThinRegionThicknessUnitLabel.Visibility = hexVisibility;
+        MinimumThinRegionThicknessNumericUpDown.IsEnabled = isHexGrid && SupportThinRegionsCheckBox.IsChecked == true;
+        AdditionalOffsetCountLabel.Visibility = boundaryOffsetVisibility;
+        AdditionalOffsetCountNumericUpDown.Visibility = boundaryOffsetVisibility;
     }
 
     /// <summary>

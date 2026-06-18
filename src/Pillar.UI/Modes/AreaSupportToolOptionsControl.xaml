@@ -24,6 +24,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="112" />
@@ -135,24 +136,44 @@
                            Style="{StaticResource ModeOverlayBodyTextStyle}"
                            Text="deg" />
 
-                <CheckBox x:Name="SupportThinRegionsCheckBox"
-                        Grid.Row="6"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Margin="0,12,0,0"
-                        VerticalAlignment="Center"
-                        Checked="SupportThinRegionsCheckBox_Changed"
-                        Unchecked="SupportThinRegionsCheckBox_Changed"
-                        Content="Support thin regions"
-                        IsChecked="True" />
+                <StackPanel Grid.Row="6"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,12,0,0"
+                            Orientation="Horizontal">
+                    <RadioButton x:Name="HexGridFillRadioButton"
+                                 VerticalAlignment="Center"
+                                 GroupName="AreaSupportFillMode"
+                                 IsChecked="True"
+                                 Checked="FillModeRadioButton_Checked"
+                                 Content="Hex grid" />
+                    <RadioButton x:Name="BoundaryOffsetsFillRadioButton"
+                                 Margin="18,0,0,0"
+                                 VerticalAlignment="Center"
+                                 GroupName="AreaSupportFillMode"
+                                 Checked="FillModeRadioButton_Checked"
+                                 Content="Boundary offsets" />
+                </StackPanel>
 
-                <TextBlock Grid.Row="7"
+                <CheckBox x:Name="SupportThinRegionsCheckBox"
+                          Grid.Row="7"
+                          Grid.Column="0"
+                          Grid.ColumnSpan="3"
+                          Margin="0,12,0,0"
+                          VerticalAlignment="Center"
+                          Checked="SupportThinRegionsCheckBox_Changed"
+                          Unchecked="SupportThinRegionsCheckBox_Changed"
+                          Content="Support thin regions"
+                          IsChecked="True" />
+
+                <TextBlock x:Name="MinimumThinRegionThicknessLabel"
+                           Grid.Row="8"
                            Grid.Column="0"
                            Margin="0,12,8,0"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="Minimum thickness" />
                 <controls:NumericUpDown x:Name="MinimumThinRegionThicknessNumericUpDown"
-                                        Grid.Row="7"
+                                        Grid.Row="8"
                                         Grid.Column="1"
                                         Margin="0,8,0,0"
                                         MinWidth="104"
@@ -161,14 +182,33 @@
                                         DecimalPlaces="1"
                                         Value="1.0"
                                         ValueChanged="AreaOption_ValueChanged" />
-                <TextBlock Grid.Row="7"
+                <TextBlock x:Name="MinimumThinRegionThicknessUnitLabel"
+                           Grid.Row="8"
                            Grid.Column="2"
                            Margin="8,12,0,0"
                            Style="{StaticResource ModeOverlayBodyTextStyle}"
                            Text="mm" />
 
+                <TextBlock x:Name="AdditionalOffsetCountLabel"
+                           Grid.Row="9"
+                           Grid.Column="0"
+                           Margin="0,12,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Number of offsets"
+                           Visibility="Collapsed" />
+                <controls:NumericUpDown x:Name="AdditionalOffsetCountNumericUpDown"
+                                        Grid.Row="9"
+                                        Grid.Column="1"
+                                        Margin="0,8,0,0"
+                                        MinWidth="104"
+                                        Minimum="0"
+                                        Increment="1"
+                                        DecimalPlaces="0"
+                                        ValueChanged="AreaOption_ValueChanged"
+                                        Visibility="Collapsed" />
+
                 <Button x:Name="DeleteSelectedSupportsButton"
-                        Grid.Row="8"
+                        Grid.Row="10"
                         Grid.Column="0"
                         Grid.ColumnSpan="3"
                         MinHeight="30"
@@ -178,7 +218,7 @@
                         Content="Delete"
                         IsEnabled="False" />
 
-                <Grid Grid.Row="9"
+                <Grid Grid.Row="11"
                       Grid.Column="0"
                       Grid.ColumnSpan="3"
                       Margin="0,14,0,0">

@@ -20,6 +20,9 @@ public sealed class AreaSupportSettings
     public const float DefaultConcaveCornerAngleDegrees = 30.0f;
     public const bool DefaultSupportThinRegions = true;
     public const float DefaultMinimumThinRegionThickness = 1.0f;
+    public const AreaSupportFillMode DefaultFillMode = AreaSupportFillMode.HexGrid;
+    public const int DefaultAdditionalOffsetCount = 1;
+    public const int MaximumAdditionalOffsetCount = 100;
 
     /// <summary>
     /// Creates validated Area Support generator settings.
@@ -32,7 +35,9 @@ public sealed class AreaSupportSettings
             CalculateDefaultBoundarySpacing(spacing),
             DefaultConcaveCornerAngleDegrees,
             DefaultSupportThinRegions,
-            DefaultMinimumThinRegionThickness)
+            DefaultMinimumThinRegionThickness,
+            DefaultFillMode,
+            DefaultAdditionalOffsetCount)
     {
     }
 
@@ -51,7 +56,9 @@ public sealed class AreaSupportSettings
             boundarySpacing,
             concaveCornerAngleDegrees,
             DefaultSupportThinRegions,
-            DefaultMinimumThinRegionThickness)
+            DefaultMinimumThinRegionThickness,
+            DefaultFillMode,
+            DefaultAdditionalOffsetCount)
     {
     }
 
@@ -72,7 +79,9 @@ public sealed class AreaSupportSettings
             boundarySpacing,
             concaveCornerAngleDegrees,
             supportThinRegions,
-            minimumThinRegionThickness)
+            minimumThinRegionThickness,
+            DefaultFillMode,
+            DefaultAdditionalOffsetCount)
     {
     }
 
@@ -86,7 +95,9 @@ public sealed class AreaSupportSettings
         float boundarySpacing,
         float concaveCornerAngleDegrees,
         bool supportThinRegions,
-        float minimumThinRegionThickness)
+        float minimumThinRegionThickness,
+        AreaSupportFillMode fillMode,
+        int additionalOffsetCount)
     {
         if (selectedFaces == null)
         {
@@ -112,6 +123,8 @@ public sealed class AreaSupportSettings
         ConcaveCornerAngleDegrees = ValidateConcaveCornerAngle(concaveCornerAngleDegrees);
         SupportThinRegions = supportThinRegions;
         MinimumThinRegionThickness = ValidateMinimumThinRegionThickness(minimumThinRegionThickness);
+        FillMode = ValidateFillMode(fillMode);
+        AdditionalOffsetCount = ValidateAdditionalOffsetCount(additionalOffsetCount);
     }
 
     /// <summary>
@@ -150,11 +163,21 @@ public sealed class AreaSupportSettings
     public float MinimumThinRegionThickness { get; }
 
     /// <summary>
+    /// Gets the strategy used to distribute supports inside the selected area.
+    /// </summary>
+    public AreaSupportFillMode FillMode { get; }
+
+    /// <summary>
+    /// Gets how many inward rings are generated after the original offset boundary.
+    /// </summary>
+    public int AdditionalOffsetCount { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public AreaSupportSettings Clone()
     {
-        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness);
+        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness, FillMode, AdditionalOffsetCount);
     }
 
     /// <summary>
@@ -236,5 +259,31 @@ public sealed class AreaSupportSettings
         }
 
         return minimumThinRegionThickness;
+    }
+
+    /// <summary>
+    /// Rejects unknown fill strategies before they reach generated document state.
+    /// </summary>
+    private static AreaSupportFillMode ValidateFillMode(AreaSupportFillMode fillMode)
+    {
+        if (!Enum.IsDefined(fillMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(fillMode), "Area Support fill mode is not supported.");
+        }
+
+        return fillMode;
+    }
+
+    /// <summary>
+    /// Bounds repeated offsets so live preview work remains predictable on complex selected areas.
+    /// </summary>
+    private static int ValidateAdditionalOffsetCount(int additionalOffsetCount)
+    {
+        if (additionalOffsetCount < 0 || additionalOffsetCount > MaximumAdditionalOffsetCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(additionalOffsetCount), $"Area Support additional offset count must be from 0 to {MaximumAdditionalOffsetCount}.");
+        }
+
+        return additionalOffsetCount;
     }
 }

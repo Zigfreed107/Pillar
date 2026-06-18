@@ -634,7 +634,9 @@ public sealed class GphDocumentSerializer
             BoundarySpacing = settings.BoundarySpacing,
             ConcaveCornerAngleDegrees = settings.ConcaveCornerAngleDegrees,
             SupportThinRegions = settings.SupportThinRegions,
-            MinimumThinRegionThickness = settings.MinimumThinRegionThickness
+            MinimumThinRegionThickness = settings.MinimumThinRegionThickness,
+            FillMode = settings.FillMode,
+            AdditionalOffsetCount = settings.AdditionalOffsetCount
         };
 
         for (int i = 0; i < settings.SelectedFaces.Count; i++)
@@ -912,7 +914,9 @@ public sealed class GphDocumentSerializer
             boundarySpacing,
             concaveCornerAngleDegrees,
             supportThinRegions,
-            minimumThinRegionThickness);
+            minimumThinRegionThickness,
+            supportLayerGroupDto.AreaSupport.FillMode,
+            supportLayerGroupDto.AreaSupport.AdditionalOffsetCount);
     }
 
     /// <summary>
@@ -1121,6 +1125,8 @@ public sealed class GphDocumentSerializer
         public float? ConcaveCornerAngleDegrees { get; set; }
         public bool? SupportThinRegions { get; set; }
         public float? MinimumThinRegionThickness { get; set; }
+        public AreaSupportFillMode FillMode { get; set; } = AreaSupportSettings.DefaultFillMode;
+        public int AdditionalOffsetCount { get; set; } = AreaSupportSettings.DefaultAdditionalOffsetCount;
     }
 
     /// <summary>

@@ -7,4 +7,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Pillar.Core\Pillar.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Clipper2" Version="2.0.0" />
+  </ItemGroup>
 </Project>

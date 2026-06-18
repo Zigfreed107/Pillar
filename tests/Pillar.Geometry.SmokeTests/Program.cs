@@ -78,6 +78,11 @@ public static class Program
         RunTest(failures, "Area support ultra-thin regions respect minimum thickness", ValidateAreaSupportUltraThinRegionsRespectMinimumThickness);
         RunTest(failures, "Area support offsets internal hole boundaries", ValidateAreaSupportOffsetsInternalHoleBoundaries);
         RunTest(failures, "Area support splits coarse offset boundary preview paths", ValidateAreaSupportSplitsCoarseOffsetBoundaryPreviewPaths);
+        RunTest(failures, "Area support boundary offset fill creates requested rings", ValidateAreaSupportBoundaryOffsetFillCreatesRequestedRings);
+        RunTest(failures, "Area support boundary offset fill closes support spacing seam", ValidateAreaSupportBoundaryOffsetFillClosesSpacingSeam);
+        RunTest(failures, "Area support boundary offset fill draws holes without supporting them", ValidateAreaSupportBoundaryOffsetFillDrawsHolesWithoutSupportingThem);
+        RunTest(failures, "Area support boundary offset fill supports concave corners on each ring", ValidateAreaSupportBoundaryOffsetFillSupportsConcaveCornersOnEachRing);
+        RunTest(failures, "Area support boundary offset fill handles collapsed rings", ValidateAreaSupportBoundaryOffsetFillHandlesCollapsedRings);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
@@ -1324,6 +1329,247 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that Boundary Offsets mode creates only the requested cumulative outer rings.
+    /// </summary>
+    private static void ValidateAreaSupportBoundaryOffsetFillCreatesRequestedRings()
+    {
+        MeshEntity mesh = CreateSquareAreaMesh(40.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            2.5f,
+            false,
+            1.0f,
+            2.0f,
+            AreaSupportFillMode.BoundaryOffsets,
+            2);
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult result))
+        {
+            throw new InvalidOperationException("Expected Boundary Offsets mode to generate supports.");
+        }
+
+        bool foundFirstRing = false;
+        bool foundSecondRing = false;
+        bool foundThirdRing = false;
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            Vector3 position = result.SupportSamples[i].Position;
+            float ringCoordinate = MathF.Max(MathF.Abs(position.X), MathF.Abs(position.Y));
+            foundFirstRing |= MathF.Abs(ringCoordinate - 18.0f) <= 0.01f;
+            foundSecondRing |= MathF.Abs(ringCoordinate - 16.0f) <= 0.01f;
+            foundThirdRing |= MathF.Abs(ringCoordinate - 14.0f) <= 0.01f;
+
+            if (MathF.Abs(ringCoordinate - 18.0f) > 0.01f
+                && MathF.Abs(ringCoordinate - 16.0f) > 0.01f
+                && MathF.Abs(ringCoordinate - 14.0f) > 0.01f)
+            {
+                throw new InvalidOperationException("Boundary Offsets mode generated a support away from its requested rings.");
+            }
+        }
+
+        if (!foundFirstRing || !foundSecondRing || !foundThirdRing)
+        {
+            throw new InvalidOperationException("Expected supports on the original boundary offset and both additional offsets.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that closed-ring spacing includes an equal final-to-first interval.
+    /// </summary>
+    private static void ValidateAreaSupportBoundaryOffsetFillClosesSpacingSeam()
+    {
+        const float RingHalfSize = 18.0f;
+        const float RequestedSpacing = 3.0f;
+        float perimeter = RingHalfSize * 8.0f;
+        MeshEntity mesh = CreateSquareAreaMesh(40.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            RequestedSpacing,
+            false,
+            1.0f,
+            2.0f,
+            AreaSupportFillMode.BoundaryOffsets,
+            0);
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult result))
+        {
+            throw new InvalidOperationException("Expected one closed Boundary Offsets support ring.");
+        }
+
+        List<float> distances = new List<float>(result.SupportSamples.Count);
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            distances.Add(GetSquarePerimeterDistance(result.SupportSamples[i].Position, RingHalfSize));
+        }
+
+        distances.Sort();
+        float expectedSpacing = perimeter / distances.Count;
+
+        for (int i = 0; i < distances.Count; i++)
+        {
+            float nextDistance = i + 1 < distances.Count ? distances[i + 1] : distances[0] + perimeter;
+            float gap = nextDistance - distances[i];
+
+            if (gap > RequestedSpacing + 0.001f || MathF.Abs(gap - expectedSpacing) > 0.01f)
+            {
+                throw new InvalidOperationException("Expected equal Boundary Offsets spacing across the closing seam.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that a hole offset remains visible but contributes no generated supports.
+    /// </summary>
+    private static void ValidateAreaSupportBoundaryOffsetFillDrawsHolesWithoutSupportingThem()
+    {
+        MeshEntity mesh = CreateSquareRingAreaMesh(4.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            2.0f,
+            false,
+            1.0f,
+            1.0f,
+            AreaSupportFillMode.BoundaryOffsets,
+            1);
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult result))
+        {
+            throw new InvalidOperationException("Expected Boundary Offsets mode to support the square ring area.");
+        }
+
+        bool foundHoleOffsetPreview = false;
+
+        for (int i = 0; i < result.OffsetBoundarySegments.Count; i++)
+        {
+            AreaSupportBoundarySegment segment = result.OffsetBoundarySegments[i];
+            float segmentCoordinate = MathF.Max(MathF.Abs(segment.Start.X), MathF.Abs(segment.Start.Y));
+
+            if (MathF.Abs(segmentCoordinate - 3.0f) <= 0.01f)
+            {
+                foundHoleOffsetPreview = true;
+                break;
+            }
+        }
+
+        if (!foundHoleOffsetPreview)
+        {
+            throw new InvalidOperationException("Expected the internal-hole offset boundary to remain in the preview.");
+        }
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            Vector3 position = result.SupportSamples[i].Position;
+            float ringCoordinate = MathF.Max(MathF.Abs(position.X), MathF.Abs(position.Y));
+
+            if (MathF.Abs(ringCoordinate - 3.0f) <= 0.1f
+                || (MathF.Abs(position.X) < 2.0f && MathF.Abs(position.Y) < 2.0f))
+            {
+                throw new InvalidOperationException("Internal holes must not generate Boundary Offsets supports.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that the concave-corner rule is applied independently to every generated ring.
+    /// </summary>
+    private static void ValidateAreaSupportBoundaryOffsetFillSupportsConcaveCornersOnEachRing()
+    {
+        MeshEntity mesh = CreateConcaveAreaMesh();
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            2.5f,
+            false,
+            1.0f,
+            1.0f,
+            AreaSupportFillMode.BoundaryOffsets,
+            1);
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult result))
+        {
+            throw new InvalidOperationException("Expected the concave area to generate offset-ring supports.");
+        }
+
+        bool foundFirstConcaveCorner = false;
+        bool foundSecondConcaveCorner = false;
+        float closestFirstDistance = float.MaxValue;
+        float closestSecondDistance = float.MaxValue;
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            Vector3 position = result.SupportSamples[i].Position;
+            float firstDistance = Vector2.Distance(new Vector2(position.X, position.Y), new Vector2(5.0f, 5.0f));
+            float secondDistance = Vector2.Distance(new Vector2(position.X, position.Y), new Vector2(4.0f, 4.0f));
+            closestFirstDistance = MathF.Min(closestFirstDistance, firstDistance);
+            closestSecondDistance = MathF.Min(closestSecondDistance, secondDistance);
+            foundFirstConcaveCorner |= firstDistance <= 0.01f;
+            foundSecondConcaveCorner |= secondDistance <= 0.01f;
+        }
+
+        if (!foundFirstConcaveCorner || !foundSecondConcaveCorner)
+        {
+            throw new InvalidOperationException($"Expected a support at the concave corner of every offset ring. Closest distances were {closestFirstDistance} and {closestSecondDistance}.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that offsets which fully collapse return no generated pattern without throwing.
+    /// </summary>
+    private static void ValidateAreaSupportBoundaryOffsetFillHandlesCollapsedRings()
+    {
+        MeshEntity mesh = CreateSquareAreaMesh(4.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            2.0f,
+            false,
+            1.0f,
+            3.0f,
+            AreaSupportFillMode.BoundaryOffsets,
+            2);
+
+        if (AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult _))
+        {
+            throw new InvalidOperationException("Expected fully collapsed Boundary Offsets rings to generate no supports.");
+        }
+    }
+
+    /// <summary>
+    /// Maps a point on a square contour to one sortable distance around its perimeter.
+    /// </summary>
+    private static float GetSquarePerimeterDistance(Vector3 point, float halfSize)
+    {
+        const float Tolerance = 0.01f;
+
+        if (MathF.Abs(point.Y + halfSize) <= Tolerance)
+        {
+            return point.X + halfSize;
+        }
+
+        if (MathF.Abs(point.X - halfSize) <= Tolerance)
+        {
+            return (2.0f * halfSize) + point.Y + halfSize;
+        }
+
+        if (MathF.Abs(point.Y - halfSize) <= Tolerance)
+        {
+            return (4.0f * halfSize) + halfSize - point.X;
+        }
+
+        if (MathF.Abs(point.X + halfSize) <= Tolerance)
+        {
+            return (6.0f * halfSize) + halfSize - point.Y;
+        }
+
+        throw new InvalidOperationException("Expected every Boundary Offsets sample to lie on the square contour.");
+    }
+
+    /// <summary>
     /// Validates that Line Support generator metadata is saved and loaded with the project.
     /// </summary>
     private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
@@ -1468,7 +1714,15 @@ public static class Program
         CadDocument document = new CadDocument();
         MeshEntity mesh = CreateSquareRingAreaMesh(2.0f);
         document.AddEntity(mesh);
-        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, true, 1.25f, 1.75f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(
+            mesh,
+            3.0f,
+            2.0f,
+            true,
+            1.25f,
+            1.75f,
+            AreaSupportFillMode.BoundaryOffsets,
+            3);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Area Supports");
         supportLayerGroup.SetAreaSupportSettings(settings);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -1507,6 +1761,11 @@ public static class Program
             if (MathF.Abs(loadedSettings.MinimumThinRegionThickness - 1.25f) > 0.0001f)
             {
                 throw new InvalidOperationException("Expected Area Support minimum thin-region thickness to survive save and load.");
+            }
+
+            if (loadedSettings.FillMode != AreaSupportFillMode.BoundaryOffsets || loadedSettings.AdditionalOffsetCount != 3)
+            {
+                throw new InvalidOperationException("Expected Area Support fill mode and offset count to survive save and load.");
             }
         }
         finally
@@ -1756,7 +2015,9 @@ public static class Program
         float boundarySpacing,
         bool supportThinRegions,
         float minimumThinRegionThickness,
-        float? boundaryOffset = null)
+        float? boundaryOffset = null,
+        AreaSupportFillMode fillMode = AreaSupportFillMode.HexGrid,
+        int additionalOffsetCount = AreaSupportSettings.DefaultAdditionalOffsetCount)
     {
         int triangleCount = mesh.TriangleIndices.Count / 3;
         List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(triangleCount);
@@ -1773,7 +2034,9 @@ public static class Program
             boundarySpacing,
             AreaSupportSettings.DefaultConcaveCornerAngleDegrees,
             supportThinRegions,
-            minimumThinRegionThickness);
+            minimumThinRegionThickness,
+            fillMode,
+            additionalOffsetCount);
     }
 
     /// <summary>
@@ -1852,6 +2115,41 @@ public static class Program
                 0,
                 2,
                 3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a planar L-shaped selected area with one unambiguous 90-degree concave corner.
+    /// </summary>
+    private static MeshEntity CreateConcaveAreaMesh()
+    {
+        return new MeshEntity(
+            "Concave area",
+            new List<Vector3>
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 0.0f, 0.0f),
+                new Vector3(10.0f, 6.0f, 0.0f),
+                new Vector3(6.0f, 6.0f, 0.0f),
+                new Vector3(6.0f, 10.0f, 0.0f),
+                new Vector3(0.0f, 10.0f, 0.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3,
+                0,
+                3,
+                5,
+                3,
+                4,
+                5
             },
             new List<Vector3>(),
             userTransform: Transform3DData.Identity);

@@ -1,5 +1,6 @@
 // AreaSupportPattern.cs
 // Converts selected mesh face areas into top-down support guide points and boundary preview segments.
+using Clipper2Lib;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Selection;
@@ -86,7 +87,7 @@ public sealed class AreaSupportResult
     public IReadOnlyList<AreaSupportBoundarySegment> BoundarySegments { get; }
 
     /// <summary>
-    /// Gets topmost dotted preview segments for the inward half-spacing boundary offset.
+    /// Gets solid preview segments for the configured inward boundary offsets.
     /// </summary>
     public IReadOnlyList<AreaSupportBoundarySegment> OffsetBoundarySegments { get; }
 
@@ -214,9 +215,25 @@ public static class AreaSupportPattern
             List<BoundaryLoop> boundaryLoops = CreateBoundaryLoops(islandBoundaryEdges);
 
             AppendBoundarySegments(islandBoundaryEdges, boundarySegments);
-            AppendOffsetBoundarySegments(settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, offsetBoundarySegments);
-            FillBoundaryCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
-            FillHexGridCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+
+            if (settings.FillMode == AreaSupportFillMode.BoundaryOffsets)
+            {
+                FillBoundaryOffsetCandidates(
+                    settings,
+                    projectedTriangles,
+                    boundaryLoops,
+                    offsetBoundarySegments,
+                    supportSamples,
+                    acceptedSamplePoints,
+                    ref rejectedCandidateCount,
+                    ref duplicateCandidateCount);
+            }
+            else
+            {
+                AppendOffsetBoundarySegments(settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, offsetBoundarySegments);
+                FillBoundaryCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+                FillHexGridCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            }
         }
 
         if (supportSamples.Count == 0)
@@ -484,7 +501,386 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Creates preview segments for the inward half-spacing boundary offset used by the support filters.
+    /// Generates preview contours and supports on independently offset outer boundary rings.
+    /// </summary>
+    private static void FillBoundaryOffsetCandidates(
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryLoop> boundaryLoops,
+        List<AreaSupportBoundarySegment> offsetBoundarySegments,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        List<OffsetFillPath> offsetFillPaths = CreateOffsetFillPaths(settings, boundaryLoops);
+        float previewSampleSpacing = CalculateValidatedBoundarySampleSpacing(settings);
+
+        for (int pathIndex = 0; pathIndex < offsetFillPaths.Count; pathIndex++)
+        {
+            OffsetFillPath offsetFillPath = offsetFillPaths[pathIndex];
+            AppendProjectedClosedPathSegments(offsetFillPath.Points, projectedTriangles, previewSampleSpacing, offsetBoundarySegments);
+
+            if (!offsetFillPath.GenerateSupports || supportSamples.Count >= MaximumSupportCount)
+            {
+                continue;
+            }
+
+            AddOffsetFillConcaveCornerCandidates(offsetFillPath.Points, settings, projectedTriangles, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            AddOffsetFillSpacingCandidates(offsetFillPath.Points, settings, projectedTriangles, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+        }
+    }
+
+    /// <summary>
+    /// Creates each requested contour directly from its source loop so one failed ring cannot affect later rings.
+    /// </summary>
+    private static List<OffsetFillPath> CreateOffsetFillPaths(AreaSupportSettings settings, IReadOnlyList<BoundaryLoop> boundaryLoops)
+    {
+        List<OffsetFillPath> offsetFillPaths = new List<OffsetFillPath>();
+
+        for (int loopIndex = 0; loopIndex < boundaryLoops.Count; loopIndex++)
+        {
+            BoundaryLoop boundaryLoop = boundaryLoops[loopIndex];
+
+            if (boundaryLoop.Points.Count < 3 || MathF.Abs(boundaryLoop.SignedArea) <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            bool isHole = IsInternalBoundaryLoop(boundaryLoop, boundaryLoops);
+            int offsetLevelCount = isHole ? 1 : settings.AdditionalOffsetCount + 1;
+            PathsD sourcePaths = new PathsD { CreateClipperPath(boundaryLoop) };
+
+            for (int offsetLevel = 1; offsetLevel <= offsetLevelCount; offsetLevel++)
+            {
+                double offsetDistance = settings.BoundaryOffset * offsetLevel;
+                double delta = isHole ? offsetDistance : -offsetDistance;
+                PathsD generatedPaths = Clipper.InflatePaths(sourcePaths, delta, JoinType.Miter, EndType.Polygon);
+
+                for (int generatedPathIndex = 0; generatedPathIndex < generatedPaths.Count; generatedPathIndex++)
+                {
+                    PathD generatedPath = generatedPaths[generatedPathIndex];
+
+                    if (generatedPath.Count < 3)
+                    {
+                        continue;
+                    }
+
+                    List<Vector2> points = new List<Vector2>(generatedPath.Count);
+
+                    for (int pointIndex = 0; pointIndex < generatedPath.Count; pointIndex++)
+                    {
+                        PointD point = generatedPath[pointIndex];
+                        points.Add(new Vector2((float)point.x, (float)point.y));
+                    }
+
+                    if (MathF.Abs(CalculateSignedArea(points)) > DegenerateTolerance)
+                    {
+                        offsetFillPaths.Add(new OffsetFillPath(points, !isHole));
+                    }
+                }
+            }
+        }
+
+        return offsetFillPaths;
+    }
+
+    /// <summary>
+    /// Converts one loop to the positive orientation expected for a standalone Clipper contour.
+    /// </summary>
+    private static PathD CreateClipperPath(BoundaryLoop boundaryLoop)
+    {
+        PathD path = new PathD(boundaryLoop.Points.Count);
+
+        if (boundaryLoop.SignedArea >= 0.0f)
+        {
+            for (int i = 0; i < boundaryLoop.Points.Count; i++)
+            {
+                Vector2 point = boundaryLoop.Points[i];
+                path.Add(new PointD(point.X, point.Y));
+            }
+        }
+        else
+        {
+            for (int i = boundaryLoop.Points.Count - 1; i >= 0; i--)
+            {
+                Vector2 point = boundaryLoop.Points[i];
+                path.Add(new PointD(point.X, point.Y));
+            }
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// Classifies a contour as a hole when it is nested inside an odd number of other source contours.
+    /// </summary>
+    private static bool IsInternalBoundaryLoop(BoundaryLoop candidate, IReadOnlyList<BoundaryLoop> boundaryLoops)
+    {
+        Vector2 testPoint = candidate.Points[0];
+        int containingLoopCount = 0;
+
+        for (int loopIndex = 0; loopIndex < boundaryLoops.Count; loopIndex++)
+        {
+            BoundaryLoop otherLoop = boundaryLoops[loopIndex];
+
+            if (ReferenceEquals(candidate, otherLoop) || otherLoop.Points.Count < 3)
+            {
+                continue;
+            }
+
+            if (IsPointInsideLoop(testPoint, otherLoop.Points))
+            {
+                containingLoopCount++;
+            }
+        }
+
+        return containingLoopCount % 2 != 0;
+    }
+
+    /// <summary>
+    /// Performs an XY odd-even containment test used only to classify source boundary loops.
+    /// </summary>
+    private static bool IsPointInsideLoop(Vector2 point, IReadOnlyList<Vector2> loop)
+    {
+        bool isInside = false;
+        int previousIndex = loop.Count - 1;
+
+        for (int currentIndex = 0; currentIndex < loop.Count; currentIndex++)
+        {
+            Vector2 current = loop[currentIndex];
+            Vector2 previous = loop[previousIndex];
+            bool crossesRay = (current.Y > point.Y) != (previous.Y > point.Y);
+
+            if (crossesRay)
+            {
+                float intersectionX = ((previous.X - current.X) * (point.Y - current.Y) / (previous.Y - current.Y)) + current.X;
+
+                if (point.X < intersectionX)
+                {
+                    isInside = !isInside;
+                }
+            }
+
+            previousIndex = currentIndex;
+        }
+
+        return isInside;
+    }
+
+    /// <summary>
+    /// Draws a closed XY contour on the selected surface while omitting only unprojectable pieces.
+    /// </summary>
+    private static void AppendProjectedClosedPathSegments(
+        IReadOnlyList<Vector2> points,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        float sampleSpacing,
+        List<AreaSupportBoundarySegment> offsetBoundarySegments)
+    {
+        for (int pointIndex = 0; pointIndex < points.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; pointIndex++)
+        {
+            Vector2 edgeStart = points[pointIndex];
+            Vector2 edgeEnd = points[(pointIndex + 1) % points.Count];
+            float edgeLength = Vector2.Distance(edgeStart, edgeEnd);
+
+            if (edgeLength <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            int sampleCount = Math.Max(1, (int)MathF.Ceiling(edgeLength / sampleSpacing));
+
+            for (int sampleIndex = 0; sampleIndex < sampleCount && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; sampleIndex++)
+            {
+                Vector2 segmentStart = Vector2.Lerp(edgeStart, edgeEnd, sampleIndex / (float)sampleCount);
+                Vector2 segmentEnd = Vector2.Lerp(edgeStart, edgeEnd, (sampleIndex + 1) / (float)sampleCount);
+
+                if (TryProjectToSelectedArea(segmentStart, projectedTriangles, out AreaSupportSample startSample)
+                    && TryProjectToSelectedArea(segmentEnd, projectedTriangles, out AreaSupportSample endSample))
+                {
+                    offsetBoundarySegments.Add(new AreaSupportBoundarySegment(startSample.Position, endSample.Position));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds explicit supports at concave vertices on every generated offset contour.
+    /// </summary>
+    private static void AddOffsetFillConcaveCornerCandidates(
+        IReadOnlyList<Vector2> points,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        if (points.Count < 3 || settings.ConcaveCornerAngleDegrees <= 0.0f)
+        {
+            return;
+        }
+
+        bool isCounterClockwise = CalculateSignedArea(points) >= 0.0f;
+
+        for (int pointIndex = 0; pointIndex < points.Count && supportSamples.Count < MaximumSupportCount; pointIndex++)
+        {
+            Vector2 previous = points[(pointIndex + points.Count - 1) % points.Count];
+            Vector2 current = points[pointIndex];
+            Vector2 next = points[(pointIndex + 1) % points.Count];
+            Vector2 incoming = current - previous;
+            Vector2 outgoing = next - current;
+            float turnCross = Cross(incoming, outgoing);
+            bool isConcave = isCounterClockwise ? turnCross < -DegenerateTolerance : turnCross > DegenerateTolerance;
+
+            if (!isConcave || CalculateAngleDegrees(incoming, outgoing) <= settings.ConcaveCornerAngleDegrees)
+            {
+                continue;
+            }
+
+            TryAddProjectedOffsetFillSample(current, settings, projectedTriangles, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+        }
+    }
+
+    /// <summary>
+    /// Evenly spaces supports around a closed contour, including its final-to-first interval.
+    /// </summary>
+    private static void AddOffsetFillSpacingCandidates(
+        IReadOnlyList<Vector2> points,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        float pathLength = CalculateClosedPathLength(points);
+
+        if (pathLength <= DegenerateTolerance)
+        {
+            return;
+        }
+
+        int supportCount = Math.Max(1, (int)MathF.Ceiling(pathLength / settings.BoundarySpacing));
+        float actualSpacing = pathLength / supportCount;
+
+        for (int supportIndex = 0; supportIndex < supportCount && supportSamples.Count < MaximumSupportCount; supportIndex++)
+        {
+            float distanceAlongPath = (supportIndex + 0.5f) * actualSpacing;
+
+            if (TryGetClosedPathPointAtDistance(points, distanceAlongPath, out Vector2 candidatePoint))
+            {
+                TryAddProjectedOffsetFillSample(candidatePoint, settings, projectedTriangles, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Projects one offset-ring candidate while preserving intentionally close adjacent rings.
+    /// </summary>
+    private static void TryAddProjectedOffsetFillSample(
+        Vector2 candidatePoint,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        if (!IsPointInsideArea(candidatePoint, projectedTriangles))
+        {
+            rejectedCandidateCount++;
+            return;
+        }
+
+        float duplicateDistance = Math.Min(settings.BoundarySpacing, settings.BoundaryOffset) * DuplicateSpacingFactor;
+        float duplicateDistanceSquared = duplicateDistance * duplicateDistance;
+
+        for (int i = 0; i < acceptedSamplePoints.Count; i++)
+        {
+            if (Vector2.DistanceSquared(candidatePoint, acceptedSamplePoints[i]) <= duplicateDistanceSquared)
+            {
+                duplicateCandidateCount++;
+                return;
+            }
+        }
+
+        if (!TryProjectToSelectedArea(candidatePoint, projectedTriangles, out AreaSupportSample sample))
+        {
+            rejectedCandidateCount++;
+            return;
+        }
+
+        acceptedSamplePoints.Add(candidatePoint);
+        supportSamples.Add(sample);
+    }
+
+    /// <summary>
+    /// Calculates a closed contour perimeter including its last-to-first segment.
+    /// </summary>
+    private static float CalculateClosedPathLength(IReadOnlyList<Vector2> points)
+    {
+        float length = 0.0f;
+
+        for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
+        {
+            length += Vector2.Distance(points[pointIndex], points[(pointIndex + 1) % points.Count]);
+        }
+
+        return length;
+    }
+
+    /// <summary>
+    /// Finds a point at a wrapped distance around a closed XY contour.
+    /// </summary>
+    private static bool TryGetClosedPathPointAtDistance(IReadOnlyList<Vector2> points, float distanceAlongPath, out Vector2 point)
+    {
+        float remainingDistance = distanceAlongPath;
+
+        for (int pointIndex = 0; pointIndex < points.Count; pointIndex++)
+        {
+            Vector2 start = points[pointIndex];
+            Vector2 end = points[(pointIndex + 1) % points.Count];
+            float segmentLength = Vector2.Distance(start, end);
+
+            if (segmentLength <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            if (remainingDistance <= segmentLength || pointIndex == points.Count - 1)
+            {
+                float segmentFraction = Math.Clamp(remainingDistance / segmentLength, 0.0f, 1.0f);
+                point = Vector2.Lerp(start, end, segmentFraction);
+                return true;
+            }
+
+            remainingDistance -= segmentLength;
+        }
+
+        point = Vector2.Zero;
+        return false;
+    }
+
+    /// <summary>
+    /// Calculates the signed area of any closed XY point sequence.
+    /// </summary>
+    private static float CalculateSignedArea(IReadOnlyList<Vector2> points)
+    {
+        float area = 0.0f;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector2 current = points[i];
+            Vector2 next = points[(i + 1) % points.Count];
+            area += (current.X * next.Y) - (next.X * current.Y);
+        }
+
+        return area * 0.5f;
+    }
+
+    /// <summary>
+    /// Creates preview segments for the configured inward boundary offset used by the Hex Grid filters.
     /// </summary>
     private static void AppendOffsetBoundarySegments(
         AreaSupportSettings settings,
@@ -559,7 +955,7 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Adds support candidates half a spacing inward from the boundary segments.
+    /// Adds support candidates on the configured inward boundary offset.
     /// </summary>
     private static void FillBoundaryCandidates(
         MeshEntity mesh,
@@ -779,7 +1175,7 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Adds centreline fallback supports where the normal half-spacing offset collapses in a thin region.
+    /// Adds centreline fallback supports where the configured boundary offset collapses in a thin region.
     /// </summary>
     private static void AddThinRegionFallbackCandidates(
         MeshEntity mesh,
@@ -809,7 +1205,7 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Projects one thin-region fallback candidate without requiring the impossible half-spacing boundary clearance.
+    /// Projects one thin-region fallback candidate without requiring the impossible boundary-offset clearance.
     /// </summary>
     private static void TryAddProjectedThinRegionSample(
         MeshEntity mesh,
@@ -1876,6 +2272,25 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
+    /// Stores one closed Clipper contour and whether it contributes generated supports.
+    /// </summary>
+    private sealed class OffsetFillPath
+    {
+        /// <summary>
+        /// Stores one closed Clipper contour and whether it contributes generated supports.
+        /// </summary>
+        public OffsetFillPath(IReadOnlyList<Vector2> points, bool generateSupports)
+        {
+            Points = new ReadOnlyCollection<Vector2>(new List<Vector2>(points));
+            GenerateSupports = generateSupports;
+        }
+
+        public IReadOnlyList<Vector2> Points { get; }
+
+        public bool GenerateSupports { get; }
+    }
+
+    /// <summary>
     /// Stores one projected triangle with cached XY coordinates.
     /// </summary>
     private readonly struct ProjectedTriangle
@@ -2054,7 +2469,7 @@ public static class AreaSupportPattern
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(First, Second);
+            return System.HashCode.Combine(First, Second);
         }
     }
 
@@ -2086,7 +2501,7 @@ public static class AreaSupportPattern
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(X, Y, Z);
+            return System.HashCode.Combine(X, Y, Z);
         }
 
         private static long Quantize(float value)
@@ -2122,7 +2537,7 @@ public static class AreaSupportPattern
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(X, Y);
+            return System.HashCode.Combine(X, Y);
         }
 
         private static long Quantize(float value)

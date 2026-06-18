@@ -4,6 +4,7 @@ using Pillar.Core.Document;
 using Pillar.Commands;
 using Pillar.Core.Entities;
 using Pillar.Core.Import;
+using Pillar.Core.Layers;
 using Pillar.Core.Persistence;
 using Pillar.Core.Snapping;
 using Pillar.Core.Supports;
@@ -131,6 +132,8 @@ public partial class MainWindow : Window
             GetAreaSupportConcaveCornerAngleOrDefault,
             GetAreaSupportThinRegions,
             GetAreaSupportMinimumThinRegionThicknessOrDefault,
+            GetAreaSupportFillMode,
+            GetAreaSupportAdditionalOffsetCountOrDefault,
             GetAreaSupportShowSpacing,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
@@ -552,6 +555,27 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Area support minimum thickness is invalid; using 1.0 mm.");
         return AreaSupportToolOptionsControl.DefaultMinimumThinRegionThickness;
+    }
+
+    /// <summary>
+    /// Gets the selected Area Support interior distribution strategy.
+    /// </summary>
+    private AreaSupportFillMode GetAreaSupportFillMode()
+    {
+        return _areaSupportToolOptionsControl.GetFillMode();
+    }
+
+    /// <summary>
+    /// Gets the requested number of Area Support rings after the original offset boundary.
+    /// </summary>
+    private int GetAreaSupportAdditionalOffsetCountOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetAdditionalOffsetCount(out int additionalOffsetCount))
+        {
+            return additionalOffsetCount;
+        }
+
+        return AreaSupportToolOptionsControl.DefaultAdditionalOffsetCount;
     }
 
     /// <summary>
