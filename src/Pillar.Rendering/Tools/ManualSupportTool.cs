@@ -34,8 +34,11 @@ public class ManualSupportTool : ITool
     private readonly Func<float> _getContourSupportStartOffset;
     private readonly Func<float> _getContourSupportFinalOffset;
     private readonly Func<float> _getAreaSupportSpacing;
+    private readonly Func<float> _getAreaSupportBoundaryOffset;
     private readonly Func<float> _getAreaSupportBoundarySpacing;
     private readonly Func<float> _getAreaSupportConcaveCornerAngleDegrees;
+    private readonly Func<bool> _getAreaSupportThinRegions;
+    private readonly Func<float> _getAreaSupportMinimumThinRegionThickness;
     private readonly Func<bool> _getAreaSupportShowSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<float> _contourSupportZHeightSelectedReporter;
@@ -61,8 +64,11 @@ public class ManualSupportTool : ITool
         Func<float> getContourSupportStartOffset,
         Func<float> getContourSupportFinalOffset,
         Func<float> getAreaSupportSpacing,
+        Func<float> getAreaSupportBoundaryOffset,
         Func<float> getAreaSupportBoundarySpacing,
         Func<float> getAreaSupportConcaveCornerAngleDegrees,
+        Func<bool> getAreaSupportThinRegions,
+        Func<float> getAreaSupportMinimumThinRegionThickness,
         Func<bool> getAreaSupportShowSpacing,
         Action<float> contourSupportZHeightSelectedReporter,
         Action<bool> contourSupportClosedStateReporter,
@@ -83,8 +89,11 @@ public class ManualSupportTool : ITool
         _getContourSupportStartOffset = getContourSupportStartOffset ?? throw new ArgumentNullException(nameof(getContourSupportStartOffset));
         _getContourSupportFinalOffset = getContourSupportFinalOffset ?? throw new ArgumentNullException(nameof(getContourSupportFinalOffset));
         _getAreaSupportSpacing = getAreaSupportSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportSpacing));
+        _getAreaSupportBoundaryOffset = getAreaSupportBoundaryOffset ?? throw new ArgumentNullException(nameof(getAreaSupportBoundaryOffset));
         _getAreaSupportBoundarySpacing = getAreaSupportBoundarySpacing ?? throw new ArgumentNullException(nameof(getAreaSupportBoundarySpacing));
         _getAreaSupportConcaveCornerAngleDegrees = getAreaSupportConcaveCornerAngleDegrees ?? throw new ArgumentNullException(nameof(getAreaSupportConcaveCornerAngleDegrees));
+        _getAreaSupportThinRegions = getAreaSupportThinRegions ?? throw new ArgumentNullException(nameof(getAreaSupportThinRegions));
+        _getAreaSupportMinimumThinRegionThickness = getAreaSupportMinimumThinRegionThickness ?? throw new ArgumentNullException(nameof(getAreaSupportMinimumThinRegionThickness));
         _getAreaSupportShowSpacing = getAreaSupportShowSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportShowSpacing));
         _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
         _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
@@ -235,8 +244,11 @@ public class ManualSupportTool : ITool
                 _commandRunner,
                 _getSelectedModelEntityId,
                 _getAreaSupportSpacing,
+                _getAreaSupportBoundaryOffset,
                 _getAreaSupportBoundarySpacing,
                 _getAreaSupportConcaveCornerAngleDegrees,
+                _getAreaSupportThinRegions,
+                _getAreaSupportMinimumThinRegionThickness,
                 _getAreaSupportShowSpacing,
                 _createSupportProfile,
                 _faceSelectionSessionStarter,

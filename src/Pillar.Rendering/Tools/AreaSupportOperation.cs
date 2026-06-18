@@ -48,8 +48,11 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
+    private readonly Func<float> _getBoundaryOffset;
     private readonly Func<float> _getBoundarySpacing;
     private readonly Func<float> _getConcaveCornerAngleDegrees;
+    private readonly Func<bool> _getSupportThinRegions;
+    private readonly Func<float> _getMinimumThinRegionThickness;
     private readonly Func<bool> _getShowSupportSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
@@ -73,8 +76,11 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
+        Func<float> getBoundaryOffset,
         Func<float> getBoundarySpacing,
         Func<float> getConcaveCornerAngleDegrees,
+        Func<bool> getSupportThinRegions,
+        Func<float> getMinimumThinRegionThickness,
         Func<bool> getShowSupportSpacing,
         Func<SupportProfile> createSupportProfile,
         Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
@@ -86,8 +92,11 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
+        _getBoundaryOffset = getBoundaryOffset ?? throw new ArgumentNullException(nameof(getBoundaryOffset));
         _getBoundarySpacing = getBoundarySpacing ?? throw new ArgumentNullException(nameof(getBoundarySpacing));
         _getConcaveCornerAngleDegrees = getConcaveCornerAngleDegrees ?? throw new ArgumentNullException(nameof(getConcaveCornerAngleDegrees));
+        _getSupportThinRegions = getSupportThinRegions ?? throw new ArgumentNullException(nameof(getSupportThinRegions));
+        _getMinimumThinRegionThickness = getMinimumThinRegionThickness ?? throw new ArgumentNullException(nameof(getMinimumThinRegionThickness));
         _getShowSupportSpacing = getShowSupportSpacing ?? throw new ArgumentNullException(nameof(getShowSupportSpacing));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
@@ -467,8 +476,11 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         return new AreaSupportSettings(
             _selectedFaces,
             _getSpacing(),
+            _getBoundaryOffset(),
             _getBoundarySpacing(),
-            _getConcaveCornerAngleDegrees());
+            _getConcaveCornerAngleDegrees(),
+            _getSupportThinRegions(),
+            _getMinimumThinRegionThickness());
     }
 
     /// <summary>

@@ -126,8 +126,11 @@ public partial class MainWindow : Window
             GetContourSupportStartOffsetOrDefault,
             GetContourSupportFinalOffsetOrDefault,
             GetAreaSupportSpacingOrDefault,
+            GetAreaSupportBoundaryOffsetOrDefault,
             GetAreaSupportBoundarySpacingOrDefault,
             GetAreaSupportConcaveCornerAngleOrDefault,
+            GetAreaSupportThinRegions,
+            GetAreaSupportMinimumThinRegionThicknessOrDefault,
             GetAreaSupportShowSpacing,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
@@ -488,6 +491,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Reads Area Support boundary offset from the active Area Support options panel.
+    /// </summary>
+    private float GetAreaSupportBoundaryOffsetOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetBoundaryOffset(out float boundaryOffset))
+        {
+            return boundaryOffset;
+        }
+
+        _viewModel.SetStatusText("Area support boundary offset is invalid; using 1.5 mm.");
+        return AreaSupportToolOptionsControl.DefaultAreaSupportBoundaryOffset;
+    }
+
+    /// <summary>
     /// Reads Area Support boundary spacing from the active Area Support options panel.
     /// </summary>
     private float GetAreaSupportBoundarySpacingOrDefault()
@@ -513,6 +530,28 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Area support concave corner angle is invalid; using 30 degrees.");
         return AreaSupportToolOptionsControl.DefaultConcaveCornerAngleDegrees;
+    }
+
+    /// <summary>
+    /// Reads whether Area Support should add centreline fallback supports in thin regions.
+    /// </summary>
+    private bool GetAreaSupportThinRegions()
+    {
+        return _areaSupportToolOptionsControl.GetSupportThinRegions();
+    }
+
+    /// <summary>
+    /// Reads the minimum local thickness required for Area Support thin-region fallback.
+    /// </summary>
+    private float GetAreaSupportMinimumThinRegionThicknessOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetMinimumThinRegionThickness(out float minimumThickness))
+        {
+            return minimumThickness;
+        }
+
+        _viewModel.SetStatusText("Area support minimum thickness is invalid; using 1.0 mm.");
+        return AreaSupportToolOptionsControl.DefaultMinimumThinRegionThickness;
     }
 
     /// <summary>

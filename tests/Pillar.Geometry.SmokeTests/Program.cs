@@ -4,6 +4,7 @@ using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Persistence;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
@@ -72,8 +73,14 @@ public static class Program
         RunTest(failures, "Contour support places supports on noisy near-vertical faces", ValidateContourSupportPlacesSupportsOnNoisyNearVerticalFaces);
         RunTest(failures, "Contour support open offsets respect spacing", ValidateContourSupportOpenOffsetsRespectSpacing);
         RunTest(failures, "Contour support Z edits choose nearest patch contour", ValidateContourSupportZEditsChooseNearestPatchContour);
+        RunTest(failures, "Area support thin ring uses centreline fallback", ValidateAreaSupportThinRingUsesCentrelineFallback);
+        RunTest(failures, "Area support thin fallback can be disabled", ValidateAreaSupportThinFallbackCanBeDisabled);
+        RunTest(failures, "Area support ultra-thin regions respect minimum thickness", ValidateAreaSupportUltraThinRegionsRespectMinimumThickness);
+        RunTest(failures, "Area support offsets internal hole boundaries", ValidateAreaSupportOffsetsInternalHoleBoundaries);
+        RunTest(failures, "Area support splits coarse offset boundary preview paths", ValidateAreaSupportSplitsCoarseOffsetBoundaryPreviewPaths);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
+        RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -1208,6 +1215,115 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that a ring thinner than support spacing still receives centreline fallback supports when enabled.
+    /// </summary>
+    private static void ValidateAreaSupportThinRingUsesCentrelineFallback()
+    {
+        MeshEntity mesh = CreateSquareRingAreaMesh(2.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, true, 1.0f);
+        AreaSupportResult result;
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected thin-ring centreline fallback to generate supports.");
+        }
+
+        if (result.SupportSamples.Count == 0)
+        {
+            throw new InvalidOperationException("Expected at least one fallback support sample.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that thin-region centreline fallback is skipped when the option is disabled.
+    /// </summary>
+    private static void ValidateAreaSupportThinFallbackCanBeDisabled()
+    {
+        MeshEntity mesh = CreateSquareRingAreaMesh(2.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, false, 1.0f);
+        AreaSupportResult result;
+
+        if (AreaSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected disabled thin-region fallback to leave the too-thin ring unsupported.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that ultra-thin regions below the configured minimum thickness do not receive fallback supports.
+    /// </summary>
+    private static void ValidateAreaSupportUltraThinRegionsRespectMinimumThickness()
+    {
+        MeshEntity mesh = CreateSquareRingAreaMesh(0.5f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, true, 1.0f);
+        AreaSupportResult result;
+
+        if (AreaSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected regions thinner than the minimum thickness to receive no centreline supports.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that Area Support creates normal offset supports around internal hole boundaries.
+    /// </summary>
+    private static void ValidateAreaSupportOffsetsInternalHoleBoundaries()
+    {
+        const float OuterHalfSize = 6.0f;
+        const float BandThickness = 4.0f;
+        const float InnerHalfSize = OuterHalfSize - BandThickness;
+        const float Spacing = 2.0f;
+        float expectedInnerOffsetCoordinate = InnerHalfSize + AreaSupportSettings.CalculateDefaultBoundaryOffset(Spacing);
+        MeshEntity mesh = CreateSquareRingAreaMesh(BandThickness);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, Spacing, 1.5f, false, 1.0f);
+        AreaSupportResult result;
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected wide ring area support generation to succeed.");
+        }
+
+        for (int i = 0; i < result.SupportSamples.Count; i++)
+        {
+            Vector3 samplePosition = result.SupportSamples[i].Position;
+            float maximumCoordinate = MathF.Max(MathF.Abs(samplePosition.X), MathF.Abs(samplePosition.Y));
+
+            if (MathF.Abs(maximumCoordinate - expectedInnerOffsetCoordinate) <= 0.25f)
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("Expected at least one support on the internal hole offset boundary.");
+    }
+
+    /// <summary>
+    /// Validates that coarse selected mesh edges are drawn as sampled offset pieces rather than long raw chords.
+    /// </summary>
+    private static void ValidateAreaSupportSplitsCoarseOffsetBoundaryPreviewPaths()
+    {
+        MeshEntity mesh = CreateSquareAreaMesh(40.0f);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, false, 1.0f);
+        AreaSupportResult result;
+
+        if (!AreaSupportPattern.TryCreate(mesh, settings, out result))
+        {
+            throw new InvalidOperationException("Expected coarse square area support generation to succeed.");
+        }
+
+        for (int i = 0; i < result.OffsetBoundarySegments.Count; i++)
+        {
+            AreaSupportBoundarySegment segment = result.OffsetBoundarySegments[i];
+            float segmentLength = Vector3.Distance(segment.Start, segment.End);
+
+            if (segmentLength > settings.Spacing * 1.5f)
+            {
+                throw new InvalidOperationException("Expected coarse offset boundary preview to be split into short validated pieces.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Validates that Line Support generator metadata is saved and loaded with the project.
     /// </summary>
     private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
@@ -1333,6 +1449,64 @@ public static class Program
                 || MathF.Abs(loadedSettings.FinalOffset - settings.FinalOffset) > 0.0001f)
             {
                 throw new InvalidOperationException("Expected loaded Contour Support settings to preserve all numeric fields.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that Area Support generator metadata is saved and loaded with thin-region settings.
+    /// </summary>
+    private static void ValidateAreaSupportSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSquareRingAreaMesh(2.0f);
+        document.AddEntity(mesh);
+        AreaSupportSettings settings = CreateAreaSupportSettingsForAllFaces(mesh, 3.0f, 2.0f, true, 1.25f, 1.75f);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Area Supports");
+        supportLayerGroup.SetAreaSupportSettings(settings);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "AreaSupportSettingsSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1)
+            {
+                throw new InvalidOperationException("Expected one loaded support layer group.");
+            }
+
+            SupportLayerGroup loadedSupportLayerGroup = loadedDocument.SupportLayerGroups[0];
+            AreaSupportSettings? loadedSettings = loadedSupportLayerGroup.AreaSupportSettings;
+
+            if (loadedSupportLayerGroup.GeneratorKind != SupportGroupGeneratorKind.AreaSupport || loadedSettings == null)
+            {
+                throw new InvalidOperationException("Expected the loaded support layer group to preserve Area Support metadata.");
+            }
+
+            if (!loadedSettings.SupportThinRegions)
+            {
+                throw new InvalidOperationException("Expected Area Support thin-region setting to survive save and load.");
+            }
+
+            if (MathF.Abs(loadedSettings.BoundaryOffset - 1.75f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Area Support boundary offset to survive save and load.");
+            }
+
+            if (MathF.Abs(loadedSettings.MinimumThinRegionThickness - 1.25f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Area Support minimum thin-region thickness to survive save and load.");
             }
         }
         finally
@@ -1571,6 +1745,116 @@ public static class Program
             },
             new List<Vector3>(),
             userTransform: userTransform);
+    }
+
+    /// <summary>
+    /// Creates Area Support settings that select every triangle in a mesh.
+    /// </summary>
+    private static AreaSupportSettings CreateAreaSupportSettingsForAllFaces(
+        MeshEntity mesh,
+        float spacing,
+        float boundarySpacing,
+        bool supportThinRegions,
+        float minimumThinRegionThickness,
+        float? boundaryOffset = null)
+    {
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(triangleCount);
+
+        for (int triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
+        {
+            selectedFaces.Add(new FaceSelectionKey(mesh.Id, triangleIndex));
+        }
+
+        return new AreaSupportSettings(
+            selectedFaces,
+            spacing,
+            boundaryOffset ?? AreaSupportSettings.CalculateDefaultBoundaryOffset(spacing),
+            boundarySpacing,
+            AreaSupportSettings.DefaultConcaveCornerAngleDegrees,
+            supportThinRegions,
+            minimumThinRegionThickness);
+    }
+
+    /// <summary>
+    /// Creates a square annulus whose uniform band thickness is easy to reason about in XY.
+    /// </summary>
+    private static MeshEntity CreateSquareRingAreaMesh(float bandThickness)
+    {
+        float outer = 6.0f;
+        float inner = outer - bandThickness;
+
+        return new MeshEntity(
+            "Square ring area",
+            new List<Vector3>
+            {
+                new Vector3(-outer, -outer, 0.0f),
+                new Vector3(outer, -outer, 0.0f),
+                new Vector3(outer, outer, 0.0f),
+                new Vector3(-outer, outer, 0.0f),
+                new Vector3(-inner, -inner, 0.0f),
+                new Vector3(inner, -inner, 0.0f),
+                new Vector3(inner, inner, 0.0f),
+                new Vector3(-inner, inner, 0.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                5,
+                0,
+                5,
+                4,
+                1,
+                2,
+                6,
+                1,
+                6,
+                5,
+                2,
+                3,
+                7,
+                2,
+                7,
+                6,
+                3,
+                0,
+                4,
+                3,
+                4,
+                7
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates a very coarse square mesh that exposes long selected-boundary edges.
+    /// </summary>
+    private static MeshEntity CreateSquareAreaMesh(float size)
+    {
+        float halfSize = size * 0.5f;
+
+        return new MeshEntity(
+            "Coarse square area",
+            new List<Vector3>
+            {
+                new Vector3(-halfSize, -halfSize, 0.0f),
+                new Vector3(halfSize, -halfSize, 0.0f),
+                new Vector3(halfSize, halfSize, 0.0f),
+                new Vector3(-halfSize, halfSize, 0.0f)
+            },
+            new List<int>
+            {
+                0,
+                1,
+                2,
+                0,
+                2,
+                3
+            },
+            new List<Vector3>(),
+            userTransform: Transform3DData.Identity);
     }
 
     /// <summary>

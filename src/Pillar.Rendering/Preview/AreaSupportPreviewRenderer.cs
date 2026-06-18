@@ -21,8 +21,6 @@ public sealed class AreaSupportPreviewRenderer
     private const int MaximumMarkerCount = AreaSupportPattern.MaximumSupportCount;
     private const int CircleSegmentCount = 32;
     private const float MarkerHalfSize = 0.18f;
-    private const float OffsetBoundaryDashLength = 0.45f;
-    private const float OffsetBoundaryGapLength = 0.45f;
 
     private readonly LineGeometry3D _boundaryGeometry;
     private readonly LineGeometryModel3D _boundaryModel;
@@ -160,28 +158,31 @@ public sealed class AreaSupportPreviewRenderer
     }
 
     /// <summary>
-    /// Updates the dotted yellow line that shows the inward offset boundary used by candidate filtering.
+    /// Updates the yellow line that shows the inward offset boundary used by candidate filtering.
     /// </summary>
     private void ShowOffsetBoundary(IReadOnlyList<AreaSupportBoundarySegment> offsetBoundarySegments)
     {
+        int segmentCount = global::System.Math.Min(offsetBoundarySegments.Count, MaximumBoundarySegmentCount);
         Vector3Collection positions = _offsetBoundaryGeometry.Positions!;
-        int dottedSegmentCount = 0;
 
-        for (int sourceSegmentIndex = 0; sourceSegmentIndex < offsetBoundarySegments.Count && dottedSegmentCount < MaximumBoundarySegmentCount; sourceSegmentIndex++)
-        {
-            AreaSupportBoundarySegment segment = offsetBoundarySegments[sourceSegmentIndex];
-            AppendDottedSegment(segment.Start, segment.End, positions, ref dottedSegmentCount);
-        }
-
-        for (int segmentIndex = dottedSegmentCount; segmentIndex < MaximumBoundarySegmentCount; segmentIndex++)
+        for (int segmentIndex = 0; segmentIndex < MaximumBoundarySegmentCount; segmentIndex++)
         {
             int baseIndex = segmentIndex * 2;
-            positions[baseIndex] = Vector3.Zero;
-            positions[baseIndex + 1] = Vector3.Zero;
+
+            if (segmentIndex < segmentCount)
+            {
+                positions[baseIndex] = offsetBoundarySegments[segmentIndex].Start;
+                positions[baseIndex + 1] = offsetBoundarySegments[segmentIndex].End;
+            }
+            else
+            {
+                positions[baseIndex] = Vector3.Zero;
+                positions[baseIndex + 1] = Vector3.Zero;
+            }
         }
 
         UpdateGeometry(_offsetBoundaryGeometry);
-        _offsetBoundaryModel.Visibility = dottedSegmentCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _offsetBoundaryModel.Visibility = segmentCount > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -295,42 +296,6 @@ public sealed class AreaSupportPreviewRenderer
         }
 
         return geometry;
-    }
-
-    /// <summary>
-    /// Emits short line sections with gaps to approximate a dotted offset boundary.
-    /// </summary>
-    private static void AppendDottedSegment(Vector3 start, Vector3 end, Vector3Collection positions, ref int dottedSegmentCount)
-    {
-        Vector3 segment = end - start;
-        float length = segment.Length();
-
-        if (length <= 0.000001f)
-        {
-            return;
-        }
-
-        Vector3 direction = Vector3.Normalize(segment);
-
-        if (length <= OffsetBoundaryDashLength)
-        {
-            int shortBaseIndex = dottedSegmentCount * 2;
-            positions[shortBaseIndex] = start;
-            positions[shortBaseIndex + 1] = end;
-            dottedSegmentCount++;
-            return;
-        }
-
-        float stepLength = OffsetBoundaryDashLength + OffsetBoundaryGapLength;
-
-        for (float distance = 0.0f; distance < length && dottedSegmentCount < MaximumBoundarySegmentCount; distance += stepLength)
-        {
-            float dashEndDistance = global::System.Math.Min(distance + OffsetBoundaryDashLength, length);
-            int baseIndex = dottedSegmentCount * 2;
-            positions[baseIndex] = start + (direction * distance);
-            positions[baseIndex + 1] = start + (direction * dashEndDistance);
-            dottedSegmentCount++;
-        }
     }
 
     /// <summary>

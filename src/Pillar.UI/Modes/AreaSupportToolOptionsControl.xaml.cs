@@ -15,8 +15,10 @@ public partial class AreaSupportToolOptionsControl : UserControl
 {
     private const int OptionsChangedDelayMilliseconds = 300;
     public const float DefaultAreaSupportSpacing = AreaSupportSettings.DefaultSpacing;
+    public const float DefaultAreaSupportBoundaryOffset = AreaSupportSettings.DefaultBoundaryOffset;
     public const float DefaultAreaSupportBoundarySpacing = AreaSupportSettings.DefaultBoundarySpacing;
     public const float DefaultConcaveCornerAngleDegrees = AreaSupportSettings.DefaultConcaveCornerAngleDegrees;
+    public const float DefaultMinimumThinRegionThickness = AreaSupportSettings.DefaultMinimumThinRegionThickness;
 
     private readonly DispatcherTimer _optionsChangedTimer;
     private bool _isSynchronizingOptions;
@@ -76,6 +78,20 @@ public partial class AreaSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Attempts to read the Area Support boundary offset field in millimeters.
+    /// </summary>
+    public bool TryGetBoundaryOffset(out float boundaryOffset)
+    {
+        if (TryGetFiniteFloat(BoundaryOffsetNumericUpDown.Value, out boundaryOffset) && boundaryOffset > 0.0f)
+        {
+            return true;
+        }
+
+        boundaryOffset = DefaultAreaSupportBoundaryOffset;
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to read the Area Support boundary spacing field in millimeters.
     /// </summary>
     public bool TryGetBoundarySpacing(out float boundarySpacing)
@@ -106,6 +122,28 @@ public partial class AreaSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Gets whether collapsed thin regions should receive centreline fallback supports.
+    /// </summary>
+    public bool GetSupportThinRegions()
+    {
+        return SupportThinRegionsCheckBox.IsChecked == true;
+    }
+
+    /// <summary>
+    /// Attempts to read the minimum local thickness required for thin-region fallback supports.
+    /// </summary>
+    public bool TryGetMinimumThinRegionThickness(out float minimumThickness)
+    {
+        if (TryGetFiniteFloat(MinimumThinRegionThicknessNumericUpDown.Value, out minimumThickness) && minimumThickness >= 0.0f)
+        {
+            return true;
+        }
+
+        minimumThickness = DefaultMinimumThinRegionThickness;
+        return false;
+    }
+
+    /// <summary>
     /// Gets whether support spacing circles should be displayed in the preview.
     /// </summary>
     public bool GetShowSupportSpacing()
@@ -129,8 +167,12 @@ public partial class AreaSupportToolOptionsControl : UserControl
         try
         {
             AreaSpacingNumericUpDown.Value = settings.Spacing;
+            BoundaryOffsetNumericUpDown.Value = settings.BoundaryOffset;
             BoundarySpacingNumericUpDown.Value = settings.BoundarySpacing;
             ConcaveCornerAngleNumericUpDown.Value = settings.ConcaveCornerAngleDegrees;
+            SupportThinRegionsCheckBox.IsChecked = settings.SupportThinRegions;
+            MinimumThinRegionThicknessNumericUpDown.Value = settings.MinimumThinRegionThickness;
+            MinimumThinRegionThicknessNumericUpDown.IsEnabled = settings.SupportThinRegions;
         }
         finally
         {
@@ -191,6 +233,27 @@ public partial class AreaSupportToolOptionsControl : UserControl
     {
         _ = sender;
         _ = e;
+
+        if (_isSynchronizingOptions)
+        {
+            return;
+        }
+
+        OptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Enables or disables thin-region thickness editing and refreshes the preview.
+    /// </summary>
+    private void SupportThinRegionsCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (MinimumThinRegionThicknessNumericUpDown != null)
+        {
+            MinimumThinRegionThicknessNumericUpDown.IsEnabled = SupportThinRegionsCheckBox.IsChecked == true;
+        }
 
         if (_isSynchronizingOptions)
         {

@@ -151,6 +151,7 @@ public static class AreaSupportPattern
     private const float DuplicateSpacingFactor = 0.45f;
     private const float PointInsideTolerance = 0.0001f;
     private const float MeshEdgePointKeyScale = 10000.0f;
+    private const float OffsetBoundarySampleSpacing = 0.5f;
 
     /// <summary>
     /// Creates Area Support preview and support samples using the mesh's current world transform.
@@ -215,7 +216,7 @@ public static class AreaSupportPattern
             AppendBoundarySegments(islandBoundaryEdges, boundarySegments);
             AppendOffsetBoundarySegments(settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, offsetBoundarySegments);
             FillBoundaryCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, boundaryLoops, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
-            FillHexGridCandidates(mesh, worldVertices, triangleNormals, settings.Spacing, projectedTriangles, islandBoundaryEdges, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            FillHexGridCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, islandBoundaryEdges, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
         }
 
         if (supportSamples.Count == 0)
@@ -492,30 +493,67 @@ public static class AreaSupportPattern
         IReadOnlyList<BoundaryLoop> boundaryLoops,
         List<AreaSupportBoundarySegment> offsetBoundarySegments)
     {
-        float boundaryOffset = settings.Spacing * 0.5f;
-        _ = boundaryEdges;
+        float boundaryOffset = settings.BoundaryOffset;
 
         for (int loopIndex = 0; loopIndex < boundaryLoops.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; loopIndex++)
         {
             BoundaryLoop boundaryLoop = boundaryLoops[loopIndex];
             bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
-            List<Vector2> offsetBoundaryPoints = CreateOffsetBoundaryPoints(boundaryLoop, boundaryOffset, isCounterClockwise);
+            List<List<Vector2>> offsetBoundaryPaths = CreateValidatedOffsetBoundaryPaths(settings, projectedTriangles, boundaryEdges, boundaryLoop, boundaryOffset, isCounterClockwise);
 
-            for (int edgeIndex = 0; edgeIndex < offsetBoundaryPoints.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; edgeIndex++)
+            for (int pathIndex = 0; pathIndex < offsetBoundaryPaths.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; pathIndex++)
             {
-                Vector2 offsetStart = offsetBoundaryPoints[edgeIndex];
-                Vector2 offsetEnd = offsetBoundaryPoints[(edgeIndex + 1) % offsetBoundaryPoints.Count];
+                IReadOnlyList<Vector2> offsetBoundaryPath = offsetBoundaryPaths[pathIndex];
 
-                if (Vector2.DistanceSquared(offsetStart, offsetEnd) <= DegenerateTolerance)
+                for (int pointIndex = 0; pointIndex + 1 < offsetBoundaryPath.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; pointIndex++)
                 {
-                    continue;
-                }
+                    Vector2 offsetStart = offsetBoundaryPath[pointIndex];
+                    Vector2 offsetEnd = offsetBoundaryPath[pointIndex + 1];
 
-                if (TryProjectToSelectedArea(offsetStart, projectedTriangles, out AreaSupportSample startSample)
-                    && TryProjectToSelectedArea(offsetEnd, projectedTriangles, out AreaSupportSample endSample))
-                {
-                    offsetBoundarySegments.Add(new AreaSupportBoundarySegment(startSample.Position, endSample.Position));
+                    if (Vector2.DistanceSquared(offsetStart, offsetEnd) <= DegenerateTolerance)
+                    {
+                        continue;
+                    }
+
+                    if (TryProjectToSelectedArea(offsetStart, projectedTriangles, out AreaSupportSample startSample)
+                        && TryProjectToSelectedArea(offsetEnd, projectedTriangles, out AreaSupportSample endSample))
+                    {
+                        offsetBoundarySegments.Add(new AreaSupportBoundarySegment(startSample.Position, endSample.Position));
+                    }
                 }
+            }
+
+            AppendThinRegionFallbackSegments(settings, projectedTriangles, boundaryEdges, boundaryLoop, isCounterClockwise, offsetBoundarySegments);
+        }
+    }
+
+    /// <summary>
+    /// Adds preview segments for centreline fallback paths in collapsed thin regions.
+    /// </summary>
+    private static void AppendThinRegionFallbackSegments(
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        BoundaryLoop boundaryLoop,
+        bool isCounterClockwise,
+        List<AreaSupportBoundarySegment> offsetBoundarySegments)
+    {
+        List<Vector2> fallbackPoints = CreateThinRegionFallbackPoints(settings, projectedTriangles, boundaryEdges, boundaryLoop, isCounterClockwise);
+
+        for (int pointIndex = 0; pointIndex + 1 < fallbackPoints.Count && offsetBoundarySegments.Count < MaximumBoundarySegmentCount; pointIndex++)
+        {
+            Vector2 start = fallbackPoints[pointIndex];
+            Vector2 end = fallbackPoints[pointIndex + 1];
+
+            if (Vector2.Distance(start, end) > settings.BoundarySpacing * 1.5f)
+            {
+                continue;
+            }
+
+            if (TryProjectToSelectedArea(start, projectedTriangles, out AreaSupportSample startSample)
+                && TryProjectToSelectedArea(end, projectedTriangles, out AreaSupportSample endSample))
+            {
+                offsetBoundarySegments.Add(new AreaSupportBoundarySegment(startSample.Position, endSample.Position));
             }
         }
     }
@@ -538,7 +576,7 @@ public static class AreaSupportPattern
     {
         Vector2 centroid = CalculateCentroid(projectedTriangles);
         List<Vector2> acceptedBoundaryPoints = new List<Vector2>();
-        float boundaryOffset = settings.Spacing * 0.5f;
+        float boundaryOffset = settings.BoundaryOffset;
 
         for (int loopIndex = 0; loopIndex < boundaryLoops.Count && supportSamples.Count < MaximumSupportCount; loopIndex++)
         {
@@ -546,6 +584,7 @@ public static class AreaSupportPattern
 
             AddConcaveCornerCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, boundaryEdges, boundaryLoop, centroid, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
             AddBoundaryLoopSpacingCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, boundaryEdges, boundaryLoop, centroid, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, boundaryOffset, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            AddThinRegionFallbackCandidates(mesh, worldVertices, triangleNormals, settings, projectedTriangles, boundaryEdges, boundaryLoop, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
         }
     }
 
@@ -572,7 +611,7 @@ public static class AreaSupportPattern
             return;
         }
 
-        float boundaryOffset = settings.Spacing * 0.5f;
+        float boundaryOffset = settings.BoundaryOffset;
         bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
 
         for (int i = 0; i < boundaryLoop.Points.Count && supportSamples.Count < MaximumSupportCount; i++)
@@ -603,8 +642,8 @@ public static class AreaSupportPattern
                 continue;
             }
 
-            Vector2 previousInwardNormal = CalculateInwardNormal(previous, current, isCounterClockwise);
-            Vector2 nextInwardNormal = CalculateInwardNormal(current, next, isCounterClockwise);
+            Vector2 previousInwardNormal = CalculateAreaInteriorNormal(previous, current, projectedTriangles, isCounterClockwise);
+            Vector2 nextInwardNormal = CalculateAreaInteriorNormal(current, next, projectedTriangles, isCounterClockwise);
             Vector2 offsetDirection = previousInwardNormal + nextInwardNormal;
 
             if (offsetDirection.LengthSquared() <= DegenerateTolerance)
@@ -629,7 +668,7 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Adds supports at closed-loop half-cell intervals without exceeding the configured spacing cap.
+    /// Adds supports along validated offset-boundary path pieces without exceeding the configured spacing cap.
     /// </summary>
     private static void AddBoundaryLoopSpacingCandidates(
         MeshEntity mesh,
@@ -653,32 +692,37 @@ public static class AreaSupportPattern
         }
 
         bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
-        List<Vector2> offsetBoundaryPoints = CreateOffsetBoundaryPoints(boundaryLoop, boundaryOffset, isCounterClockwise);
-        float perimeter = CalculateLoopPerimeter(offsetBoundaryPoints);
+        List<List<Vector2>> offsetBoundaryPaths = CreateValidatedOffsetBoundaryPaths(settings, projectedTriangles, boundaryEdges, boundaryLoop, boundaryOffset, isCounterClockwise);
 
-        if (perimeter <= DegenerateTolerance)
+        for (int pathIndex = 0; pathIndex < offsetBoundaryPaths.Count && supportSamples.Count < MaximumSupportCount; pathIndex++)
         {
-            return;
-        }
+            IReadOnlyList<Vector2> offsetBoundaryPath = offsetBoundaryPaths[pathIndex];
+            float pathLength = CalculateOpenPathLength(offsetBoundaryPath);
 
-        int supportCount = Math.Max(1, (int)MathF.Ceiling(perimeter / settings.BoundarySpacing));
-        float actualSpacing = perimeter / supportCount;
-
-        for (int supportIndex = 0; supportIndex < supportCount && supportSamples.Count < MaximumSupportCount; supportIndex++)
-        {
-            float distanceAlongLoop = (supportIndex + 0.5f) * actualSpacing;
-
-            if (!TryGetLoopPointAtDistance(offsetBoundaryPoints, distanceAlongLoop, out Vector2 candidatePoint))
+            if (pathLength <= DegenerateTolerance)
             {
                 continue;
             }
 
-            if (!IsInsideBoundaryOffset(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset))
-            {
-                candidatePoint = MoveTowardOffsetInterior(candidatePoint, centroid, boundaryOffset, projectedTriangles, boundaryEdges);
-            }
+            int supportCount = Math.Max(1, (int)MathF.Ceiling(pathLength / settings.BoundarySpacing));
+            float actualSpacing = pathLength / supportCount;
 
-            TryAddProjectedBoundarySample(mesh, worldVertices, triangleNormals, candidatePoint, settings, boundaryOffset, projectedTriangles, boundaryEdges, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            for (int supportIndex = 0; supportIndex < supportCount && supportSamples.Count < MaximumSupportCount; supportIndex++)
+            {
+                float distanceAlongPath = (supportIndex + 0.5f) * actualSpacing;
+
+                if (!TryGetOpenPathPointAtDistance(offsetBoundaryPath, distanceAlongPath, out Vector2 candidatePoint))
+                {
+                    continue;
+                }
+
+                if (!IsInsideBoundaryOffset(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset))
+                {
+                    candidatePoint = MoveTowardOffsetInterior(candidatePoint, centroid, boundaryOffset, projectedTriangles, boundaryEdges);
+                }
+
+                TryAddProjectedBoundarySample(mesh, worldVertices, triangleNormals, candidatePoint, settings, boundaryOffset, projectedTriangles, boundaryEdges, supportSamples, acceptedSamplePoints, acceptedBoundaryPoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+            }
         }
     }
 
@@ -735,6 +779,84 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
+    /// Adds centreline fallback supports where the normal half-spacing offset collapses in a thin region.
+    /// </summary>
+    private static void AddThinRegionFallbackCandidates(
+        MeshEntity mesh,
+        IReadOnlyList<Vector3> worldVertices,
+        IReadOnlyList<Vector3> triangleNormals,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        BoundaryLoop boundaryLoop,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        if (!settings.SupportThinRegions)
+        {
+            return;
+        }
+
+        bool isCounterClockwise = boundaryLoop.SignedArea >= 0.0f;
+        List<Vector2> fallbackPoints = CreateThinRegionFallbackPoints(settings, projectedTriangles, boundaryEdges, boundaryLoop, isCounterClockwise);
+
+        for (int i = 0; i < fallbackPoints.Count && supportSamples.Count < MaximumSupportCount; i++)
+        {
+            TryAddProjectedThinRegionSample(mesh, worldVertices, triangleNormals, fallbackPoints[i], settings, projectedTriangles, supportSamples, acceptedSamplePoints, ref rejectedCandidateCount, ref duplicateCandidateCount);
+        }
+    }
+
+    /// <summary>
+    /// Projects one thin-region fallback candidate without requiring the impossible half-spacing boundary clearance.
+    /// </summary>
+    private static void TryAddProjectedThinRegionSample(
+        MeshEntity mesh,
+        IReadOnlyList<Vector3> worldVertices,
+        IReadOnlyList<Vector3> triangleNormals,
+        Vector2 candidatePoint,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        List<AreaSupportSample> supportSamples,
+        List<Vector2> acceptedSamplePoints,
+        ref int rejectedCandidateCount,
+        ref int duplicateCandidateCount)
+    {
+        if (!IsPointInsideArea(candidatePoint, projectedTriangles))
+        {
+            rejectedCandidateCount++;
+            return;
+        }
+
+        float duplicateDistance = Math.Min(settings.BoundarySpacing, settings.Spacing) * DuplicateSpacingFactor;
+        float duplicateDistanceSquared = duplicateDistance * duplicateDistance;
+
+        for (int i = 0; i < acceptedSamplePoints.Count; i++)
+        {
+            if (Vector2.DistanceSquared(candidatePoint, acceptedSamplePoints[i]) <= duplicateDistanceSquared)
+            {
+                duplicateCandidateCount++;
+                return;
+            }
+        }
+
+        AreaSupportSample sample;
+
+        if (!TryProjectToSelectedArea(candidatePoint, projectedTriangles, out sample))
+        {
+            rejectedCandidateCount++;
+            return;
+        }
+
+        _ = mesh;
+        _ = worldVertices;
+        _ = triangleNormals;
+        acceptedSamplePoints.Add(candidatePoint);
+        supportSamples.Add(sample);
+    }
+
+    /// <summary>
     /// Calculates the closed perimeter length of an ordered XY boundary loop.
     /// </summary>
     private static float CalculateLoopPerimeter(IReadOnlyList<Vector2> points)
@@ -787,9 +909,368 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
+    /// Creates clipped offset-boundary path pieces by sampling source boundary edges and validating each offset sample.
+    /// </summary>
+    private static List<List<Vector2>> CreateValidatedOffsetBoundaryPaths(
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        BoundaryLoop boundaryLoop,
+        float boundaryOffset,
+        bool isCounterClockwise)
+    {
+        List<List<Vector2>> paths = new List<List<Vector2>>();
+        List<Vector2> currentPath = new List<Vector2>();
+
+        if (boundaryLoop.Points.Count < 2)
+        {
+            return paths;
+        }
+
+        float sampleSpacing = CalculateValidatedBoundarySampleSpacing(settings);
+        float splitDistance = Math.Max(settings.Spacing, settings.BoundarySpacing) * 1.25f;
+        List<Vector2> cornerOffsetPoints = CreateOffsetBoundaryPoints(boundaryLoop, boundaryOffset, isCounterClockwise, projectedTriangles);
+
+        for (int edgeIndex = 0; edgeIndex < boundaryLoop.Points.Count; edgeIndex++)
+        {
+            Vector2 start = boundaryLoop.Points[edgeIndex];
+            Vector2 end = boundaryLoop.Points[(edgeIndex + 1) % boundaryLoop.Points.Count];
+            float length = Vector2.Distance(start, end);
+
+            if (length <= DegenerateTolerance)
+            {
+                FlushValidatedOffsetPath(paths, currentPath);
+                continue;
+            }
+
+            Vector2 inwardDirection = CalculateAreaInteriorNormal(start, end, projectedTriangles, isCounterClockwise);
+
+            if (inwardDirection.LengthSquared() <= DegenerateTolerance)
+            {
+                FlushValidatedOffsetPath(paths, currentPath);
+                continue;
+            }
+
+            TryAppendValidatedOffsetPoint(cornerOffsetPoints[edgeIndex], projectedTriangles, boundaryEdges, boundaryOffset, sampleSpacing, splitDistance, paths, currentPath);
+
+            int sampleCount = Math.Max(1, (int)MathF.Ceiling(length / sampleSpacing));
+
+            for (int sampleIndex = 1; sampleIndex < sampleCount; sampleIndex++)
+            {
+                float edgeFraction = sampleIndex / (float)sampleCount;
+                Vector2 boundaryPoint = Vector2.Lerp(start, end, edgeFraction);
+                Vector2 candidatePoint = boundaryPoint + (inwardDirection * boundaryOffset);
+                TryAppendValidatedOffsetPoint(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset, sampleSpacing, splitDistance, paths, currentPath);
+            }
+
+            int nextCornerIndex = (edgeIndex + 1) % boundaryLoop.Points.Count;
+            TryAppendValidatedOffsetPoint(cornerOffsetPoints[nextCornerIndex], projectedTriangles, boundaryEdges, boundaryOffset, sampleSpacing, splitDistance, paths, currentPath);
+        }
+
+        FlushValidatedOffsetPath(paths, currentPath);
+        return paths;
+    }
+
+    /// <summary>
+    /// Chooses a short validation interval for long source mesh edges without tying support density to mesh density.
+    /// </summary>
+    private static float CalculateValidatedBoundarySampleSpacing(AreaSupportSettings settings)
+    {
+        float spacingBasedSample = Math.Max(0.1f, Math.Min(settings.Spacing, settings.BoundarySpacing) * 0.25f);
+        return Math.Min(OffsetBoundarySampleSpacing, spacingBasedSample);
+    }
+
+    /// <summary>
+    /// Adds a valid offset point to the current path, splitting if the local path crosses an invalid region.
+    /// </summary>
+    private static void TryAppendValidatedOffsetPoint(
+        Vector2 candidatePoint,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        float boundaryOffset,
+        float sampleSpacing,
+        float splitDistance,
+        List<List<Vector2>> paths,
+        List<Vector2> currentPath)
+    {
+        if (!IsInsideBoundaryOffset(candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset))
+        {
+            FlushValidatedOffsetPath(paths, currentPath);
+            return;
+        }
+
+        if (currentPath.Count > 0)
+        {
+            Vector2 previousPoint = currentPath[currentPath.Count - 1];
+
+            if (!CanConnectOffsetBoundarySamples(previousPoint, candidatePoint, projectedTriangles, boundaryEdges, boundaryOffset, sampleSpacing, splitDistance))
+            {
+                FlushValidatedOffsetPath(paths, currentPath);
+            }
+        }
+
+        if (currentPath.Count == 0 || Vector2.DistanceSquared(currentPath[currentPath.Count - 1], candidatePoint) > DegenerateTolerance)
+        {
+            currentPath.Add(candidatePoint);
+        }
+    }
+
+    /// <summary>
+    /// Stores a completed offset path if it has enough points to draw or place supports along.
+    /// </summary>
+    private static void FlushValidatedOffsetPath(List<List<Vector2>> paths, List<Vector2> currentPath)
+    {
+        if (currentPath.Count >= 2)
+        {
+            paths.Add(new List<Vector2>(currentPath));
+        }
+
+        currentPath.Clear();
+    }
+
+    /// <summary>
+    /// Checks that a path segment between two validated offset samples does not jump across an invalid region.
+    /// </summary>
+    private static bool CanConnectOffsetBoundarySamples(
+        Vector2 start,
+        Vector2 end,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        float boundaryOffset,
+        float sampleSpacing,
+        float splitDistance)
+    {
+        float segmentLength = Vector2.Distance(start, end);
+
+        if (segmentLength <= DegenerateTolerance)
+        {
+            return true;
+        }
+
+        if (segmentLength > splitDistance)
+        {
+            return false;
+        }
+
+        int checkCount = Math.Max(1, (int)MathF.Ceiling(segmentLength / sampleSpacing));
+
+        for (int checkIndex = 1; checkIndex < checkCount; checkIndex++)
+        {
+            float fraction = checkIndex / (float)checkCount;
+            Vector2 checkPoint = Vector2.Lerp(start, end, fraction);
+
+            if (!IsInsideBoundaryOffset(checkPoint, projectedTriangles, boundaryEdges, boundaryOffset))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Calculates the length of an open or explicitly closed XY polyline.
+    /// </summary>
+    private static float CalculateOpenPathLength(IReadOnlyList<Vector2> points)
+    {
+        float length = 0.0f;
+
+        for (int pointIndex = 0; pointIndex + 1 < points.Count; pointIndex++)
+        {
+            length += Vector2.Distance(points[pointIndex], points[pointIndex + 1]);
+        }
+
+        return length;
+    }
+
+    /// <summary>
+    /// Finds a point at a distance measured along an open or explicitly closed XY polyline.
+    /// </summary>
+    private static bool TryGetOpenPathPointAtDistance(IReadOnlyList<Vector2> points, float distanceAlongPath, out Vector2 point)
+    {
+        float remainingDistance = distanceAlongPath;
+
+        for (int pointIndex = 0; pointIndex + 1 < points.Count; pointIndex++)
+        {
+            Vector2 start = points[pointIndex];
+            Vector2 end = points[pointIndex + 1];
+            float segmentLength = Vector2.Distance(start, end);
+
+            if (segmentLength <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            if (remainingDistance <= segmentLength || pointIndex == points.Count - 2)
+            {
+                float segmentFraction = Math.Clamp(remainingDistance / segmentLength, 0.0f, 1.0f);
+                point = Vector2.Lerp(start, end, segmentFraction);
+                return true;
+            }
+
+            remainingDistance -= segmentLength;
+        }
+
+        point = Vector2.Zero;
+        return false;
+    }
+
+    /// <summary>
+    /// Creates centreline fallback points by measuring from sampled boundary points to the opposing boundary.
+    /// </summary>
+    private static List<Vector2> CreateThinRegionFallbackPoints(
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        BoundaryLoop boundaryLoop,
+        bool isCounterClockwise)
+    {
+        List<Vector2> fallbackPoints = new List<Vector2>();
+
+        if (!settings.SupportThinRegions || boundaryLoop.Points.Count < 2)
+        {
+            return fallbackPoints;
+        }
+
+        for (int edgeIndex = 0; edgeIndex < boundaryLoop.Points.Count; edgeIndex++)
+        {
+            Vector2 start = boundaryLoop.Points[edgeIndex];
+            Vector2 end = boundaryLoop.Points[(edgeIndex + 1) % boundaryLoop.Points.Count];
+            float length = Vector2.Distance(start, end);
+
+            if (length <= DegenerateTolerance)
+            {
+                continue;
+            }
+
+            Vector2 inwardDirection = CalculateAreaInteriorNormal(start, end, projectedTriangles, isCounterClockwise);
+            int cellCount = Math.Max(1, (int)MathF.Ceiling(length / settings.BoundarySpacing));
+            float actualSpacing = length / cellCount;
+
+            for (int cellIndex = 0; cellIndex < cellCount; cellIndex++)
+            {
+                float distance = (cellIndex + 0.5f) * actualSpacing;
+                Vector2 boundaryPoint = Vector2.Lerp(start, end, Math.Clamp(distance / length, 0.0f, 1.0f));
+
+                if (TryCreateThinRegionFallbackPoint(boundaryPoint, start, end, inwardDirection, settings, projectedTriangles, boundaryEdges, out Vector2 fallbackPoint))
+                {
+                    fallbackPoints.Add(fallbackPoint);
+                }
+            }
+        }
+
+        return fallbackPoints;
+    }
+
+    /// <summary>
+    /// Finds the midpoint between one boundary sample and the opposing boundary when the local area is thin enough.
+    /// </summary>
+    private static bool TryCreateThinRegionFallbackPoint(
+        Vector2 boundaryPoint,
+        Vector2 sourceStart,
+        Vector2 sourceEnd,
+        Vector2 inwardDirection,
+        AreaSupportSettings settings,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        IReadOnlyList<BoundaryEdge> boundaryEdges,
+        out Vector2 fallbackPoint)
+    {
+        fallbackPoint = Vector2.Zero;
+
+        if (inwardDirection.LengthSquared() <= DegenerateTolerance)
+        {
+            return false;
+        }
+
+        float closestDistance = float.MaxValue;
+
+        for (int i = 0; i < boundaryEdges.Count; i++)
+        {
+            Vector2 segmentStart = ToVector2(boundaryEdges[i].Start);
+            Vector2 segmentEnd = ToVector2(boundaryEdges[i].End);
+
+            if (IsSameSegment(sourceStart, sourceEnd, segmentStart, segmentEnd))
+            {
+                continue;
+            }
+
+            if (TryIntersectRayWithSegment(boundaryPoint, inwardDirection, segmentStart, segmentEnd, out float distance)
+                && distance < closestDistance)
+            {
+                closestDistance = distance;
+            }
+        }
+
+        if (closestDistance == float.MaxValue)
+        {
+            return false;
+        }
+
+        if (closestDistance >= settings.Spacing - PointInsideTolerance)
+        {
+            return false;
+        }
+
+        if (closestDistance < settings.MinimumThinRegionThickness - PointInsideTolerance)
+        {
+            return false;
+        }
+
+        Vector2 candidatePoint = boundaryPoint + (Vector2.Normalize(inwardDirection) * closestDistance * 0.5f);
+
+        if (!IsPointInsideArea(candidatePoint, projectedTriangles))
+        {
+            return false;
+        }
+
+        fallbackPoint = candidatePoint;
+        return true;
+    }
+
+    /// <summary>
+    /// Intersects a forward ray with a finite boundary segment.
+    /// </summary>
+    private static bool TryIntersectRayWithSegment(Vector2 rayOrigin, Vector2 rayDirection, Vector2 segmentStart, Vector2 segmentEnd, out float distance)
+    {
+        Vector2 segmentDirection = segmentEnd - segmentStart;
+        float denominator = Cross(rayDirection, segmentDirection);
+        distance = 0.0f;
+
+        if (MathF.Abs(denominator) <= DegenerateTolerance)
+        {
+            return false;
+        }
+
+        Vector2 delta = segmentStart - rayOrigin;
+        float rayDistance = Cross(delta, segmentDirection) / denominator;
+        float segmentFraction = Cross(delta, rayDirection) / denominator;
+
+        if (rayDistance <= PointInsideTolerance || segmentFraction < -PointInsideTolerance || segmentFraction > 1.0f + PointInsideTolerance)
+        {
+            return false;
+        }
+
+        distance = rayDistance;
+        return true;
+    }
+
+    /// <summary>
+    /// Checks whether two XY segments represent the same boundary edge regardless of direction.
+    /// </summary>
+    private static bool IsSameSegment(Vector2 firstStart, Vector2 firstEnd, Vector2 secondStart, Vector2 secondEnd)
+    {
+        return (AreSamePoint(firstStart, secondStart) && AreSamePoint(firstEnd, secondEnd))
+            || (AreSamePoint(firstStart, secondEnd) && AreSamePoint(firstEnd, secondStart));
+    }
+
+    /// <summary>
     /// Builds the true inward offset loop by intersecting adjacent offset boundary-edge lines.
     /// </summary>
-    private static List<Vector2> CreateOffsetBoundaryPoints(BoundaryLoop boundaryLoop, float boundaryOffset, bool isCounterClockwise)
+    private static List<Vector2> CreateOffsetBoundaryPoints(
+        BoundaryLoop boundaryLoop,
+        float boundaryOffset,
+        bool isCounterClockwise,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles)
     {
         List<Vector2> offsetPoints = new List<Vector2>(boundaryLoop.Points.Count);
 
@@ -798,8 +1279,8 @@ public static class AreaSupportPattern
             Vector2 previous = boundaryLoop.Points[(i + boundaryLoop.Points.Count - 1) % boundaryLoop.Points.Count];
             Vector2 current = boundaryLoop.Points[i];
             Vector2 next = boundaryLoop.Points[(i + 1) % boundaryLoop.Points.Count];
-            Vector2 previousInwardNormal = CalculateInwardNormal(previous, current, isCounterClockwise);
-            Vector2 nextInwardNormal = CalculateInwardNormal(current, next, isCounterClockwise);
+            Vector2 previousInwardNormal = CalculateAreaInteriorNormal(previous, current, projectedTriangles, isCounterClockwise);
+            Vector2 nextInwardNormal = CalculateAreaInteriorNormal(current, next, projectedTriangles, isCounterClockwise);
             Vector2 previousOffsetStart = previous + (previousInwardNormal * boundaryOffset);
             Vector2 previousOffsetEnd = current + (previousInwardNormal * boundaryOffset);
             Vector2 nextOffsetStart = current + (nextInwardNormal * boundaryOffset);
@@ -960,6 +1441,52 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
+    /// Calculates the boundary-side normal that points into the selected projected face area.
+    /// </summary>
+    private static Vector2 CalculateAreaInteriorNormal(
+        Vector2 start,
+        Vector2 end,
+        IReadOnlyList<ProjectedTriangle> projectedTriangles,
+        bool isCounterClockwiseFallback)
+    {
+        Vector2 edgeDirection = end - start;
+
+        if (edgeDirection.LengthSquared() <= DegenerateTolerance)
+        {
+            return Vector2.Zero;
+        }
+
+        Vector2 normalizedEdge = Vector2.Normalize(edgeDirection);
+        Vector2 leftNormal = new Vector2(-normalizedEdge.Y, normalizedEdge.X);
+        Vector2 rightNormal = -leftNormal;
+        Vector2 midpoint = (start + end) * 0.5f;
+        float edgeLength = edgeDirection.Length();
+        float probeDistance = MathF.Max(PointInsideTolerance * 10.0f, MathF.Min(edgeLength * 0.1f, 0.01f));
+
+        for (int attempt = 0; attempt < 4; attempt++)
+        {
+            Vector2 leftProbe = midpoint + (leftNormal * probeDistance);
+            Vector2 rightProbe = midpoint + (rightNormal * probeDistance);
+            bool isLeftInside = IsPointInsideArea(leftProbe, projectedTriangles);
+            bool isRightInside = IsPointInsideArea(rightProbe, projectedTriangles);
+
+            if (isLeftInside && !isRightInside)
+            {
+                return leftNormal;
+            }
+
+            if (isRightInside && !isLeftInside)
+            {
+                return rightNormal;
+            }
+
+            probeDistance *= 2.0f;
+        }
+
+        return CalculateInwardNormal(start, end, isCounterClockwiseFallback);
+    }
+
+    /// <summary>
     /// Calculates the unsigned angle between two vectors in degrees.
     /// </summary>
     private static float CalculateAngleDegrees(Vector2 first, Vector2 second)
@@ -983,7 +1510,7 @@ public static class AreaSupportPattern
         MeshEntity mesh,
         IReadOnlyList<Vector3> worldVertices,
         IReadOnlyList<Vector3> triangleNormals,
-        float spacing,
+        AreaSupportSettings settings,
         IReadOnlyList<ProjectedTriangle> projectedTriangles,
         IReadOnlyList<BoundaryEdge> boundaryEdges,
         List<AreaSupportSample> supportSamples,
@@ -997,7 +1524,8 @@ public static class AreaSupportPattern
         }
 
         Bounds2D bounds = CalculateBounds(projectedTriangles);
-        float boundaryOffset = spacing * 0.5f;
+        float spacing = settings.Spacing;
+        float boundaryOffset = settings.BoundaryOffset;
         float rowSpacing = spacing * 0.8660254f;
         int rowIndex = 0;
 

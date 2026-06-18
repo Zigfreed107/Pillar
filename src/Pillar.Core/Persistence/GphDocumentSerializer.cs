@@ -630,8 +630,11 @@ public sealed class GphDocumentSerializer
         GphAreaSupportSettingsDto dto = new GphAreaSupportSettingsDto
         {
             Spacing = settings.Spacing,
+            BoundaryOffset = settings.BoundaryOffset,
             BoundarySpacing = settings.BoundarySpacing,
-            ConcaveCornerAngleDegrees = settings.ConcaveCornerAngleDegrees
+            ConcaveCornerAngleDegrees = settings.ConcaveCornerAngleDegrees,
+            SupportThinRegions = settings.SupportThinRegions,
+            MinimumThinRegionThickness = settings.MinimumThinRegionThickness
         };
 
         for (int i = 0; i < settings.SelectedFaces.Count; i++)
@@ -892,16 +895,24 @@ public sealed class GphDocumentSerializer
             selectedFaces.Add(new FaceSelectionKey(selectedFace.MeshEntityId, selectedFace.TriangleIndex));
         }
 
+        float boundaryOffset = supportLayerGroupDto.AreaSupport.BoundaryOffset
+            ?? AreaSupportSettings.CalculateDefaultBoundaryOffset(supportLayerGroupDto.AreaSupport.Spacing);
         float boundarySpacing = supportLayerGroupDto.AreaSupport.BoundarySpacing
             ?? AreaSupportSettings.CalculateDefaultBoundarySpacing(supportLayerGroupDto.AreaSupport.Spacing);
         float concaveCornerAngleDegrees = supportLayerGroupDto.AreaSupport.ConcaveCornerAngleDegrees
             ?? AreaSupportSettings.DefaultConcaveCornerAngleDegrees;
+        bool supportThinRegions = supportLayerGroupDto.AreaSupport.SupportThinRegions ?? false;
+        float minimumThinRegionThickness = supportLayerGroupDto.AreaSupport.MinimumThinRegionThickness
+            ?? AreaSupportSettings.DefaultMinimumThinRegionThickness;
 
         return new AreaSupportSettings(
             selectedFaces,
             supportLayerGroupDto.AreaSupport.Spacing,
+            boundaryOffset,
             boundarySpacing,
-            concaveCornerAngleDegrees);
+            concaveCornerAngleDegrees,
+            supportThinRegions,
+            minimumThinRegionThickness);
     }
 
     /// <summary>
@@ -1105,8 +1116,11 @@ public sealed class GphDocumentSerializer
     {
         public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
         public float Spacing { get; set; }
+        public float? BoundaryOffset { get; set; }
         public float? BoundarySpacing { get; set; }
         public float? ConcaveCornerAngleDegrees { get; set; }
+        public bool? SupportThinRegions { get; set; }
+        public float? MinimumThinRegionThickness { get; set; }
     }
 
     /// <summary>

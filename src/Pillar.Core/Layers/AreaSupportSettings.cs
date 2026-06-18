@@ -13,9 +13,13 @@ namespace Pillar.Core.Layers;
 public sealed class AreaSupportSettings
 {
     public const float DefaultSpacing = 3.0f;
+    public const float DefaultBoundaryOffsetFactor = 0.5f;
+    public const float DefaultBoundaryOffset = DefaultSpacing * DefaultBoundaryOffsetFactor;
     public const float DefaultBoundarySpacingFactor = 0.8f;
     public const float DefaultBoundarySpacing = DefaultSpacing * DefaultBoundarySpacingFactor;
     public const float DefaultConcaveCornerAngleDegrees = 30.0f;
+    public const bool DefaultSupportThinRegions = true;
+    public const float DefaultMinimumThinRegionThickness = 1.0f;
 
     /// <summary>
     /// Creates validated Area Support generator settings.
@@ -24,8 +28,11 @@ public sealed class AreaSupportSettings
         : this(
             selectedFaces,
             spacing,
+            CalculateDefaultBoundaryOffset(spacing),
             CalculateDefaultBoundarySpacing(spacing),
-            DefaultConcaveCornerAngleDegrees)
+            DefaultConcaveCornerAngleDegrees,
+            DefaultSupportThinRegions,
+            DefaultMinimumThinRegionThickness)
     {
     }
 
@@ -37,6 +44,49 @@ public sealed class AreaSupportSettings
         float spacing,
         float boundarySpacing,
         float concaveCornerAngleDegrees)
+        : this(
+            selectedFaces,
+            spacing,
+            CalculateDefaultBoundaryOffset(spacing),
+            boundarySpacing,
+            concaveCornerAngleDegrees,
+            DefaultSupportThinRegions,
+            DefaultMinimumThinRegionThickness)
+    {
+    }
+
+    /// <summary>
+    /// Creates validated Area Support generator settings.
+    /// </summary>
+    public AreaSupportSettings(
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces,
+        float spacing,
+        float boundarySpacing,
+        float concaveCornerAngleDegrees,
+        bool supportThinRegions,
+        float minimumThinRegionThickness)
+        : this(
+            selectedFaces,
+            spacing,
+            CalculateDefaultBoundaryOffset(spacing),
+            boundarySpacing,
+            concaveCornerAngleDegrees,
+            supportThinRegions,
+            minimumThinRegionThickness)
+    {
+    }
+
+    /// <summary>
+    /// Creates validated Area Support generator settings.
+    /// </summary>
+    public AreaSupportSettings(
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces,
+        float spacing,
+        float boundaryOffset,
+        float boundarySpacing,
+        float concaveCornerAngleDegrees,
+        bool supportThinRegions,
+        float minimumThinRegionThickness)
     {
         if (selectedFaces == null)
         {
@@ -57,8 +107,11 @@ public sealed class AreaSupportSettings
 
         SelectedFaces = new ReadOnlyCollection<FaceSelectionKey>(copiedFaces);
         Spacing = ValidateSpacing(spacing);
+        BoundaryOffset = ValidateBoundaryOffset(boundaryOffset);
         BoundarySpacing = ValidateBoundarySpacing(boundarySpacing);
         ConcaveCornerAngleDegrees = ValidateConcaveCornerAngle(concaveCornerAngleDegrees);
+        SupportThinRegions = supportThinRegions;
+        MinimumThinRegionThickness = ValidateMinimumThinRegionThickness(minimumThinRegionThickness);
     }
 
     /// <summary>
@@ -72,6 +125,11 @@ public sealed class AreaSupportSettings
     public float Spacing { get; }
 
     /// <summary>
+    /// Gets the inward distance from source boundaries to the generated offset boundary.
+    /// </summary>
+    public float BoundaryOffset { get; }
+
+    /// <summary>
     /// Gets the absolute spacing in millimeters used along offset boundary support paths.
     /// </summary>
     public float BoundarySpacing { get; }
@@ -82,11 +140,29 @@ public sealed class AreaSupportSettings
     public float ConcaveCornerAngleDegrees { get; }
 
     /// <summary>
+    /// Gets whether collapsed thin regions should receive centreline fallback supports.
+    /// </summary>
+    public bool SupportThinRegions { get; }
+
+    /// <summary>
+    /// Gets the minimum local area thickness required for centreline fallback supports.
+    /// </summary>
+    public float MinimumThinRegionThickness { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public AreaSupportSettings Clone()
     {
-        return new AreaSupportSettings(SelectedFaces, Spacing, BoundarySpacing, ConcaveCornerAngleDegrees);
+        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness);
+    }
+
+    /// <summary>
+    /// Calculates the default boundary offset from the support spacing.
+    /// </summary>
+    public static float CalculateDefaultBoundaryOffset(float spacing)
+    {
+        return ValidateSpacing(spacing) * DefaultBoundaryOffsetFactor;
     }
 
     /// <summary>
@@ -108,6 +184,19 @@ public sealed class AreaSupportSettings
         }
 
         return spacing;
+    }
+
+    /// <summary>
+    /// Rejects invalid boundary offsets before generator settings reach document state.
+    /// </summary>
+    private static float ValidateBoundaryOffset(float boundaryOffset)
+    {
+        if (!float.IsFinite(boundaryOffset) || boundaryOffset <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(boundaryOffset), "Area Support boundary offset must be finite and positive.");
+        }
+
+        return boundaryOffset;
     }
 
     /// <summary>
@@ -134,5 +223,18 @@ public sealed class AreaSupportSettings
         }
 
         return concaveCornerAngleDegrees;
+    }
+
+    /// <summary>
+    /// Rejects invalid minimum thin-region thickness values before generator settings reach document state.
+    /// </summary>
+    private static float ValidateMinimumThinRegionThickness(float minimumThinRegionThickness)
+    {
+        if (!float.IsFinite(minimumThinRegionThickness) || minimumThinRegionThickness < 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minimumThinRegionThickness), "Area Support minimum thin-region thickness must be finite and non-negative.");
+        }
+
+        return minimumThinRegionThickness;
     }
 }
