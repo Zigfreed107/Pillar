@@ -183,6 +183,14 @@ public partial class MainWindow
 
         // Return the model to the pre-preview state so the command owns the durable document mutation.
         selectedMesh.UserTransform = oldTransform;
+
+        // Mark the preview as committed before the command replaces support entities. Those document
+        // collection changes synchronously refresh the Layer Panel and can close this tool re-entrantly.
+        // A closing committed session must not mistake the command's old transform for a cancelled preview.
+        _activeTransformScaleOriginalTransform = newTransform;
+        _activeTransformScalePreviewTransform = newTransform;
+        _hasPendingTransformScalePreview = false;
+
         _commandRunner.Execute(new SetMeshUserTransformCommand(
             _document,
             selectedMesh,
@@ -190,10 +198,6 @@ public partial class MainWindow
             newTransform,
             supportRegenerations,
             "Scale Model"));
-
-        _activeTransformScaleOriginalTransform = newTransform;
-        _activeTransformScalePreviewTransform = newTransform;
-        _hasPendingTransformScalePreview = false;
     }
 
     /// <summary>
