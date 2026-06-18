@@ -553,7 +553,7 @@ public static class AreaSupportPattern
 
             for (int offsetLevel = 1; offsetLevel <= offsetLevelCount; offsetLevel++)
             {
-                double offsetDistance = settings.BoundaryOffset * offsetLevel;
+                double offsetDistance = settings.BoundaryOffset + ((offsetLevel - 1) * settings.OffsetSpacing);
                 double delta = isHole ? offsetDistance : -offsetDistance;
                 PathsD generatedPaths = Clipper.InflatePaths(sourcePaths, delta, JoinType.Miter, EndType.Polygon);
 
@@ -793,7 +793,7 @@ public static class AreaSupportPattern
             return;
         }
 
-        float duplicateDistance = Math.Min(settings.BoundarySpacing, settings.BoundaryOffset) * DuplicateSpacingFactor;
+        float duplicateDistance = Math.Min(settings.BoundarySpacing, settings.OffsetSpacing) * DuplicateSpacingFactor;
         float duplicateDistanceSquared = duplicateDistance * duplicateDistance;
 
         for (int i = 0; i < acceptedSamplePoints.Count; i++)

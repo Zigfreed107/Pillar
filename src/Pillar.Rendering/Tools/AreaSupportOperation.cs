@@ -55,6 +55,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly Func<float> _getMinimumThinRegionThickness;
     private readonly Func<AreaSupportFillMode> _getFillMode;
     private readonly Func<int> _getAdditionalOffsetCount;
+    private readonly Func<float> _getOffsetSpacing;
     private readonly Func<bool> _getShowSupportSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
@@ -85,6 +86,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         Func<float> getMinimumThinRegionThickness,
         Func<AreaSupportFillMode> getFillMode,
         Func<int> getAdditionalOffsetCount,
+        Func<float> getOffsetSpacing,
         Func<bool> getShowSupportSpacing,
         Func<SupportProfile> createSupportProfile,
         Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
@@ -103,6 +105,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         _getMinimumThinRegionThickness = getMinimumThinRegionThickness ?? throw new ArgumentNullException(nameof(getMinimumThinRegionThickness));
         _getFillMode = getFillMode ?? throw new ArgumentNullException(nameof(getFillMode));
         _getAdditionalOffsetCount = getAdditionalOffsetCount ?? throw new ArgumentNullException(nameof(getAdditionalOffsetCount));
+        _getOffsetSpacing = getOffsetSpacing ?? throw new ArgumentNullException(nameof(getOffsetSpacing));
         _getShowSupportSpacing = getShowSupportSpacing ?? throw new ArgumentNullException(nameof(getShowSupportSpacing));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
@@ -488,7 +491,8 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
             _getSupportThinRegions(),
             _getMinimumThinRegionThickness(),
             _getFillMode(),
-            _getAdditionalOffsetCount());
+            _getAdditionalOffsetCount(),
+            _getOffsetSpacing());
     }
 
     /// <summary>

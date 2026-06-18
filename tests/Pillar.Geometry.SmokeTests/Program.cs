@@ -1342,7 +1342,8 @@ public static class Program
             1.0f,
             2.0f,
             AreaSupportFillMode.BoundaryOffsets,
-            2);
+            2,
+            3.0f);
 
         if (!AreaSupportPattern.TryCreate(mesh, settings, out AreaSupportResult result))
         {
@@ -1358,12 +1359,12 @@ public static class Program
             Vector3 position = result.SupportSamples[i].Position;
             float ringCoordinate = MathF.Max(MathF.Abs(position.X), MathF.Abs(position.Y));
             foundFirstRing |= MathF.Abs(ringCoordinate - 18.0f) <= 0.01f;
-            foundSecondRing |= MathF.Abs(ringCoordinate - 16.0f) <= 0.01f;
-            foundThirdRing |= MathF.Abs(ringCoordinate - 14.0f) <= 0.01f;
+            foundSecondRing |= MathF.Abs(ringCoordinate - 15.0f) <= 0.01f;
+            foundThirdRing |= MathF.Abs(ringCoordinate - 12.0f) <= 0.01f;
 
             if (MathF.Abs(ringCoordinate - 18.0f) > 0.01f
-                && MathF.Abs(ringCoordinate - 16.0f) > 0.01f
-                && MathF.Abs(ringCoordinate - 14.0f) > 0.01f)
+                && MathF.Abs(ringCoordinate - 15.0f) > 0.01f
+                && MathF.Abs(ringCoordinate - 12.0f) > 0.01f)
             {
                 throw new InvalidOperationException("Boundary Offsets mode generated a support away from its requested rings.");
             }
@@ -1722,7 +1723,8 @@ public static class Program
             1.25f,
             1.75f,
             AreaSupportFillMode.BoundaryOffsets,
-            3);
+            3,
+            2.25f);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Area Supports");
         supportLayerGroup.SetAreaSupportSettings(settings);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -1766,6 +1768,11 @@ public static class Program
             if (loadedSettings.FillMode != AreaSupportFillMode.BoundaryOffsets || loadedSettings.AdditionalOffsetCount != 3)
             {
                 throw new InvalidOperationException("Expected Area Support fill mode and offset count to survive save and load.");
+            }
+
+            if (MathF.Abs(loadedSettings.OffsetSpacing - 2.25f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Area Support offset spacing to survive save and load.");
             }
         }
         finally
@@ -2017,7 +2024,8 @@ public static class Program
         float minimumThinRegionThickness,
         float? boundaryOffset = null,
         AreaSupportFillMode fillMode = AreaSupportFillMode.HexGrid,
-        int additionalOffsetCount = AreaSupportSettings.DefaultAdditionalOffsetCount)
+        int additionalOffsetCount = AreaSupportSettings.DefaultAdditionalOffsetCount,
+        float? offsetSpacing = null)
     {
         int triangleCount = mesh.TriangleIndices.Count / 3;
         List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(triangleCount);
@@ -2036,7 +2044,8 @@ public static class Program
             supportThinRegions,
             minimumThinRegionThickness,
             fillMode,
-            additionalOffsetCount);
+            additionalOffsetCount,
+            offsetSpacing ?? boundaryOffset ?? AreaSupportSettings.CalculateDefaultBoundaryOffset(spacing));
     }
 
     /// <summary>

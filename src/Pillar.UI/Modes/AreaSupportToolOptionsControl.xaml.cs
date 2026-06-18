@@ -16,6 +16,7 @@ public partial class AreaSupportToolOptionsControl : UserControl
     private const int OptionsChangedDelayMilliseconds = 300;
     public const float DefaultAreaSupportSpacing = AreaSupportSettings.DefaultSpacing;
     public const float DefaultAreaSupportBoundaryOffset = AreaSupportSettings.DefaultBoundaryOffset;
+    public const float DefaultAreaSupportOffsetSpacing = AreaSupportSettings.DefaultOffsetSpacing;
     public const float DefaultAreaSupportBoundarySpacing = AreaSupportSettings.DefaultBoundarySpacing;
     public const float DefaultConcaveCornerAngleDegrees = AreaSupportSettings.DefaultConcaveCornerAngleDegrees;
     public const float DefaultMinimumThinRegionThickness = AreaSupportSettings.DefaultMinimumThinRegionThickness;
@@ -93,6 +94,20 @@ public partial class AreaSupportToolOptionsControl : UserControl
         }
 
         boundaryOffset = DefaultAreaSupportBoundaryOffset;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to read the spacing between successive Boundary Offsets contours in millimeters.
+    /// </summary>
+    public bool TryGetOffsetSpacing(out float offsetSpacing)
+    {
+        if (TryGetFiniteFloat(OffsetSpacingNumericUpDown.Value, out offsetSpacing) && offsetSpacing > 0.0f)
+        {
+            return true;
+        }
+
+        offsetSpacing = DefaultAreaSupportOffsetSpacing;
         return false;
     }
 
@@ -209,6 +224,7 @@ public partial class AreaSupportToolOptionsControl : UserControl
             MinimumThinRegionThicknessNumericUpDown.Value = settings.MinimumThinRegionThickness;
             HexGridFillRadioButton.IsChecked = settings.FillMode == AreaSupportFillMode.HexGrid;
             BoundaryOffsetsFillRadioButton.IsChecked = settings.FillMode == AreaSupportFillMode.BoundaryOffsets;
+            OffsetSpacingNumericUpDown.Value = settings.OffsetSpacing;
             AdditionalOffsetCountNumericUpDown.Value = settings.AdditionalOffsetCount;
             UpdateFillModeControlVisibility();
         }
@@ -309,7 +325,7 @@ public partial class AreaSupportToolOptionsControl : UserControl
         _ = sender;
         _ = e;
 
-        if (SupportThinRegionsCheckBox == null || AdditionalOffsetCountNumericUpDown == null)
+        if (SupportThinRegionsCheckBox == null || OffsetSpacingNumericUpDown == null || AdditionalOffsetCountNumericUpDown == null)
         {
             return;
         }
@@ -338,6 +354,9 @@ public partial class AreaSupportToolOptionsControl : UserControl
         MinimumThinRegionThicknessNumericUpDown.Visibility = hexVisibility;
         MinimumThinRegionThicknessUnitLabel.Visibility = hexVisibility;
         MinimumThinRegionThicknessNumericUpDown.IsEnabled = isHexGrid && SupportThinRegionsCheckBox.IsChecked == true;
+        OffsetSpacingLabel.Visibility = boundaryOffsetVisibility;
+        OffsetSpacingNumericUpDown.Visibility = boundaryOffsetVisibility;
+        OffsetSpacingUnitLabel.Visibility = boundaryOffsetVisibility;
         AdditionalOffsetCountLabel.Visibility = boundaryOffsetVisibility;
         AdditionalOffsetCountNumericUpDown.Visibility = boundaryOffsetVisibility;
     }

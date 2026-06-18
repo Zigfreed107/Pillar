@@ -15,6 +15,7 @@ public sealed class AreaSupportSettings
     public const float DefaultSpacing = 3.0f;
     public const float DefaultBoundaryOffsetFactor = 0.5f;
     public const float DefaultBoundaryOffset = DefaultSpacing * DefaultBoundaryOffsetFactor;
+    public const float DefaultOffsetSpacing = DefaultBoundaryOffset;
     public const float DefaultBoundarySpacingFactor = 0.8f;
     public const float DefaultBoundarySpacing = DefaultSpacing * DefaultBoundarySpacingFactor;
     public const float DefaultConcaveCornerAngleDegrees = 30.0f;
@@ -37,7 +38,8 @@ public sealed class AreaSupportSettings
             DefaultSupportThinRegions,
             DefaultMinimumThinRegionThickness,
             DefaultFillMode,
-            DefaultAdditionalOffsetCount)
+            DefaultAdditionalOffsetCount,
+            CalculateDefaultBoundaryOffset(spacing))
     {
     }
 
@@ -58,7 +60,8 @@ public sealed class AreaSupportSettings
             DefaultSupportThinRegions,
             DefaultMinimumThinRegionThickness,
             DefaultFillMode,
-            DefaultAdditionalOffsetCount)
+            DefaultAdditionalOffsetCount,
+            CalculateDefaultBoundaryOffset(spacing))
     {
     }
 
@@ -81,7 +84,8 @@ public sealed class AreaSupportSettings
             supportThinRegions,
             minimumThinRegionThickness,
             DefaultFillMode,
-            DefaultAdditionalOffsetCount)
+            DefaultAdditionalOffsetCount,
+            CalculateDefaultBoundaryOffset(spacing))
     {
     }
 
@@ -97,7 +101,8 @@ public sealed class AreaSupportSettings
         bool supportThinRegions,
         float minimumThinRegionThickness,
         AreaSupportFillMode fillMode,
-        int additionalOffsetCount)
+        int additionalOffsetCount,
+        float offsetSpacing)
     {
         if (selectedFaces == null)
         {
@@ -125,6 +130,7 @@ public sealed class AreaSupportSettings
         MinimumThinRegionThickness = ValidateMinimumThinRegionThickness(minimumThinRegionThickness);
         FillMode = ValidateFillMode(fillMode);
         AdditionalOffsetCount = ValidateAdditionalOffsetCount(additionalOffsetCount);
+        OffsetSpacing = ValidateOffsetSpacing(offsetSpacing);
     }
 
     /// <summary>
@@ -173,11 +179,16 @@ public sealed class AreaSupportSettings
     public int AdditionalOffsetCount { get; }
 
     /// <summary>
+    /// Gets the inward distance in millimeters between successive Boundary Offsets fill contours.
+    /// </summary>
+    public float OffsetSpacing { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public AreaSupportSettings Clone()
     {
-        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness, FillMode, AdditionalOffsetCount);
+        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness, FillMode, AdditionalOffsetCount, OffsetSpacing);
     }
 
     /// <summary>
@@ -220,6 +231,19 @@ public sealed class AreaSupportSettings
         }
 
         return boundaryOffset;
+    }
+
+    /// <summary>
+    /// Rejects invalid repeated contour spacing before generator settings reach document state.
+    /// </summary>
+    private static float ValidateOffsetSpacing(float offsetSpacing)
+    {
+        if (!float.IsFinite(offsetSpacing) || offsetSpacing <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offsetSpacing), "Area Support offset spacing must be finite and positive.");
+        }
+
+        return offsetSpacing;
     }
 
     /// <summary>

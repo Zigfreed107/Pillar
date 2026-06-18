@@ -134,6 +134,7 @@ public partial class MainWindow : Window
             GetAreaSupportMinimumThinRegionThicknessOrDefault,
             GetAreaSupportFillMode,
             GetAreaSupportAdditionalOffsetCountOrDefault,
+            GetAreaSupportOffsetSpacingOrDefault,
             GetAreaSupportShowSpacing,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
@@ -576,6 +577,20 @@ public partial class MainWindow : Window
         }
 
         return AreaSupportToolOptionsControl.DefaultAdditionalOffsetCount;
+    }
+
+    /// <summary>
+    /// Gets the spacing between successive Area Support Boundary Offsets contours.
+    /// </summary>
+    private float GetAreaSupportOffsetSpacingOrDefault()
+    {
+        if (_areaSupportToolOptionsControl.TryGetOffsetSpacing(out float offsetSpacing))
+        {
+            return offsetSpacing;
+        }
+
+        _viewModel.SetStatusText("Area support offset spacing is invalid; using 1.5 mm.");
+        return AreaSupportToolOptionsControl.DefaultAreaSupportOffsetSpacing;
     }
 
     /// <summary>

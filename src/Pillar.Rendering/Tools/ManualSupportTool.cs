@@ -41,6 +41,7 @@ public class ManualSupportTool : ITool
     private readonly Func<float> _getAreaSupportMinimumThinRegionThickness;
     private readonly Func<AreaSupportFillMode> _getAreaSupportFillMode;
     private readonly Func<int> _getAreaSupportAdditionalOffsetCount;
+    private readonly Func<float> _getAreaSupportOffsetSpacing;
     private readonly Func<bool> _getAreaSupportShowSpacing;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<float> _contourSupportZHeightSelectedReporter;
@@ -73,6 +74,7 @@ public class ManualSupportTool : ITool
         Func<float> getAreaSupportMinimumThinRegionThickness,
         Func<AreaSupportFillMode> getAreaSupportFillMode,
         Func<int> getAreaSupportAdditionalOffsetCount,
+        Func<float> getAreaSupportOffsetSpacing,
         Func<bool> getAreaSupportShowSpacing,
         Action<float> contourSupportZHeightSelectedReporter,
         Action<bool> contourSupportClosedStateReporter,
@@ -100,6 +102,7 @@ public class ManualSupportTool : ITool
         _getAreaSupportMinimumThinRegionThickness = getAreaSupportMinimumThinRegionThickness ?? throw new ArgumentNullException(nameof(getAreaSupportMinimumThinRegionThickness));
         _getAreaSupportFillMode = getAreaSupportFillMode ?? throw new ArgumentNullException(nameof(getAreaSupportFillMode));
         _getAreaSupportAdditionalOffsetCount = getAreaSupportAdditionalOffsetCount ?? throw new ArgumentNullException(nameof(getAreaSupportAdditionalOffsetCount));
+        _getAreaSupportOffsetSpacing = getAreaSupportOffsetSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportOffsetSpacing));
         _getAreaSupportShowSpacing = getAreaSupportShowSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportShowSpacing));
         _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
         _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
@@ -257,6 +260,7 @@ public class ManualSupportTool : ITool
                 _getAreaSupportMinimumThinRegionThickness,
                 _getAreaSupportFillMode,
                 _getAreaSupportAdditionalOffsetCount,
+                _getAreaSupportOffsetSpacing,
                 _getAreaSupportShowSpacing,
                 _createSupportProfile,
                 _faceSelectionSessionStarter,
