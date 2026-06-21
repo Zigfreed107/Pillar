@@ -30,7 +30,7 @@ public partial class MainWindow
     /// </summary>
     private void ShowTransformScaleTool()
     {
-        MeshEntity? selectedMesh = GetSelectedTransformScaleMesh();
+        MeshEntity? selectedMesh = GetSelectedTransformMesh();
 
         if (selectedMesh == null)
         {
@@ -112,7 +112,7 @@ public partial class MainWindow
             return;
         }
 
-        MeshEntity? selectedMesh = GetSelectedTransformScaleMesh();
+        MeshEntity? selectedMesh = GetSelectedTransformMesh();
 
         if (selectedMesh == null)
         {
@@ -224,7 +224,7 @@ public partial class MainWindow
     /// <summary>
     /// Gets the mesh currently selected for starting or refreshing the scale tool.
     /// </summary>
-    private MeshEntity? GetSelectedTransformScaleMesh()
+    private MeshEntity? GetSelectedTransformMesh()
     {
         Guid? selectedModelEntityId = _layerPanelViewModel.GetSelectedModelEntityId();
 
@@ -265,7 +265,7 @@ public partial class MainWindow
             return null;
         }
 
-        MeshEntity? selectedMesh = GetSelectedTransformScaleMesh();
+        MeshEntity? selectedMesh = GetSelectedTransformMesh();
 
         if (selectedMesh == null || selectedMesh.Id != mesh.Id)
         {

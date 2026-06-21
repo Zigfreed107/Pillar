@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private readonly ContourSupportToolOptionsControl _contourSupportToolOptionsControl;
     private readonly AreaSupportToolOptionsControl _areaSupportToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
+    private readonly RotationToolOptionsControl _rotationToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
     private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
     private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
         _contourSupportToolOptionsControl = new ContourSupportToolOptionsControl();
         _areaSupportToolOptionsControl = new AreaSupportToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
+        _rotationToolOptionsControl = new RotationToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
             WorkflowModePanelOverlay,
@@ -325,6 +327,11 @@ public partial class MainWindow : Window
         _areaSupportToolOptionsControl.DeleteRequested += AreaSupportToolOptionsControl_DeleteRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
+        _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;
+        _rotationToolOptionsControl.CoordinateSpaceChanged += RotationToolOptionsControl_CoordinateSpaceChanged;
+        _rotationToolOptionsControl.ResetRequested += RotationToolOptionsControl_ResetRequested;
+        _rotationToolOptionsControl.FinishRequested += RotationToolOptionsControl_FinishRequested;
+        _rotationToolOptionsControl.CancelRequested += RotationToolOptionsControl_CancelRequested;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
         SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);

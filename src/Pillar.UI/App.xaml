@@ -13,6 +13,9 @@
         <SolidColorBrush x:Key="ModeOverlayTitleBrush" Color="#FF1F2933" />
         <SolidColorBrush x:Key="ModeOverlayBodyBrush" Color="#FF3E4C59" />
         <SolidColorBrush x:Key="ModeOverlayLabelBrush" Color="#FF007ACC" />
+        <SolidColorBrush x:Key="RotationXAxisBrush" Color="Red" />
+        <SolidColorBrush x:Key="RotationYAxisBrush" Color="Green" />
+        <SolidColorBrush x:Key="RotationZAxisBrush" Color="Blue" />
         <SolidColorBrush x:Key="ClipSliderOverlayBackgroundBrush" Color="#F8FFFFFF" />
         <SolidColorBrush x:Key="ClipSliderTrackBrush" Color="#33000000" />
         <SolidColorBrush x:Key="ClipSliderRangeBrush" Color="#55007ACC" />

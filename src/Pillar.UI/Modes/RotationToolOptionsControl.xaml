@@ -1,0 +1,87 @@
+<!--
+    RotationToolOptionsControl.xaml
+    Defines the Transform Rotate coordinate-space selection, axis inputs, and explicit session actions.
+-->
+<UserControl x:Class="Pillar.UI.Modes.RotationToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Rotate Options" />
+
+            <StackPanel Margin="0,14,0,0">
+                <TextBlock Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Rotation space" />
+                <StackPanel Margin="0,4,0,0">
+                    <RadioButton x:Name="WorldRotationSpaceRadioButton"
+                                 GroupName="RotationSpace"
+                                 IsChecked="True"
+                                 Checked="RotationSpaceRadioButton_Checked"
+                                 Content="World"
+                                 ToolTip="Rotate around the fixed scene axes" />
+                    <RadioButton x:Name="LocalRotationSpaceRadioButton"
+                                 Margin="0,6,0,0"
+                                 GroupName="RotationSpace"
+                                 Checked="RotationSpaceRadioButton_Checked"
+                                 Content="Local"
+                                 ToolTip="Rotate around the model's own axes" />
+                </StackPanel>
+                <TextBlock Margin="0,5,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="World uses the scene axes. Local uses the model axes."
+                           TextWrapping="Wrap" />
+
+                <TextBlock Margin="0,14,0,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="X (degrees)"
+                           Foreground="{StaticResource RotationXAxisBrush}" />
+                <controls:NumericUpDown x:Name="RotationXNumericUpDown"
+                                        Margin="0,4,0,0"
+                                        Minimum="-360"
+                                        Maximum="360"
+                                        Increment="1"
+                                        DecimalPlaces="2"
+                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+
+                <TextBlock Margin="0,10,0,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Y (degrees)"
+                           Foreground="{StaticResource RotationYAxisBrush}" />
+                <controls:NumericUpDown x:Name="RotationYNumericUpDown"
+                                        Margin="0,4,0,0"
+                                        Minimum="-360"
+                                        Maximum="360"
+                                        Increment="1"
+                                        DecimalPlaces="2"
+                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+
+                <TextBlock Margin="0,10,0,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Z (degrees)"
+                           Foreground="{StaticResource RotationZAxisBrush}" />
+                <controls:NumericUpDown x:Name="RotationZNumericUpDown"
+                                        Margin="0,4,0,0"
+                                        Minimum="-360"
+                                        Maximum="360"
+                                        Increment="1"
+                                        DecimalPlaces="2"
+                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+
+                <Button Margin="0,14,0,0"
+                        MinHeight="30"
+                        Click="ResetButton_Click"
+                        Content="Reset" />
+                <Button Margin="0,10,0,0"
+                        MinHeight="30"
+                        Click="FinishButton_Click"
+                        Content="Finish" />
+                <Button Margin="0,10,0,0"
+                        MinHeight="30"
+                        Click="CancelButton_Click"
+                        Content="Cancel" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

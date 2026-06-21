@@ -233,22 +233,10 @@ public class SelectTool : Pillar.Core.Tools.ITool
     /// </summary>
     private CadEntity? FindHitEntity(Vector2 screenPosition)
     {
-        Point hitPoint = new Point(screenPosition.X, screenPosition.Y);
-        IList<HitTestResult> hits = _viewport.FindHits(hitPoint);
-
-        for (int i = 0; i < hits.Count; i++)
+        if (_scene.TryHitEntity(screenPosition, out CadEntity hitEntity))
         {
-            if (hits[i].ModelHit is Element3D modelHit)
-            {
-                CadEntity? entity = _scene.GetEntityFromVisual(modelHit);
-
-                if (entity != null)
-                {
-                    return entity;
-                }
-            }
+            return hitEntity;
         }
-
         return null;
     }
 

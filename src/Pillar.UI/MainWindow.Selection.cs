@@ -5,6 +5,7 @@ using Pillar.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Numerics;
 
 namespace Pillar.UI;
 
@@ -30,6 +31,7 @@ public partial class MainWindow
             }
             UpdateToolOptionsHostVisibilityForWorkflowContext();
             RefreshTransformScaleToolForSelection();
+            RefreshTransformRotationToolForSelection();
             return;
         }
 
@@ -42,6 +44,7 @@ public partial class MainWindow
             }
             UpdateToolOptionsHostVisibilityForWorkflowContext();
             RefreshTransformScaleToolForSelection();
+            RefreshTransformRotationToolForSelection();
             return;
         }
 
@@ -52,6 +55,7 @@ public partial class MainWindow
         }
         UpdateToolOptionsHostVisibilityForWorkflowContext();
         RefreshTransformScaleToolForSelection();
+        RefreshTransformRotationToolForSelection();
     }
 
     /// <summary>
@@ -233,13 +237,42 @@ public partial class MainWindow
     private bool TrySelectActiveEditingSupportGroupLayer()
     {
         Guid? activeEditingSupportLayerGroupId = _manualSupportTool.ActiveEditingSupportLayerGroupId;
-
         if (!activeEditingSupportLayerGroupId.HasValue)
         {
             return false;
         }
-
         _layerPanelViewModel.SelectSupportGroupLayer(activeEditingSupportLayerGroupId.Value);
         return true;
+    }
+    /// <summary>
+    /// Updates the Layer Panel directly from the entity under the cursor so non-selection tools still keep the tree context aligned.
+    /// </summary>
+    private void SynchronizeLayerPanelSelectionFromViewportHit(Vector2 screenPosition)
+    {
+        if (_isSynchronizingLayerAndViewportSelection)
+        {
+            return;
+        }
+        if (!_scene.TryHitEntity(screenPosition, out CadEntity hitEntity))
+        {
+            return;
+        }
+        _isSynchronizingLayerAndViewportSelection = true;
+        try
+        {
+            if (hitEntity is MeshEntity hitMesh)
+            {
+                _layerPanelViewModel.SelectModelLayer(hitMesh.Id);
+                return;
+            }
+            if (hitEntity is SupportEntity hitSupport)
+            {
+                _layerPanelViewModel.SelectSupportGroupLayer(hitSupport.SupportLayerGroupId);
+            }
+        }
+        finally
+        {
+            _isSynchronizingLayerAndViewportSelection = false;
+        }
     }
 }

@@ -115,7 +115,7 @@ public sealed class ViewportCameraService : IDisposable
         _viewport.IsZoomEnabled = true;
         _viewport.IsInertiaEnabled = false;
         _viewport.RotateAroundMouseDownPoint = true;
-        _viewport.ZoomAroundMouseDownPoint = false;
+        _viewport.ZoomAroundMouseDownPoint = true;
         RemapPanGestureToMiddleMouse();
     }
 

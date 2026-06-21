@@ -51,6 +51,7 @@ public class SceneManager
     private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
     private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
+    private readonly RotationOriginPreviewRenderer _rotationOriginPreviewRenderer;
     private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
@@ -157,6 +158,7 @@ public class SceneManager
         _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
         _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
+        _rotationOriginPreviewRenderer = new RotationOriginPreviewRenderer(_previewRoot);
         _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
@@ -331,8 +333,30 @@ public class SceneManager
             _visualToEntity.TryGetValue(visual, out CadEntity? entity);
             return entity;
         }
-
         return null;
+    }
+    /// <summary>
+    /// Hit-tests the viewport and returns the front-most document entity under the supplied screen position.
+    /// </summary>
+    public bool TryHitEntity(Vector2 screenPosition, out CadEntity entity)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is not Element3D hitModel)
+            {
+                continue;
+            }
+            CadEntity? hitEntity = GetEntityFromVisual(hitModel);
+            if (hitEntity == null)
+            {
+                continue;
+            }
+            entity = hitEntity;
+            return true;
+        }
+        entity = null!;
+        return false;
     }
 
     /// <summary>
@@ -514,6 +538,22 @@ public class SceneManager
     public void HideScaleOriginPreview()
     {
         _scaleOriginPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows the visual-only Transform Rotate axis guides.
+    /// </summary>
+    public void ShowRotationOriginPreview(Vector3 origin, float radius, System.Numerics.Quaternion orientation)
+    {
+        _rotationOriginPreviewRenderer.Show(origin, radius, orientation);
+    }
+
+    /// <summary>
+    /// Hides the Transform Rotate axis guides.
+    /// </summary>
+    public void HideRotationOriginPreview()
+    {
+        _rotationOriginPreviewRenderer.Hide();
     }
 
     /// <summary>

@@ -34,6 +34,7 @@ public partial class MainWindow
         }
 
         Vector2 screenPosition = GetScreenPosition(e);
+        SynchronizeLayerPanelSelectionFromViewportHit(screenPosition);
 
         _toolManager.ActiveTool?.OnMouseDown(screenPosition);
 

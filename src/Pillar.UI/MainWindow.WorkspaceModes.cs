@@ -496,6 +496,7 @@ public partial class MainWindow
         if (string.Equals(selectedToolName, "Translate", StringComparison.Ordinal))
         {
             ClearTransformScaleToolState();
+            ClearTransformRotationToolState();
             ShowPlaceholderToolOptions(
                 "Translate Options",
                 "Translate tool is active. Dedicated movement controls will be added here.",
@@ -504,24 +505,22 @@ public partial class MainWindow
             return;
         }
 
-        if (string.Equals(selectedToolName, "Rotate", StringComparison.Ordinal))
+        if (string.Equals(selectedToolName, TransformRotationToolName, StringComparison.Ordinal))
         {
             ClearTransformScaleToolState();
-            ShowPlaceholderToolOptions(
-                "Rotate Options",
-                "Rotate tool is active. Dedicated orientation controls will be added here.",
-                ToolSessionPanelSet.None,
-                () => FinishPlaceholderToolSession("Finished rotate tool"));
+            ShowTransformRotationTool();
             return;
         }
 
         if (string.Equals(selectedToolName, TransformScaleToolName, StringComparison.Ordinal))
         {
+            ClearTransformRotationToolState();
             ShowTransformScaleTool();
             return;
         }
 
         ClearTransformScaleToolState();
+        ClearTransformRotationToolState();
         if (string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal))
         {
             ShowPlaceholderToolOptions(
@@ -565,6 +564,7 @@ public partial class MainWindow
     private void HideToolOptionsOverlay()
     {
         ClearTransformScaleToolState();
+        ClearTransformRotationToolState();
         _activePlaceholderToolFinishAction = null;
         _toolSessionOverlayCoordinator.EndSession();
         UpdateGeneratedSupportDeleteButtonState();

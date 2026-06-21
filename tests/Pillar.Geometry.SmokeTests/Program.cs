@@ -57,6 +57,11 @@ public static class Program
         RunTest(failures, "Support projection fallback rejects distant vertical face", ValidateSupportProjectionFallbackRejectsDistantVerticalFace);
         RunTest(failures, "Vertical support projection chooses first exterior hit", ValidateVerticalSupportProjectionChoosesFirstExteriorHit);
         RunTest(failures, "Transform regeneration uses supportable projection", ValidateTransformRegenerationUsesSupportableProjection);
+        RunTest(failures, "Rotation transform preserves its pivot and scale", ValidateRotationTransformPreservesPivotAndScale);
+        RunTest(failures, "Zero rotation restores exact session transform", ValidateZeroRotationRestoresExactSessionTransform);
+        RunTest(failures, "Reset rotation restores imported orientation", ValidateResetRotationRestoresImportedOrientation);
+        RunTest(failures, "X rotation follows the world X axis", ValidateRotationTransformUsesWorldXAxis);
+        RunTest(failures, "X rotation follows the model local X axis", ValidateRotationTransformUsesLocalXAxis);
         RunTest(failures, "Line support pattern includes clicked endpoints", ValidateLineSupportPatternIncludesClickedEndpoints);
         RunTest(failures, "Line support pattern avoids duplicate shared vertices", ValidateLineSupportPatternAvoidsDuplicateSharedVertices);
         RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
@@ -652,6 +657,112 @@ public static class Program
                 throw new InvalidOperationException("Expected regenerated supports to use the lower exterior projection hit.");
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that a rotation preview keeps its model pivot fixed and preserves existing scale.
+    /// </summary>
+    private static void ValidateRotationTransformPreservesPivotAndScale()
+    {
+        Transform3DData originalTransform = new Transform3DData(
+            new Vector3(3.0f, 4.0f, 5.0f),
+            Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 6.0f),
+            new Vector3(2.0f, 3.0f, 4.0f));
+        Vector3 importSpaceOrigin = new Vector3(1.0f, 2.0f, -1.0f);
+        Vector3 originalWorldOrigin = MeshRotationTransform.CalculateWorldOrigin(originalTransform, importSpaceOrigin);
+        Transform3DData rotatedTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            originalTransform,
+            new Vector3(90.0f, 15.0f, -20.0f),
+            importSpaceOrigin,
+            RotationCoordinateSpace.World);
+        Vector3 rotatedWorldOrigin = MeshRotationTransform.CalculateWorldOrigin(rotatedTransform, importSpaceOrigin);
+
+        ValidateVectorNear(originalWorldOrigin, rotatedWorldOrigin, 0.0001f, "Expected rotation to keep the model pivot fixed.");
+        ValidateVectorNear(originalTransform.Scale, rotatedTransform.Scale, 0.0001f, "Expected rotation to preserve the existing user scale.");
+
+        if (rotatedTransform.Rotation == originalTransform.Rotation)
+        {
+            throw new InvalidOperationException("Expected a non-zero rotation delta to change the user rotation.");
+        }
+    }
+
+    /// <summary>
+    /// Validates Reset semantics by requiring zero deltas to return the exact session-start value.
+    /// </summary>
+    private static void ValidateZeroRotationRestoresExactSessionTransform()
+    {
+        Transform3DData originalTransform = new Transform3DData(
+            new Vector3(-2.0f, 7.0f, 1.5f),
+            Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.7f),
+            new Vector3(1.5f, 0.75f, 2.0f));
+        Transform3DData resetTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            originalTransform,
+            Vector3.Zero,
+            new Vector3(4.0f, -3.0f, 0.0f),
+            RotationCoordinateSpace.World);
+
+        if (resetTransform != originalTransform)
+        {
+            throw new InvalidOperationException("Expected zero rotation deltas to restore the exact session-start transform.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that Reset removes user rotation without changing scale or the stable pivot position.
+    /// </summary>
+    private static void ValidateResetRotationRestoresImportedOrientation()
+    {
+        Transform3DData rotatedTransform = new Transform3DData(
+            new Vector3(8.0f, -3.0f, 6.0f),
+            Quaternion.CreateFromYawPitchRoll(0.7f, -0.4f, 0.25f),
+            new Vector3(1.5f, 0.75f, 2.0f));
+        Vector3 importSpaceOrigin = new Vector3(2.0f, -1.0f, 0.5f);
+        Vector3 originalWorldOrigin = MeshRotationTransform.CalculateWorldOrigin(rotatedTransform, importSpaceOrigin);
+        Transform3DData resetTransform = MeshRotationTransform.CreateUserTransformForOriginalOrientation(
+            rotatedTransform,
+            importSpaceOrigin);
+        Vector3 resetWorldOrigin = MeshRotationTransform.CalculateWorldOrigin(resetTransform, importSpaceOrigin);
+
+        if (resetTransform.Rotation != Quaternion.Identity)
+        {
+            throw new InvalidOperationException("Expected Reset to remove all user rotation.");
+        }
+
+        ValidateVectorNear(rotatedTransform.Scale, resetTransform.Scale, 0.0001f, "Expected Reset to preserve user scale.");
+        ValidateVectorNear(originalWorldOrigin, resetWorldOrigin, 0.0001f, "Expected Reset to keep the model pivot fixed.");
+    }
+    /// <summary>
+    /// Validates that positive X input rotates around the fixed world X axis.
+    /// </summary>
+    private static void ValidateRotationTransformUsesWorldXAxis()
+    {
+        Transform3DData rotatedTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            Transform3DData.Identity,
+            new Vector3(90.0f, 0.0f, 0.0f),
+            Vector3.Zero,
+            RotationCoordinateSpace.World);
+        Vector3 rotatedYAxis = Vector3.Transform(Vector3.UnitY, rotatedTransform.ToMatrix4x4());
+
+        ValidateVectorNear(Vector3.UnitZ, rotatedYAxis, 0.0001f, "Expected positive X rotation to move +Y toward +Z.");
+    }
+
+    /// <summary>
+    /// Validates that local X input rotates around the model's already-oriented X axis.
+    /// </summary>
+    private static void ValidateRotationTransformUsesLocalXAxis()
+    {
+        Transform3DData originalTransform = new Transform3DData(
+            Vector3.Zero,
+            Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI * 0.5f),
+            Vector3.One);
+        Transform3DData rotatedTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            originalTransform,
+            new Vector3(90.0f, 0.0f, 0.0f),
+            Vector3.Zero,
+            RotationCoordinateSpace.Local);
+        Vector3 rotatedLocalYAxis = Vector3.Transform(Vector3.UnitY, rotatedTransform.ToMatrix4x4());
+
+        ValidateVectorNear(Vector3.UnitZ, rotatedLocalYAxis, 0.0001f, "Expected local X rotation to move the model's +Y axis toward its +Z axis.");
     }
 
     /// <summary>
