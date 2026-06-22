@@ -1,3 +1,0 @@
-- Better Camera navigation (orbit around cursor, zoom to cursor, rotate so z axis is always up)
-- Expand on snapping, with options for snapping to grid, and snapping to midpoints, endpoints, and intersections.
-

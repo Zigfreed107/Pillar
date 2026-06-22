@@ -16,24 +16,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.ViewModels", "src\Pi
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AI Documentation", "AI Documentation", "{2CA95D3F-9516-44EB-9F6F-B4C52E48612E}"
 	ProjectSection(SolutionItems) = preProject
-		2026_03_15 AI_Chat_Summary.txt = 2026_03_15 AI_Chat_Summary.txt
-		2026_04_07 AI_Chat_Summary.txt = 2026_04_07 AI_Chat_Summary.txt
-		Agents.md = Agents.md
-		CurrentTask.md = CurrentTask.md
-		Mode, Tools, Operations, Commands.md = Mode, Tools, Operations, Commands.md
-		SupportFunctionalityTask.md = SupportFunctionalityTask.md
-		TODO.txt = TODO.txt
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentaion", "Documentaion", "{B64C065D-C640-4395-862F-EFCC3FDF3090}"
-	ProjectSection(SolutionItems) = preProject
-		Documentation\Gui-And-Workflow-Map.md = Documentation\Gui-And-Workflow-Map.md
-		Documentation\GUI.pptx = Documentation\GUI.pptx
-		Documentation\LineSupportTool.md = Documentation\LineSupportTool.md
-		Documentation\Ring Support Tool behaviours.txt = Documentation\Ring Support Tool behaviours.txt
-		Documentation\Support Editing Mode Behaviours.md = Documentation\Support Editing Mode Behaviours.md
-		Documentation\SupportFunctionality.md = Documentation\SupportFunctionality.md
-		Documentation\Tool Behaviour Template.md = Documentation\Tool Behaviour Template.md
+		Oldagents.md = Oldagents.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8B34A751-53CF-467E-BFB6-05E222CFD4F7}"
@@ -43,19 +26,46 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pillar.Geometry.SmokeTests", "tests\Pillar.Geometry.SmokeTests\Pillar.Geometry.SmokeTests.csproj", "{8DC51B66-65D7-4C97-8A26-50F8F1ED82B7}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tasks", "Tasks", "{84CCF0D0-CB87-4623-9A26-4855DABDA6C2}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documents", "Documents", "{98639024-1FC6-45C3-B643-2FE6BDAFE387}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Architecture", "Architecture", "{3A373EEF-92F3-4A21-8A56-94B4AB281925}"
 	ProjectSection(SolutionItems) = preProject
-		Edit Supports Mode Tab.md = Edit Supports Mode Tab.md
+		Documentation\Architecture\Modes-And-Tools.md = Documentation\Architecture\Modes-And-Tools.md
+		Documentation\Architecture\Overview.md = Documentation\Architecture\Overview.md
+		Documentation\Architecture\Rendering-Boundaries.md = Documentation\Architecture\Rendering-Boundaries.md
+		Documentation\Architecture\Undo-Redo-Notes.md = Documentation\Architecture\Undo-Redo-Notes.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Completed", "Completed", "{614638B5-47A1-4AAB-9F7D-3FB8050198D3}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Archive", "Archive", "{CD2F406E-5211-4559-B585-11DE6E54EDFF}"
 	ProjectSection(SolutionItems) = preProject
-		Area Support Tool Implementation.md = Area Support Tool Implementation.md
-		Area Support Tool.md = Area Support Tool.md
-		Contour Support Tool.md = Contour Support Tool.md
-		Face Set Selection Tool Implementation.md = Face Set Selection Tool Implementation.md
-		Rotation Tool.md = Rotation Tool.md
-		Rotation Transform Implementaiton.md = Rotation Transform Implementaiton.md
+		Documentation\Archive\2026-06-Area-Support-Implementation.md = Documentation\Archive\2026-06-Area-Support-Implementation.md
+		Documentation\Archive\2026-06-Rotation-Transform-Implementation.md = Documentation\Archive\2026-06-Rotation-Transform-Implementation.md
+		Documentation\Archive\2026-06-SupportFunctionalityTask.md = Documentation\Archive\2026-06-SupportFunctionalityTask.md
+		Documentation\Archive\README.md = Documentation\Archive\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Features", "Features", "{B362E5DD-7B52-47A5-BCF3-EB2ED501F458}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Features\Face-Set-Selection.md = Documentation\Features\Face-Set-Selection.md
+		Documentation\Features\Rotation-Tool.md = Documentation\Features\Rotation-Tool.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Supports", "Supports", "{0695FCCA-0834-403E-8E53-A6B7B6D6C756}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\Supports\Area-Support-Tool.md = Documentation\Supports\Area-Support-Tool.md
+		Documentation\Supports\Contour-Support-Tool.md = Documentation\Supports\Contour-Support-Tool.md
+		Documentation\Supports\Editing-Mode-Behaviours.md = Documentation\Supports\Editing-Mode-Behaviours.md
+		Documentation\Supports\Line-Support-Tool.md = Documentation\Supports\Line-Support-Tool.md
+		Documentation\Supports\Overview.md = Documentation\Supports\Overview.md
+		Documentation\Supports\Tool-Template.md = Documentation\Supports\Tool-Template.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tasks", "Tasks", "{4425472E-0D4F-4B0C-A545-F0E431E20157}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UI", "UI", "{E6E8E711-7624-4468-86A4-1C8BBDED9869}"
+	ProjectSection(SolutionItems) = preProject
+		Documentation\UI\Panels.md = Documentation\UI\Panels.md
+		Documentation\UI\Workflow.md = Documentation\UI\Workflow.md
 	EndProjectSection
 EndProject
 Global
@@ -97,8 +107,12 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{84CCF0D0-CB87-4623-9A26-4855DABDA6C2} = {2CA95D3F-9516-44EB-9F6F-B4C52E48612E}
-		{614638B5-47A1-4AAB-9F7D-3FB8050198D3} = {84CCF0D0-CB87-4623-9A26-4855DABDA6C2}
+		{3A373EEF-92F3-4A21-8A56-94B4AB281925} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{CD2F406E-5211-4559-B585-11DE6E54EDFF} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{B362E5DD-7B52-47A5-BCF3-EB2ED501F458} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{0695FCCA-0834-403E-8E53-A6B7B6D6C756} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{4425472E-0D4F-4B0C-A545-F0E431E20157} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{E6E8E711-7624-4468-86A4-1C8BBDED9869} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7E64CCF2-ED87-450F-B577-DE4EFDA32C5A}
