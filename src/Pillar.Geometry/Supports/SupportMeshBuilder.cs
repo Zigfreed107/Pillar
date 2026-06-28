@@ -40,6 +40,7 @@ public static class SupportMeshBuilder
         List<Vector3> positions = new List<Vector3>();
         List<int> triangleIndices = new List<int>();
         List<Vector3> normals = new List<Vector3>();
+        SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(support.Profile, support.Style);
         Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
         float headLength = CalculateUsableHeadLength(support.TipPosition, support.BasePosition.Z, headDirection, support.Profile.HeadHeight);
         Vector3 headJointPosition = support.TipPosition - (headDirection * headLength);
@@ -56,7 +57,7 @@ public static class SupportMeshBuilder
         if (verticalLength > AxialTolerance)
         {
             (Vector3 U, Vector3 V) verticalFrame = CreatePerpendicularFrame(Vector3.UnitZ);
-            List<SectionStation> stemStations = CreateVerticalSectionStations(support.Profile, verticalLength);
+            List<SectionStation> stemStations = CreateVerticalSectionStations(support.Profile, dimensions, verticalLength);
 
             for (int stationIndex = 0; stationIndex < stemStations.Count - 1; stationIndex++)
             {
@@ -90,6 +91,7 @@ public static class SupportMeshBuilder
             support.TipPosition,
             headDirection,
             support.Profile,
+            dimensions,
             validatedRadialSegments);
 
         if (hasBranch)
@@ -101,7 +103,7 @@ public static class SupportMeshBuilder
                 stemJointPosition,
                 headJointPosition,
                 branchDirection,
-                support.Profile,
+                dimensions,
                 validatedRadialSegments);
 
             AddJointBall(
@@ -109,7 +111,7 @@ public static class SupportMeshBuilder
                 triangleIndices,
                 normals,
                 stemJointPosition,
-                support.Profile,
+                MathF.Max(dimensions.StemTopDiameter, dimensions.BranchDiameter) * 0.5f,
                 validatedRadialSegments);
 
             AddJointBall(
@@ -117,7 +119,7 @@ public static class SupportMeshBuilder
                 triangleIndices,
                 normals,
                 headJointPosition,
-                support.Profile,
+                dimensions.BranchDiameter * 0.5f,
                 validatedRadialSegments);
         }
         else
@@ -127,7 +129,7 @@ public static class SupportMeshBuilder
                 triangleIndices,
                 normals,
                 headJointPosition,
-                support.Profile,
+                MathF.Max(dimensions.StemTopDiameter, dimensions.HeadBottomDiameter) * 0.5f,
                 validatedRadialSegments);
         }
 
@@ -151,12 +153,12 @@ public static class SupportMeshBuilder
     /// <summary>
     /// Creates an ordered vertical base-and-stem profile chain from the build plate to the angled head joint.
     /// </summary>
-    private static List<SectionStation> CreateVerticalSectionStations(SupportProfile profile, float totalLength)
+    private static List<SectionStation> CreateVerticalSectionStations(SupportProfile profile, SupportPartDimensions dimensions, float totalLength)
     {
         float baseBottomRadius = profile.BaseBottomRadius;
-        float stemBottomRadius = profile.StemBottomDiameter * 0.5f;
-        float stemTopRadius = profile.StemTopDiameter * 0.5f;
-        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
+        float stemBottomRadius = dimensions.StemBottomDiameter * 0.5f;
+        float stemTopRadius = dimensions.StemTopDiameter * 0.5f;
+        float headBottomRadius = dimensions.HeadBottomDiameter * 0.5f;
         float baseHeight = MathF.Min(profile.BaseHeight, totalLength);
         float distanceAboveBase = MathF.Max(0.0f, totalLength - baseHeight);
         float stemHeight = distanceAboveBase;
@@ -188,10 +190,11 @@ public static class SupportMeshBuilder
         Vector3 tipPosition,
         Vector3 headDirection,
         SupportProfile profile,
+        SupportPartDimensions dimensions,
         int radialSegments)
     {
-        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
-        float headTopRadius = profile.HeadTopDiameter * 0.5f;
+        float headBottomRadius = dimensions.HeadBottomDiameter * 0.5f;
+        float headTopRadius = dimensions.HeadTopDiameter * 0.5f;
         Vector3 penetrationTip = tipPosition + (headDirection * profile.HeadPenetrationDepth);
         (Vector3 U, Vector3 V) headFrame = CreatePerpendicularFrame(headDirection);
 
@@ -239,10 +242,10 @@ public static class SupportMeshBuilder
         Vector3 stemJointPosition,
         Vector3 headJointPosition,
         Vector3 branchDirection,
-        SupportProfile profile,
+        SupportPartDimensions dimensions,
         int radialSegments)
     {
-        float branchRadius = profile.StemTopDiameter * 0.5f;
+        float branchRadius = dimensions.BranchDiameter * 0.5f;
         (Vector3 U, Vector3 V) branchFrame = CreatePerpendicularFrame(branchDirection);
 
         AddFrustum(
@@ -269,13 +272,10 @@ public static class SupportMeshBuilder
         List<int> triangleIndices,
         List<Vector3> normals,
         Vector3 center,
-        SupportProfile profile,
+        float radius,
         int radialSegments)
     {
-        float stemTopRadius = profile.StemTopDiameter * 0.5f;
-        float headBottomRadius = profile.HeadBottomDiameter * 0.5f;
-        float ballRadius = MathF.Max(stemTopRadius, headBottomRadius);
-        AddSphere(positions, triangleIndices, normals, center, ballRadius, radialSegments);
+        AddSphere(positions, triangleIndices, normals, center, radius, radialSegments);
     }
 
     /// <summary>
@@ -514,3 +514,7 @@ public static class SupportMeshBuilder
         public float Radius { get; }
     }
 }
+
+
+
+

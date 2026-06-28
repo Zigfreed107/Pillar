@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     private readonly LineSupportToolOptionsControl _lineSupportToolOptionsControl;
     private readonly ContourSupportToolOptionsControl _contourSupportToolOptionsControl;
     private readonly AreaSupportToolOptionsControl _areaSupportToolOptionsControl;
+    private readonly SupportClusterToolOptionsControl _supportClusterToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly RotationToolOptionsControl _rotationToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
     private string _activeToolStatusText = "Select tool active";
     private bool _hasFramedStartupView;
     private bool _isSynchronizingLayerAndViewportSelection;
+    private Guid? _activeEditingClusterModifierId;
     private bool _isPrecisionSelectCursorActive;
     private Cursor? _viewportCursorBeforePrecisionSelect;
     private int _previewCalculationCursorDepth;
@@ -80,6 +82,7 @@ public partial class MainWindow : Window
         _lineSupportToolOptionsControl = new LineSupportToolOptionsControl();
         _contourSupportToolOptionsControl = new ContourSupportToolOptionsControl();
         _areaSupportToolOptionsControl = new AreaSupportToolOptionsControl();
+        _supportClusterToolOptionsControl = new SupportClusterToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _rotationToolOptionsControl = new RotationToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
@@ -325,6 +328,11 @@ public partial class MainWindow : Window
         _areaSupportToolOptionsControl.ApplyRequested += AreaSupportToolOptionsControl_ApplyRequested;
         _areaSupportToolOptionsControl.CloseRequested += AreaSupportToolOptionsControl_CloseRequested;
         _areaSupportToolOptionsControl.DeleteRequested += AreaSupportToolOptionsControl_DeleteRequested;
+        _supportClusterToolOptionsControl.OptionsChanged += SupportClusterToolOptionsControl_OptionsChanged;
+        _supportClusterToolOptionsControl.ApplyRequested += SupportClusterToolOptionsControl_ApplyRequested;
+        _supportClusterToolOptionsControl.RemoveAllRequested += SupportClusterToolOptionsControl_RemoveAllRequested;
+        _supportClusterToolOptionsControl.UnclusterSelectedRequested += SupportClusterToolOptionsControl_UnclusterSelectedRequested;
+        _supportClusterToolOptionsControl.CloseRequested += SupportClusterToolOptionsControl_CloseRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;
@@ -347,6 +355,7 @@ public partial class MainWindow : Window
         LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
         LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
+        LayerPanelOverlay.EditSupportModifierRequested += LayerPanel_EditSupportModifierRequested;
     }
 
     /// <summary>

@@ -110,6 +110,12 @@ public sealed class SetMeshUserTransformCommand : ICadCommand
 
             ReplaceSupportEntities(supportsToRemove, supportsToAdd);
             ApplyGeneratorSettings(supportRegeneration, useNewState);
+            supportRegeneration.SupportLayerGroup.SetSourceGeneratorRevision(useNewState
+                ? supportRegeneration.NewSourceGeneratorRevision
+                : supportRegeneration.OldSourceGeneratorRevision);
+            supportRegeneration.SupportLayerGroup.SetSupportModifiers(useNewState
+                ? supportRegeneration.NewSupportModifiers
+                : supportRegeneration.OldSupportModifiers);
         }
     }
 

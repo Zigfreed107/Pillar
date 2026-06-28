@@ -37,7 +37,8 @@ public sealed class SupportEntity : CadEntity
         Vector3 headDirection,
         float branchLength,
         Vector3 branchDirection,
-        SupportProfile profile)
+        SupportProfile profile,
+        SupportStyle? style = null)
         : base("Support")
     {
         if (supportLayerGroupId == Guid.Empty)
@@ -46,6 +47,7 @@ public sealed class SupportEntity : CadEntity
         }
 
         Profile = profile?.Clone() ?? throw new ArgumentNullException(nameof(profile));
+        Style = style?.Clone() ?? SupportStyle.Individual.Clone();
         HeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, Profile);
         BranchLength = ValidateBranchLength(branchLength, nameof(branchLength));
         BranchDirection = NormalizeOrDefault(branchDirection, Vector3.UnitZ);
@@ -92,6 +94,11 @@ public sealed class SupportEntity : CadEntity
     public SupportProfile Profile { get; }
 
     /// <summary>
+    /// Gets the style that resolves dimensions for this support.
+    /// </summary>
+    public SupportStyle Style { get; }
+
+    /// <summary>
     /// Recreates one saved support while preserving its document identity and name.
     /// </summary>
     public static SupportEntity CreateLoaded(
@@ -103,9 +110,10 @@ public sealed class SupportEntity : CadEntity
         Vector3 headDirection,
         float branchLength,
         Vector3 branchDirection,
-        SupportProfile profile)
+        SupportProfile profile,
+        SupportStyle? style = null)
     {
-        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, profile);
+        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, profile, style);
         support.Id = id;
         support.Name = string.IsNullOrWhiteSpace(name) ? "Support" : name.Trim();
         return support;
@@ -116,11 +124,12 @@ public sealed class SupportEntity : CadEntity
     /// </summary>
     public override (Vector3 Min, Vector3 Max) GetBounds()
     {
+        SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(Profile, Style);
         float maximumRadius = MathF.Max(
             Profile.BaseBottomRadius,
             MathF.Max(
-                Profile.StemBottomDiameter,
-                MathF.Max(Profile.StemTopDiameter, MathF.Max(Profile.HeadBottomDiameter, Profile.HeadTopDiameter))) * 0.5f);
+                dimensions.StemBottomDiameter,
+                MathF.Max(dimensions.StemTopDiameter, MathF.Max(dimensions.HeadBottomDiameter, dimensions.HeadTopDiameter))) * 0.5f);
         Vector3 radiusPadding = new Vector3(maximumRadius, maximumRadius, maximumRadius);
         Vector3 headBottom = TipPosition - (HeadDirection * Profile.HeadHeight);
         Vector3 stemTop = BranchLength > 0.0f
@@ -208,3 +217,5 @@ public sealed class SupportEntity : CadEntity
         return Vector3.Normalize(direction);
     }
 }
+
+

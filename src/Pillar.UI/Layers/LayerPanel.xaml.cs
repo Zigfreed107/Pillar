@@ -69,6 +69,11 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerSupportGroupEditRequestedEventArgs>? EditSupportGroupRequested;
 
     /// <summary>
+    /// Raised when one support modifier row should be opened for tool-specific editing.
+    /// </summary>
+    public event EventHandler<LayerSupportModifierEditRequestedEventArgs>? EditSupportModifierRequested;
+
+    /// <summary>
     /// Requests the shared import workflow from the owning window.
     /// </summary>
     private void ImportModelButton_Click(object sender, RoutedEventArgs e)
@@ -226,7 +231,7 @@ public partial class LayerPanel : UserControl
     {
         _ = e;
 
-        if (sender is not Button button || button.DataContext is not LayerTreeItemViewModel layer || !layer.CanEditSupportGroup)
+        if (sender is not Button button || button.DataContext is not LayerTreeItemViewModel layer || !layer.CanEditLayerTool)
         {
             return;
         }
@@ -234,6 +239,12 @@ public partial class LayerPanel : UserControl
         if (DataContext is LayerPanelViewModel layerPanelViewModel)
         {
             layerPanelViewModel.SetSelectedLayer(layer);
+        }
+
+        if (layer.Kind == LayerTreeItemKind.SupportModifier)
+        {
+            EditSupportModifierRequested?.Invoke(this, new LayerSupportModifierEditRequestedEventArgs(layer.SupportLayerGroupId, layer.Id));
+            return;
         }
 
         EditSupportGroupRequested?.Invoke(this, new LayerSupportGroupEditRequestedEventArgs(layer.Id));
@@ -415,6 +426,31 @@ public sealed class LayerColorChangeRequestedEventArgs : EventArgs
     /// Gets the color requested by the color picker.
     /// </summary>
     public SupportLayerColor NewColor { get; }
+}
+
+/// <summary>
+/// Carries one support modifier edit request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerSupportModifierEditRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates support modifier edit request data.
+    /// </summary>
+    public LayerSupportModifierEditRequestedEventArgs(Guid supportLayerGroupId, Guid modifierId)
+    {
+        SupportLayerGroupId = supportLayerGroupId;
+        ModifierId = modifierId;
+    }
+
+    /// <summary>
+    /// Gets the support group id that owns the modifier.
+    /// </summary>
+    public Guid SupportLayerGroupId { get; }
+
+    /// <summary>
+    /// Gets the modifier id that should be edited.
+    /// </summary>
+    public Guid ModifierId { get; }
 }
 
 /// <summary>

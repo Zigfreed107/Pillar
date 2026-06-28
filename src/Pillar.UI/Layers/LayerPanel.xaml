@@ -69,7 +69,7 @@
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="Visibility" Value="Collapsed" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding CanEditSupportGroup}" Value="True">
+                <DataTrigger Binding="{Binding CanEditLayerTool}" Value="True">
                     <Setter Property="Visibility" Value="Visible" />
                 </DataTrigger>
             </Style.Triggers>
@@ -141,7 +141,7 @@
                     </TextBlock>
                     <Button Grid.Column="2"
                             Style="{StaticResource SupportGroupEditButtonStyle}"
-                            ToolTip="Edit support group"
+                            ToolTip="Edit"
                             Click="SupportGroupEditButton_Click"
                             Content="E" />
                 </Grid>

@@ -49,6 +49,13 @@ public static class Program
         RunTest(failures, "Support is skipped when branch cannot clear model", ValidateSupportIsSkippedWhenBranchCannotClearModel);
         RunTest(failures, "Angled head omits branch inside model clearance", ValidateAngledHeadOmitsBranchInsideModelClearance);
         RunTest(failures, "Branch is used when vertical stem intersects model", ValidateBranchIsUsedWhenVerticalStemIntersectsModel);
+        RunTest(failures, "Individual support dimensions derive branch from stem top", ValidateIndividualSupportDimensionsDeriveBranchFromStemTop);
+        RunTest(failures, "Clustered support dimensions use explicit branch diameter", ValidateClusteredSupportDimensionsUseExplicitBranchDiameter);
+        RunTest(failures, "Cluster branch diameter affects support mesh", ValidateClusterBranchDiameterAffectsSupportMesh);
+        RunTest(failures, "Cluster head branch joint uses branch diameter", ValidateClusterHeadBranchJointUsesBranchDiameter);
+        RunTest(failures, "Individual branched supports remain cluster eligible", ValidateIndividualBranchedSupportsRemainClusterEligible);
+        RunTest(failures, "Cluster modifier redirects nearby supports", ValidateClusterModifierRedirectsNearbySupports);
+        RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
         RunTest(failures, "Support placement rejects crossing angled head", ValidateSupportPlacementRejectsCrossingAngledHead);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Vertical projection handles vertical side faces", ValidateVerticalProjectionHandlesVerticalSideFaces);
@@ -91,6 +98,7 @@ public static class Program
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
+        RunTest(failures, "Support style and cluster branch diameter survive save and load", ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -493,6 +501,300 @@ public static class Program
     /// <summary>
     /// Validates that the angled head centerline cannot cross another model face before the intended contact.
     /// </summary>
+    /// <summary>
+    /// Validates that individual support dimensions derive branch and head-bottom diameters from stem top.
+    /// </summary>
+    private static void ValidateIndividualSupportDimensionsDeriveBranchFromStemTop()
+    {
+        SupportProfile profile = new SupportProfile(
+            0.25f,
+            0.25f,
+            0.80f,
+            0.55f,
+            4.0f,
+            0.5f,
+            30.0f,
+            1.0f,
+            0.2f,
+            0.20f,
+            45.0f);
+        SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(profile, SupportStyle.Individual);
+
+        if (MathF.Abs(dimensions.BranchDiameter - profile.StemTopDiameter) > 0.0001f
+            || MathF.Abs(dimensions.HeadBottomDiameter - profile.StemTopDiameter) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected individual branch and head-bottom diameters to come from stem top diameter.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that clustered support dimensions use an explicit branch diameter without changing stem diameters.
+    /// </summary>
+    private static void ValidateClusteredSupportDimensionsUseExplicitBranchDiameter()
+    {
+        SupportProfile profile = new SupportProfile(
+            0.25f,
+            0.25f,
+            0.80f,
+            0.55f,
+            4.0f,
+            0.5f,
+            30.0f,
+            1.0f,
+            0.2f,
+            0.20f,
+            45.0f);
+        SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(profile, new ClusteredSupportStyle(1.35f));
+
+        if (MathF.Abs(dimensions.StemTopDiameter - profile.StemTopDiameter) > 0.0001f
+            || MathF.Abs(dimensions.BranchDiameter - 1.35f) > 0.0001f
+            || MathF.Abs(dimensions.HeadBottomDiameter - 1.35f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected clustered dimensions to keep stem top and use explicit branch diameter for branch and head bottom.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that support mesh generation uses clustered branch diameter independently from stem top diameter.
+    /// </summary>
+    private static void ValidateClusterBranchDiameterAffectsSupportMesh()
+    {
+        SupportProfile profile = new SupportProfile(
+            0.10f,
+            0.10f,
+            0.10f,
+            0.20f,
+            4.0f,
+            0.5f,
+            30.0f,
+            1.0f,
+            0.2f,
+            0.10f,
+            45.0f);
+        SupportEntity support = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(5.0f, 0.0f, 5.0f),
+            new Vector3(0.0f, 0.0f, 0.0f),
+            Vector3.UnitZ,
+            4.0f,
+            Vector3.UnitX,
+            profile,
+            new ClusteredSupportStyle(2.0f));
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+        float maximumY = 0.0f;
+
+        for (int i = 0; i < meshData.Positions.Count; i++)
+        {
+            maximumY = MathF.Max(maximumY, MathF.Abs(meshData.Positions[i].Y));
+        }
+
+        if (maximumY < 0.90f)
+        {
+            throw new InvalidOperationException("Expected clustered branch diameter to visibly widen the generated support mesh.");
+        }
+    }
+    /// <summary>
+    /// Validates that the clustered head-to-branch ball uses the branch diameter, not the central stem top diameter.
+    /// </summary>
+    private static void ValidateClusterHeadBranchJointUsesBranchDiameter()
+    {
+        SupportProfile profile = new SupportProfile(
+            0.10f,
+            0.10f,
+            0.10f,
+            1.60f,
+            4.0f,
+            0.5f,
+            30.0f,
+            1.0f,
+            0.2f,
+            0.10f,
+            45.0f);
+        Vector3 tipPosition = new Vector3(5.0f, 0.0f, 5.0f);
+        Vector3 headDirection = Vector3.UnitZ;
+        SupportEntity support = new SupportEntity(
+            Guid.NewGuid(),
+            tipPosition,
+            new Vector3(0.0f, 0.0f, 0.0f),
+            headDirection,
+            4.0f,
+            Vector3.UnitX,
+            profile,
+            new ClusteredSupportStyle(0.40f));
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+        Vector3 headJointPosition = tipPosition - (headDirection * profile.HeadHeight);
+        Vector3 expectedBallTop = headJointPosition + (Vector3.UnitZ * 0.20f);
+        Vector3 stemSizedBallTop = headJointPosition + (Vector3.UnitZ * 0.80f);
+        bool foundExpectedBallTop = false;
+        bool foundStemSizedBallTop = false;
+
+        for (int i = 0; i < meshData.Positions.Count; i++)
+        {
+            if (Vector3.Distance(meshData.Positions[i], expectedBallTop) <= 0.0001f)
+            {
+                foundExpectedBallTop = true;
+            }
+
+            if (Vector3.Distance(meshData.Positions[i], stemSizedBallTop) <= 0.0001f)
+            {
+                foundStemSizedBallTop = true;
+            }
+        }
+
+        if (!foundExpectedBallTop)
+        {
+            throw new InvalidOperationException("Expected clustered head branch joint ball to use the branch radius.");
+        }
+
+        if (foundStemSizedBallTop)
+        {
+            throw new InvalidOperationException("Expected clustered head branch joint ball not to use the central stem top radius.");
+        }
+    }
+    /// <summary>
+    /// Validates that individual supports with ordinary branches can still become clustered supports.
+    /// </summary>
+    private static void ValidateIndividualBranchedSupportsRemainClusterEligible()
+    {
+        SupportProfile profile = CreateBranchProfile(45.0f, 4.0f, 0.5f);
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            new SupportEntity(Guid.NewGuid(), new Vector3(0.0f, 0.0f, 12.0f), new Vector3(0.0f, 0.0f, 0.0f), Vector3.UnitZ, 1.0f, Vector3.UnitX, profile),
+            new SupportEntity(Guid.NewGuid(), new Vector3(1.0f, 0.0f, 12.0f), new Vector3(1.0f, 0.0f, 0.0f), Vector3.UnitZ, 1.0f, Vector3.UnitX, profile)
+        };
+        SupportClusterModifierSettings settings = new SupportClusterModifierSettings(
+            3.0f,
+            2,
+            4,
+            45.0f,
+            SupportClusterStemSizingMode.Automatic,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            0.42f);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            SupportModifierScope.WholeLayer,
+            0,
+            settings,
+            null,
+            null);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
+
+        if (result.ClusteredSupportCount != 2)
+        {
+            throw new InvalidOperationException("Expected individual branched supports to remain eligible for clustering.");
+        }
+    }
+    /// <summary>
+    /// Validates that a whole-layer Cluster modifier redirects nearby supports onto shared stem axes.
+    /// </summary>
+    private static void ValidateClusterModifierRedirectsNearbySupports()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(10.0f, 0.0f, 0.0f), new Vector3(10.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = new SupportClusterModifierSettings(
+            3.0f,
+            2,
+            4,
+            45.0f,
+            SupportClusterStemSizingMode.Automatic,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            0.42f);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            SupportModifierScope.WholeLayer,
+            0,
+            settings,
+            null,
+            null);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
+
+        if (result.ClusterCount != 1 || result.ClusteredSupportCount != 2)
+        {
+            throw new InvalidOperationException("Expected one two-member cluster.");
+        }
+
+        if (result.SupportEntities[0].BranchLength <= 0.0f || result.SupportEntities[1].BranchLength <= 0.0f)
+        {
+            throw new InvalidOperationException("Expected nearby supports to become branched cluster members.");
+        }
+
+        if (result.SupportEntities[2].BranchLength > 0.0f)
+        {
+            throw new InvalidOperationException("Expected the distant support to remain individual.");
+        }
+
+        float expectedBottomDiameter = MathF.Sqrt(2.0f) * SupportDefaults.DefaultStemBottomDiameter;
+
+        if (result.SupportEntities[0].Style.Kind != SupportStyleKind.Clustered)
+        {
+            throw new InvalidOperationException("Expected clustered output supports to use clustered style dimensions.");
+        }
+
+        SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(result.SupportEntities[0].Profile, result.SupportEntities[0].Style);
+
+        if (MathF.Abs(result.SupportEntities[0].Profile.StemBottomDiameter - SupportDefaults.DefaultStemBottomDiameter) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected clustered output to keep the source profile stem diameter for later restoration.");
+        }
+
+        if (MathF.Abs(dimensions.StemBottomDiameter - expectedBottomDiameter) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected automatic stem sizing to preserve combined stem area in resolved dimensions.");
+        }
+
+        if (MathF.Abs(dimensions.BranchDiameter - 0.42f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected clustered output branch diameter to come from Cluster settings.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that selection-scoped Cluster modifiers do not absorb nearby unselected supports.
+    /// </summary>
+    private static void ValidateSelectionClusterModifierIgnoresUnselectedSupports()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(1.0f, 1.0f, 0.0f), new Vector3(1.0f, 1.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = new SupportClusterModifierSettings(
+            3.0f,
+            2,
+            4,
+            45.0f,
+            SupportClusterStemSizingMode.Automatic,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            0.42f);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            SupportModifierScope.Selection,
+            0,
+            settings,
+            new List<Guid> { supports[0].Id, supports[1].Id },
+            0);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
+
+        if (result.ClusteredSupportCount != 2)
+        {
+            throw new InvalidOperationException("Expected only selected supports to be clustered.");
+        }
+
+        if (result.SupportEntities[2].BranchLength > 0.0f)
+        {
+            throw new InvalidOperationException("Expected the unselected nearby support to remain individual.");
+        }
+    }
     private static void ValidateSupportPlacementRejectsCrossingAngledHead()
     {
         SupportProfile profile = CreateAngledProfile(45.0f);
@@ -1898,6 +2200,97 @@ public static class Program
     /// <summary>
     /// Validates that removing file versioning does not remove the Graphite file identity check.
     /// </summary>
+    /// <summary>
+    /// Validates that support styles and cluster branch diameter settings are saved and loaded with the project.
+    /// </summary>
+    private static void ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Clustered Supports");
+        SupportClusterModifierSettings clusterSettings = new SupportClusterModifierSettings(
+            3.0f,
+            2,
+            4,
+            45.0f,
+            SupportClusterStemSizingMode.Manual,
+            1.25f,
+            0.85f,
+            0.45f);
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(
+                SupportModifierKind.Cluster,
+                SupportModifierScope.WholeLayer,
+                0,
+                clusterSettings,
+                null,
+                null)
+        });
+        document.AddSupportLayerGroup(supportLayerGroup);
+        SupportEntity clusteredSupport = new SupportEntity(
+            supportLayerGroup.Id,
+            new Vector3(2.0f, 0.0f, 6.0f),
+            new Vector3(0.0f, 0.0f, 0.0f),
+            Vector3.UnitZ,
+            2.0f,
+            Vector3.UnitX,
+            SupportDefaults.CreateProfile(),
+            new ClusteredSupportStyle(1.25f, 0.85f, 0.45f));
+        document.AddEntity(clusteredSupport);
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "SupportStyleSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+            SupportEntity? loadedSupport = null;
+
+            for (int i = 0; i < loadedDocument.Entities.Count; i++)
+            {
+                if (loadedDocument.Entities[i] is SupportEntity support)
+                {
+                    loadedSupport = support;
+                    break;
+                }
+            }
+
+            if (loadedSupport == null || loadedSupport.Style is not ClusteredSupportStyle loadedStyle)
+            {
+                throw new InvalidOperationException("Expected clustered support style to survive save and load.");
+            }
+
+            if (MathF.Abs(loadedStyle.BranchDiameter - 0.45f) > 0.0001f
+                || !loadedStyle.CentralStemBottomDiameter.HasValue
+                || !loadedStyle.CentralStemTopDiameter.HasValue
+                || MathF.Abs(loadedStyle.CentralStemBottomDiameter.Value - 1.25f) > 0.0001f
+                || MathF.Abs(loadedStyle.CentralStemTopDiameter.Value - 0.85f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected clustered support style diameters to survive save and load.");
+            }
+
+            if (loadedDocument.SupportLayerGroups.Count != 1
+                || loadedDocument.SupportLayerGroups[0].SupportModifiers.Count != 1
+                || loadedDocument.SupportLayerGroups[0].SupportModifiers[0].ClusterSettings == null
+                || MathF.Abs(loadedDocument.SupportLayerGroups[0].SupportModifiers[0].ClusterSettings!.ClusterBranchDiameter - 0.45f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Cluster modifier branch diameter to survive save and load.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
     private static void ValidateGphSerializerRejectsInvalidFormat()
     {
         GphDocumentSerializer serializer = new GphDocumentSerializer();
@@ -3106,3 +3499,14 @@ public static class Program
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+

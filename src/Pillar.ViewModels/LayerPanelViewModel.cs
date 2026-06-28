@@ -20,6 +20,7 @@ public partial class LayerPanelViewModel : ObservableObject
     private readonly CadDocument _document;
     private LayerTreeItemViewModel? _selectedLayer;
     private int _selectedModelCount;
+    private int _selectedSupportLayerGroupCount;
 
     /// <summary>
     /// Creates a Layer Panel model that mirrors the supplied document.
@@ -72,11 +73,33 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether multiple support layers are currently selected through viewport support selection.
+    /// </summary>
+    public bool HasMultipleSelectedSupportLayerGroups
+    {
+        get { return GetEffectiveSelectedSupportLayerGroupCount() > 1; }
+    }
+
+    /// <summary>
+    /// Gets whether exactly one support layer is selected and Edit Supports tools can run.
+    /// </summary>
+    public bool CanUseSupportEditingTools
+    {
+        get { return GetEffectiveSelectedSupportLayerGroupCount() == 1; }
+    }
+
+    /// <summary>
     /// Gets whether the workflow tabs should be visible for the current selection context.
     /// </summary>
     public bool CanShowWorkflowTabs
     {
-        get { return HasSelectedModelLayer || HasSelectedSupportGroupLayer || HasMultipleSelectedModels; }
+        get
+        {
+            return HasSelectedModelLayer
+                || HasSelectedSupportGroupLayer
+                || HasMultipleSelectedModels
+                || GetEffectiveSelectedSupportLayerGroupCount() > 0;
+        }
     }
 
     /// <summary>
@@ -126,6 +149,8 @@ public partial class LayerPanelViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanRemoveModel));
                 OnPropertyChanged(nameof(HasSelectedModelLayer));
                 OnPropertyChanged(nameof(HasSelectedSupportGroupLayer));
+                OnPropertyChanged(nameof(HasMultipleSelectedSupportLayerGroups));
+                OnPropertyChanged(nameof(CanUseSupportEditingTools));
                 OnPropertyChanged(nameof(CanShowWorkflowTabs));
                 UpdateLayerSelectionFlags();
             }
@@ -149,6 +174,27 @@ public partial class LayerPanelViewModel : ObservableObject
 
         _selectedModelCount = selectedModelCount;
         OnPropertyChanged(nameof(HasMultipleSelectedModels));
+        OnPropertyChanged(nameof(CanShowWorkflowTabs));
+    }
+
+    /// <summary>
+    /// Updates the number of distinct support layer groups selected in the viewport.
+    /// </summary>
+    public void SetSelectedSupportLayerGroupCount(int selectedSupportLayerGroupCount)
+    {
+        if (selectedSupportLayerGroupCount < 0)
+        {
+            selectedSupportLayerGroupCount = 0;
+        }
+
+        if (_selectedSupportLayerGroupCount == selectedSupportLayerGroupCount)
+        {
+            return;
+        }
+
+        _selectedSupportLayerGroupCount = selectedSupportLayerGroupCount;
+        OnPropertyChanged(nameof(HasMultipleSelectedSupportLayerGroups));
+        OnPropertyChanged(nameof(CanUseSupportEditingTools));
         OnPropertyChanged(nameof(CanShowWorkflowTabs));
     }
 
@@ -189,7 +235,22 @@ public partial class LayerPanelViewModel : ObservableObject
                     supportLayerGroup.ModelEntityId,
                     LayerTreeItemKind.SupportGroup,
                     supportLayerGroup.Name,
-                    supportLayerGroup.Color);
+                    supportLayerGroup.Color,
+                    supportLayerGroup.Id);
+
+                IReadOnlyList<SupportModifierDefinition> supportModifiers = supportLayerGroup.SupportModifiers;
+
+                for (int i = 0; i < supportModifiers.Count; i++)
+                {
+                    SupportModifierDefinition modifier = supportModifiers[i];
+                    supportGroupRow.Children.Add(new LayerTreeItemViewModel(
+                        modifier.Id,
+                        supportLayerGroup.ModelEntityId,
+                        LayerTreeItemKind.SupportModifier,
+                        modifier.DisplayName,
+                        supportLayerGroup.Color,
+                        supportLayerGroup.Id));
+                }
 
                 modelRow.Children.Add(supportGroupRow);
             }
@@ -318,17 +379,34 @@ public partial class LayerPanelViewModel : ObservableObject
 
         foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
         {
-            if (modelLayer.Id == id.Value && modelLayer.Kind == kind.Value)
-            {
-                return modelLayer;
-            }
+            LayerTreeItemViewModel? foundLayer = FindLayerRecursive(modelLayer, id.Value, kind.Value);
 
-            foreach (LayerTreeItemViewModel childLayer in modelLayer.Children)
+            if (foundLayer != null)
             {
-                if (childLayer.Id == id.Value && childLayer.Kind == kind.Value)
-                {
-                    return childLayer;
-                }
+                return foundLayer;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a layer row recursively in the layer tree.
+    /// </summary>
+    private static LayerTreeItemViewModel? FindLayerRecursive(LayerTreeItemViewModel layer, Guid id, LayerTreeItemKind kind)
+    {
+        if (layer.Id == id && layer.Kind == kind)
+        {
+            return layer;
+        }
+
+        foreach (LayerTreeItemViewModel childLayer in layer.Children)
+        {
+            LayerTreeItemViewModel? foundLayer = FindLayerRecursive(childLayer, id, kind);
+
+            if (foundLayer != null)
+            {
+                return foundLayer;
             }
         }
 
@@ -355,12 +433,20 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
         {
-            modelLayer.IsSelected = ReferenceEquals(modelLayer, SelectedLayer);
+            UpdateLayerSelectionFlagsRecursive(modelLayer);
+        }
+    }
 
-            foreach (LayerTreeItemViewModel childLayer in modelLayer.Children)
-            {
-                childLayer.IsSelected = ReferenceEquals(childLayer, SelectedLayer);
-            }
+    /// <summary>
+    /// Mirrors selection state recursively into each tree row.
+    /// </summary>
+    private void UpdateLayerSelectionFlagsRecursive(LayerTreeItemViewModel layer)
+    {
+        layer.IsSelected = ReferenceEquals(layer, SelectedLayer);
+
+        foreach (LayerTreeItemViewModel childLayer in layer.Children)
+        {
+            UpdateLayerSelectionFlagsRecursive(childLayer);
         }
     }
 
@@ -419,5 +505,18 @@ public partial class LayerPanelViewModel : ObservableObject
         {
             supportLayerGroup.PropertyChanged += SupportLayerGroup_PropertyChanged;
         }
+    }
+
+    /// <summary>
+    /// Gets the effective support-layer selection count from either the layer tree or viewport support selection.
+    /// </summary>
+    private int GetEffectiveSelectedSupportLayerGroupCount()
+    {
+        if (_selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.SupportGroup)
+        {
+            return 1;
+        }
+
+        return _selectedSupportLayerGroupCount;
     }
 }

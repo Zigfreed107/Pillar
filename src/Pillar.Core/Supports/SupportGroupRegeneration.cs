@@ -107,6 +107,10 @@ public sealed class SupportGroupRegeneration
         AreaSupportSettings? newAreaSupportSettings)
     {
         SupportLayerGroup = supportLayerGroup ?? throw new ArgumentNullException(nameof(supportLayerGroup));
+        OldSourceGeneratorRevision = SupportLayerGroup.SourceGeneratorRevision;
+        NewSourceGeneratorRevision = OldSourceGeneratorRevision + 1;
+        OldSupportModifiers = SupportLayerGroup.SupportModifiers;
+        NewSupportModifiers = CreateModifiersForRegeneratedOutput(OldSupportModifiers);
         OldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
         NewSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
         OldRingSupportSettings = oldRingSupportSettings?.Clone();
@@ -126,6 +130,26 @@ public sealed class SupportGroupRegeneration
     /// Gets the support group whose children will be regenerated.
     /// </summary>
     public SupportLayerGroup SupportLayerGroup { get; }
+
+    /// <summary>
+    /// Gets the source generator revision present before support identities are regenerated.
+    /// </summary>
+    public int OldSourceGeneratorRevision { get; }
+
+    /// <summary>
+    /// Gets the source generator revision that should be stored with the regenerated output.
+    /// </summary>
+    public int NewSourceGeneratorRevision { get; }
+
+    /// <summary>
+    /// Gets the modifier stack present before support identities are regenerated.
+    /// </summary>
+    public IReadOnlyList<SupportModifierDefinition> OldSupportModifiers { get; }
+
+    /// <summary>
+    /// Gets the modifier stack retained for regenerated support output.
+    /// </summary>
+    public IReadOnlyList<SupportModifierDefinition> NewSupportModifiers { get; }
 
     /// <summary>
     /// Gets the support entities present before the owning model transform changes.
@@ -176,6 +200,24 @@ public sealed class SupportGroupRegeneration
     /// Gets the Area Support generator settings transformed for the new model transform, when this is an Area group.
     /// </summary>
     public AreaSupportSettings? NewAreaSupportSettings { get; }
+
+    /// <summary>
+    /// Keeps replayable whole-layer modifiers and discards revision-bound selection modifiers after regeneration.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierDefinition> CreateModifiersForRegeneratedOutput(IReadOnlyList<SupportModifierDefinition> oldModifiers)
+    {
+        List<SupportModifierDefinition> retainedModifiers = new List<SupportModifierDefinition>();
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            if (oldModifiers[i].Scope == SupportModifierScope.WholeLayer)
+            {
+                retainedModifiers.Add(oldModifiers[i]);
+            }
+        }
+
+        return retainedModifiers;
+    }
 
     /// <summary>
     /// Verifies every support entity belongs to the group carried by this regeneration snapshot.

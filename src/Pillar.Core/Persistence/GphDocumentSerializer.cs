@@ -26,6 +26,15 @@ public sealed class GphDocumentSerializer
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
     private const string AreaSupportGeneratorName = "areaSupport";
+    private const string ClusterModifierName = "cluster";
+    private const string BraceModifierName = "brace";
+    private const string DeleteModifierName = "delete";
+    private const string WholeLayerModifierScopeName = "wholeLayer";
+    private const string SelectionModifierScopeName = "selection";
+    private const string AutomaticClusterStemSizingName = "automatic";
+    private const string ManualClusterStemSizingName = "manual";
+    private const string IndividualSupportStyleName = "individual";
+    private const string ClusteredSupportStyleName = "clustered";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -128,6 +137,7 @@ public sealed class GphDocumentSerializer
 
         List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
         AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
+        ValidateLoadedSupportModifiers(supportLayerGroups, entities);
 
         return new GphDocumentData(entities, supportLayerGroups);
     }
@@ -212,7 +222,8 @@ public sealed class GphDocumentSerializer
                 HeadDirection = CreateVectorDto(support.HeadDirection),
                 BranchLength = support.BranchLength,
                 BranchDirection = CreateVectorDto(support.BranchDirection),
-                SupportProfile = CreateSupportProfileDto(support.Profile)
+                SupportProfile = CreateSupportProfileDto(support.Profile),
+                SupportStyle = CreateSupportStyleDto(support.Style)
             };
         }
 
@@ -231,10 +242,12 @@ public sealed class GphDocumentSerializer
             Name = supportLayerGroup.Name,
             Color = CreateSupportLayerColorDto(supportLayerGroup.Color),
             GeneratorKind = CreateSupportGroupGeneratorKindDto(supportLayerGroup),
+            SourceGeneratorRevision = supportLayerGroup.SourceGeneratorRevision,
             RingSupport = CreateRingSupportSettingsDto(supportLayerGroup.RingSupportSettings),
             LineSupport = CreateLineSupportSettingsDto(supportLayerGroup.LineSupportSettings),
             ContourSupport = CreateContourSupportSettingsDto(supportLayerGroup.ContourSupportSettings),
-            AreaSupport = CreateAreaSupportSettingsDto(supportLayerGroup.AreaSupportSettings)
+            AreaSupport = CreateAreaSupportSettingsDto(supportLayerGroup.AreaSupportSettings),
+            SupportModifiers = CreateSupportModifierDtos(supportLayerGroup.SupportModifiers)
         };
     }
 
@@ -281,7 +294,9 @@ public sealed class GphDocumentSerializer
                 CreateRingSupportSettingsOrDefault(supportLayerGroupDto),
                 CreateLineSupportSettingsOrDefault(supportLayerGroupDto),
                 CreateContourSupportSettingsOrDefault(supportLayerGroupDto),
-                CreateAreaSupportSettingsOrDefault(supportLayerGroupDto)));
+                CreateAreaSupportSettingsOrDefault(supportLayerGroupDto),
+                Math.Max(0, supportLayerGroupDto.SourceGeneratorRevision),
+                CreateSupportModifiersOrDefault(supportLayerGroupDto)));
         }
 
         return supportLayerGroups;
@@ -353,6 +368,78 @@ public sealed class GphDocumentSerializer
         {
             entities.Add(CreateSupportEntity(supportEntityDto, supportLayerGroupIds));
         }
+    }
+
+    /// <summary>
+    /// Removes loaded selection modifiers whose saved targets no longer match the generated support population.
+    /// </summary>
+    private static void ValidateLoadedSupportModifiers(IReadOnlyList<SupportLayerGroup> supportLayerGroups, IReadOnlyList<CadEntity> entities)
+    {
+        Dictionary<Guid, HashSet<Guid>> supportIdsByGroupId = new Dictionary<Guid, HashSet<Guid>>();
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is not SupportEntity supportEntity)
+            {
+                continue;
+            }
+
+            if (!supportIdsByGroupId.TryGetValue(supportEntity.SupportLayerGroupId, out HashSet<Guid>? supportIds))
+            {
+                supportIds = new HashSet<Guid>();
+                supportIdsByGroupId.Add(supportEntity.SupportLayerGroupId, supportIds);
+            }
+
+            supportIds.Add(supportEntity.Id);
+        }
+
+        foreach (SupportLayerGroup supportLayerGroup in supportLayerGroups)
+        {
+            IReadOnlyList<SupportModifierDefinition> modifiers = supportLayerGroup.SupportModifiers;
+            List<SupportModifierDefinition> validModifiers = new List<SupportModifierDefinition>(modifiers.Count);
+            supportIdsByGroupId.TryGetValue(supportLayerGroup.Id, out HashSet<Guid>? groupSupportIds);
+
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                SupportModifierDefinition modifier = modifiers[i];
+
+                if (modifier.Scope == SupportModifierScope.WholeLayer || IsSelectionModifierValid(modifier, supportLayerGroup, groupSupportIds))
+                {
+                    validModifiers.Add(modifier);
+                }
+            }
+
+            if (validModifiers.Count != modifiers.Count)
+            {
+                supportLayerGroup.SetSupportModifiers(validModifiers);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a loaded selection modifier still targets support ids from the saved generator revision.
+    /// </summary>
+    private static bool IsSelectionModifierValid(SupportModifierDefinition modifier, SupportLayerGroup supportLayerGroup, HashSet<Guid>? groupSupportIds)
+    {
+        if (!modifier.SourceGeneratorRevision.HasValue || modifier.SourceGeneratorRevision.Value != supportLayerGroup.SourceGeneratorRevision)
+        {
+            return false;
+        }
+
+        if (groupSupportIds == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < modifier.TargetSupportIds.Count; i++)
+        {
+            if (!groupSupportIds.Contains(modifier.TargetSupportIds[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -474,7 +561,8 @@ public sealed class GphDocumentSerializer
             CreateVector(entityDto.HeadDirection),
             entityDto.BranchLength,
             CreateVector(entityDto.BranchDirection),
-            CreateSupportProfile(entityDto.SupportProfile));
+            CreateSupportProfile(entityDto.SupportProfile),
+            CreateSupportStyleOrDefault(entityDto.SupportStyle));
     }
 
     /// <summary>
@@ -508,6 +596,27 @@ public sealed class GphDocumentSerializer
             HeadPenetrationDepth = profile.HeadPenetrationDepth,
             HeadTopDiameter = profile.HeadTopDiameter,
             MaxHeadAngleFromVerticalDegrees = profile.MaxHeadAngleFromVerticalDegrees
+        };
+    }
+    /// <summary>
+    /// Converts one runtime support style into its persisted representation.
+    /// </summary>
+    private static GphSupportStyleDto CreateSupportStyleDto(SupportStyle style)
+    {
+        if (style is ClusteredSupportStyle clusteredStyle)
+        {
+            return new GphSupportStyleDto
+            {
+                Kind = ClusteredSupportStyleName,
+                CentralStemBottomDiameter = clusteredStyle.CentralStemBottomDiameter,
+                CentralStemTopDiameter = clusteredStyle.CentralStemTopDiameter,
+                BranchDiameter = clusteredStyle.BranchDiameter
+            };
+        }
+
+        return new GphSupportStyleDto
+        {
+            Kind = IndividualSupportStyleName
         };
     }
 
@@ -654,6 +763,88 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts support modifier definitions into their persisted representation.
+    /// </summary>
+    private static List<GphSupportModifierDto> CreateSupportModifierDtos(IReadOnlyList<SupportModifierDefinition> modifiers)
+    {
+        List<GphSupportModifierDto> result = new List<GphSupportModifierDto>(modifiers.Count);
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            SupportModifierDefinition modifier = modifiers[i];
+            result.Add(new GphSupportModifierDto
+            {
+                Id = modifier.Id,
+                Kind = CreateSupportModifierKindDto(modifier.Kind),
+                Scope = CreateSupportModifierScopeDto(modifier.Scope),
+                IsEnabled = modifier.IsEnabled,
+                Order = modifier.Order,
+                SourceGeneratorRevision = modifier.SourceGeneratorRevision,
+                TargetSupportIds = new List<Guid>(modifier.TargetSupportIds),
+                ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings)
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Converts one modifier kind into its persisted wire value.
+    /// </summary>
+    private static string CreateSupportModifierKindDto(SupportModifierKind kind)
+    {
+        switch (kind)
+        {
+            case SupportModifierKind.Cluster:
+                return ClusterModifierName;
+
+            case SupportModifierKind.Brace:
+                return BraceModifierName;
+
+            case SupportModifierKind.Delete:
+                return DeleteModifierName;
+
+            default:
+                throw new NotSupportedException($"Support modifier kind '{kind}' is not supported by the .gph format.");
+        }
+    }
+
+    /// <summary>
+    /// Converts one modifier scope into its persisted wire value.
+    /// </summary>
+    private static string CreateSupportModifierScopeDto(SupportModifierScope scope)
+    {
+        return scope == SupportModifierScope.WholeLayer
+            ? WholeLayerModifierScopeName
+            : SelectionModifierScopeName;
+    }
+
+    /// <summary>
+    /// Converts cluster modifier settings into their persisted representation when present.
+    /// </summary>
+    private static GphClusterModifierSettingsDto? CreateClusterModifierSettingsDto(SupportClusterModifierSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphClusterModifierSettingsDto
+        {
+            MaximumClusterRadius = settings.MaximumClusterRadius,
+            MinimumSupportsPerCluster = settings.MinimumSupportsPerCluster,
+            MaximumSupportsPerCluster = settings.MaximumSupportsPerCluster,
+            MaximumBranchAngleFromVerticalDegrees = settings.MaximumBranchAngleFromVerticalDegrees,
+            StemSizingMode = settings.StemSizingMode == SupportClusterStemSizingMode.Automatic
+                ? AutomaticClusterStemSizingName
+                : ManualClusterStemSizingName,
+            ManualCentralStemBottomDiameter = settings.ManualCentralStemBottomDiameter,
+            ManualCentralStemTopDiameter = settings.ManualCentralStemTopDiameter,
+            ClusterBranchDiameter = settings.ClusterBranchDiameter
+        };
+    }
+
+    /// <summary>
     /// Converts one runtime transform into a serializable DTO payload.
     /// </summary>
     private static GphTransform3DDto CreateTransformDto(Transform3DData transform)
@@ -699,6 +890,33 @@ public sealed class GphDocumentSerializer
             supportProfileDto.HeadPenetrationDepth,
             supportProfileDto.HeadTopDiameter,
             supportProfileDto.MaxHeadAngleFromVerticalDegrees);
+    }
+    /// <summary>
+    /// Converts one serialized support style into the runtime style type, defaulting old files to individual supports.
+    /// </summary>
+    private static SupportStyle CreateSupportStyleOrDefault(GphSupportStyleDto? supportStyleDto)
+    {
+        if (supportStyleDto == null || string.IsNullOrWhiteSpace(supportStyleDto.Kind))
+        {
+            return SupportStyle.Individual;
+        }
+
+        if (string.Equals(supportStyleDto.Kind, ClusteredSupportStyleName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!supportStyleDto.BranchDiameter.HasValue)
+            {
+                throw new InvalidDataException("A clustered support style is missing its branch diameter.");
+            }
+
+            return new ClusteredSupportStyle(supportStyleDto.CentralStemBottomDiameter, supportStyleDto.CentralStemTopDiameter, supportStyleDto.BranchDiameter.Value);
+        }
+
+        if (string.Equals(supportStyleDto.Kind, IndividualSupportStyleName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportStyle.Individual;
+        }
+
+        throw new InvalidDataException($"Support style '{supportStyleDto.Kind}' is not supported.");
     }
 
     /// <summary>
@@ -923,6 +1141,116 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts saved modifier metadata into ordered support modifier definitions.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierDefinition> CreateSupportModifiersOrDefault(GphSupportLayerGroupDto supportLayerGroupDto)
+    {
+        if (supportLayerGroupDto.SupportModifiers == null || supportLayerGroupDto.SupportModifiers.Count == 0)
+        {
+            return Array.Empty<SupportModifierDefinition>();
+        }
+
+        List<SupportModifierDefinition> modifiers = new List<SupportModifierDefinition>(supportLayerGroupDto.SupportModifiers.Count);
+
+        for (int i = 0; i < supportLayerGroupDto.SupportModifiers.Count; i++)
+        {
+            GphSupportModifierDto? modifierDto = supportLayerGroupDto.SupportModifiers[i];
+
+            if (modifierDto == null)
+            {
+                throw new InvalidDataException($"A support group has a null modifier at index {i}.");
+            }
+
+            modifiers.Add(new SupportModifierDefinition(
+                modifierDto.Id,
+                CreateSupportModifierKind(modifierDto.Kind),
+                CreateSupportModifierScope(modifierDto.Scope),
+                modifierDto.IsEnabled,
+                Math.Max(0, modifierDto.Order),
+                CreateClusterModifierSettingsOrDefault(modifierDto),
+                modifierDto.TargetSupportIds ?? new List<Guid>(),
+                modifierDto.SourceGeneratorRevision));
+        }
+
+        modifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
+        return modifiers;
+    }
+
+    /// <summary>
+    /// Converts saved modifier kind text into the runtime enum.
+    /// </summary>
+    private static SupportModifierKind CreateSupportModifierKind(string kind)
+    {
+        if (string.Equals(kind, ClusterModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierKind.Cluster;
+        }
+
+        if (string.Equals(kind, BraceModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierKind.Brace;
+        }
+
+        if (string.Equals(kind, DeleteModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierKind.Delete;
+        }
+
+        throw new InvalidDataException($"Support modifier kind '{kind}' is not supported.");
+    }
+
+    /// <summary>
+    /// Converts saved modifier scope text into the runtime enum.
+    /// </summary>
+    private static SupportModifierScope CreateSupportModifierScope(string scope)
+    {
+        if (string.Equals(scope, WholeLayerModifierScopeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierScope.WholeLayer;
+        }
+
+        if (string.Equals(scope, SelectionModifierScopeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierScope.Selection;
+        }
+
+        throw new InvalidDataException($"Support modifier scope '{scope}' is not supported.");
+    }
+
+    /// <summary>
+    /// Converts saved Cluster settings into the runtime settings object when present.
+    /// </summary>
+    private static SupportClusterModifierSettings? CreateClusterModifierSettingsOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (!string.Equals(modifierDto.Kind, ClusterModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (modifierDto.ClusterSettings == null)
+        {
+            throw new InvalidDataException("A Cluster support modifier is missing its settings.");
+        }
+
+        SupportClusterStemSizingMode stemSizingMode = string.Equals(
+            modifierDto.ClusterSettings.StemSizingMode,
+            ManualClusterStemSizingName,
+            StringComparison.OrdinalIgnoreCase)
+            ? SupportClusterStemSizingMode.Manual
+            : SupportClusterStemSizingMode.Automatic;
+
+        return new SupportClusterModifierSettings(
+            modifierDto.ClusterSettings.MaximumClusterRadius,
+            modifierDto.ClusterSettings.MinimumSupportsPerCluster,
+            modifierDto.ClusterSettings.MaximumSupportsPerCluster,
+            modifierDto.ClusterSettings.MaximumBranchAngleFromVerticalDegrees,
+            stemSizingMode,
+            modifierDto.ClusterSettings.ManualCentralStemBottomDiameter,
+            modifierDto.ClusterSettings.ManualCentralStemTopDiameter,
+            modifierDto.ClusterSettings.ClusterBranchDiameter ?? SupportDefaults.DefaultStemTopDiameter);
+    }
+
+    /// <summary>
     /// Converts one serialized transform into the runtime transform type, or returns identity for legacy files.
     /// </summary>
     private static Transform3DData CreateTransformOrIdentity(GphTransform3DDto? transformDto)
@@ -1014,6 +1342,7 @@ public sealed class GphDocumentSerializer
         public float BranchLength { get; set; }
         public GphVector3Dto? BranchDirection { get; set; }
         public GphSupportProfileDto? SupportProfile { get; set; }
+        public GphSupportStyleDto? SupportStyle { get; set; }
     }
 
     /// <summary>
@@ -1046,6 +1375,16 @@ public sealed class GphDocumentSerializer
         public GphQuaternionDto? Rotation { get; set; }
         public GphVector3Dto? Scale { get; set; }
     }
+    /// <summary>
+    /// DTO for persisted support style values.
+    /// </summary>
+    private sealed class GphSupportStyleDto
+    {
+        public string Kind { get; set; } = IndividualSupportStyleName;
+        public float? CentralStemBottomDiameter { get; set; }
+        public float? CentralStemTopDiameter { get; set; }
+        public float? BranchDiameter { get; set; }
+    }
 
     /// <summary>
     /// DTO for persisted support profile values.
@@ -1075,10 +1414,42 @@ public sealed class GphDocumentSerializer
         public string Name { get; set; } = string.Empty;
         public GphSupportLayerColorDto? Color { get; set; }
         public string? GeneratorKind { get; set; }
+        public int SourceGeneratorRevision { get; set; }
         public GphRingSupportSettingsDto? RingSupport { get; set; }
         public GphLineSupportSettingsDto? LineSupport { get; set; }
         public GphContourSupportSettingsDto? ContourSupport { get; set; }
         public GphAreaSupportSettingsDto? AreaSupport { get; set; }
+        public List<GphSupportModifierDto>? SupportModifiers { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for one persisted support-layer modifier stack entry.
+    /// </summary>
+    private sealed class GphSupportModifierDto
+    {
+        public Guid Id { get; set; }
+        public string Kind { get; set; } = string.Empty;
+        public string Scope { get; set; } = string.Empty;
+        public bool IsEnabled { get; set; } = true;
+        public int Order { get; set; }
+        public int? SourceGeneratorRevision { get; set; }
+        public List<Guid>? TargetSupportIds { get; set; }
+        public GphClusterModifierSettingsDto? ClusterSettings { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Cluster modifier settings.
+    /// </summary>
+    private sealed class GphClusterModifierSettingsDto
+    {
+        public float MaximumClusterRadius { get; set; } = SupportClusterModifierSettings.DefaultMaximumClusterRadius;
+        public int MinimumSupportsPerCluster { get; set; } = SupportClusterModifierSettings.DefaultMinimumSupportsPerCluster;
+        public int MaximumSupportsPerCluster { get; set; } = SupportClusterModifierSettings.DefaultMaximumSupportsPerCluster;
+        public float MaximumBranchAngleFromVerticalDegrees { get; set; } = SupportDefaults.DefaultBranchAngleFromVerticalDegrees;
+        public string StemSizingMode { get; set; } = AutomaticClusterStemSizingName;
+        public float ManualCentralStemBottomDiameter { get; set; } = SupportDefaults.DefaultStemBottomDiameter;
+        public float ManualCentralStemTopDiameter { get; set; } = SupportDefaults.DefaultStemTopDiameter;
+        public float? ClusterBranchDiameter { get; set; } = SupportDefaults.DefaultStemTopDiameter;
     }
 
     /// <summary>
@@ -1166,3 +1537,10 @@ public sealed class GphDocumentSerializer
         };
     }
 }
+
+
+
+
+
+
+

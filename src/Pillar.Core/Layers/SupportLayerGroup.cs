@@ -1,6 +1,7 @@
 // SupportLayerGroup.cs
 // Defines document-level support grouping metadata for imported mesh layers without coupling layers to rendering.
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -18,6 +19,8 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     private RingSupportSettings? _ringSupportSettings;
     private ContourSupportSettings? _contourSupportSettings;
     private AreaSupportSettings? _areaSupportSettings;
+    private readonly List<SupportModifierDefinition> _supportModifiers = new List<SupportModifierDefinition>();
+    private int _sourceGeneratorRevision;
 
     /// <summary>
     /// Creates a new support group under the supplied imported model entity.
@@ -181,6 +184,22 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the revision of the source generator output that selection-scoped modifiers bind to.
+    /// </summary>
+    public int SourceGeneratorRevision
+    {
+        get { return _sourceGeneratorRevision; }
+    }
+
+    /// <summary>
+    /// Gets defensive copies of the ordered support editing modifier stack.
+    /// </summary>
+    public IReadOnlyList<SupportModifierDefinition> SupportModifiers
+    {
+        get { return CloneSupportModifiers(_supportModifiers); }
+    }
+
+    /// <summary>
     /// Recreates a saved support group while preserving its document identity.
     /// </summary>
     public static SupportLayerGroup CreateLoaded(Guid id, Guid modelEntityId, string name, SupportLayerColor? color = null)
@@ -244,6 +263,34 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         ContourSupportSettings? contourSupportSettings,
         AreaSupportSettings? areaSupportSettings)
     {
+        return CreateLoaded(
+            id,
+            modelEntityId,
+            name,
+            color,
+            ringSupportSettings,
+            lineSupportSettings,
+            contourSupportSettings,
+            areaSupportSettings,
+            0,
+            Array.Empty<SupportModifierDefinition>());
+    }
+
+    /// <summary>
+    /// Recreates a saved support group with generated support and modifier metadata.
+    /// </summary>
+    public static SupportLayerGroup CreateLoaded(
+        Guid id,
+        Guid modelEntityId,
+        string name,
+        SupportLayerColor? color,
+        RingSupportSettings? ringSupportSettings,
+        LineSupportSettings? lineSupportSettings,
+        ContourSupportSettings? contourSupportSettings,
+        AreaSupportSettings? areaSupportSettings,
+        int sourceGeneratorRevision,
+        IReadOnlyList<SupportModifierDefinition>? supportModifiers)
+    {
         SupportLayerGroup supportLayerGroup = CreateLoaded(id, modelEntityId, name, color);
 
         if (ringSupportSettings != null)
@@ -263,6 +310,8 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
             supportLayerGroup.SetAreaSupportSettings(areaSupportSettings);
         }
 
+        supportLayerGroup.SetSourceGeneratorRevision(sourceGeneratorRevision);
+        supportLayerGroup.SetSupportModifiers(supportModifiers ?? Array.Empty<SupportModifierDefinition>());
         return supportLayerGroup;
     }
 
@@ -351,6 +400,61 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Replaces the modifier stack with normalized ordered copies.
+    /// </summary>
+    public void SetSupportModifiers(IReadOnlyList<SupportModifierDefinition> modifiers)
+    {
+        if (modifiers == null)
+        {
+            throw new ArgumentNullException(nameof(modifiers));
+        }
+
+        _supportModifiers.Clear();
+        HashSet<Guid> modifierIds = new HashSet<Guid>();
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            SupportModifierDefinition modifier = modifiers[i] ?? throw new ArgumentException("Modifier entries cannot be null.", nameof(modifiers));
+
+            if (!modifierIds.Add(modifier.Id))
+            {
+                throw new ArgumentException("Modifier entries must have unique identifiers.", nameof(modifiers));
+            }
+
+            _supportModifiers.Add(modifier.CloneWithOrder(i));
+        }
+
+        OnPropertyChanged(nameof(SupportModifiers));
+    }
+
+    /// <summary>
+    /// Sets the generator revision restored by load or undo.
+    /// </summary>
+    public void SetSourceGeneratorRevision(int sourceGeneratorRevision)
+    {
+        if (sourceGeneratorRevision < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sourceGeneratorRevision), "Source generator revision cannot be negative.");
+        }
+
+        if (_sourceGeneratorRevision == sourceGeneratorRevision)
+        {
+            return;
+        }
+
+        _sourceGeneratorRevision = sourceGeneratorRevision;
+        OnPropertyChanged(nameof(SourceGeneratorRevision));
+    }
+
+    /// <summary>
+    /// Advances the source generator revision after regenerated support identities replace prior output.
+    /// </summary>
+    public void AdvanceSourceGeneratorRevision()
+    {
+        SetSourceGeneratorRevision(_sourceGeneratorRevision + 1);
+    }
+
+    /// <summary>
     /// Clears parametric generator metadata, leaving this as a plain support group.
     /// </summary>
     public void ClearGeneratorSettings()
@@ -360,6 +464,21 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
         ContourSupportSettings = null;
         AreaSupportSettings = null;
         GeneratorKind = SupportGroupGeneratorKind.None;
+    }
+
+    /// <summary>
+    /// Creates defensive modifier copies for callers crossing document ownership boundaries.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierDefinition> CloneSupportModifiers(IReadOnlyList<SupportModifierDefinition> modifiers)
+    {
+        List<SupportModifierDefinition> result = new List<SupportModifierDefinition>(modifiers.Count);
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            result.Add(modifiers[i].Clone());
+        }
+
+        return result;
     }
 
     /// <summary>

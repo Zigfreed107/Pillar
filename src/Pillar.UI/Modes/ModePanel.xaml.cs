@@ -206,6 +206,19 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
+    /// Selects support clustering and shows its options.
+    /// </summary>
+    private void ClusterSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        SupportOperationToggleRequested?.Invoke(
+            this,
+            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
+        RaiseToolSelected("Cluster Supports");
+    }
+
+    /// <summary>
     /// Publishes one selected tool name to the owning shell.
     /// </summary>
     private void RaiseToolSelected(string toolName)

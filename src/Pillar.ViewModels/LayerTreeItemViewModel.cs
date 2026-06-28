@@ -21,11 +21,12 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// <summary>
     /// Creates one layer tree row.
     /// </summary>
-    public LayerTreeItemViewModel(Guid id, Guid modelEntityId, LayerTreeItemKind kind, string name, SupportLayerColor supportColor)
+    public LayerTreeItemViewModel(Guid id, Guid modelEntityId, LayerTreeItemKind kind, string name, SupportLayerColor supportColor, Guid? supportLayerGroupId = null)
     {
         Id = id;
         ModelEntityId = modelEntityId;
         Kind = kind;
+        SupportLayerGroupId = supportLayerGroupId ?? (kind == LayerTreeItemKind.SupportGroup ? id : Guid.Empty);
         Name = name;
         _supportColor = supportColor;
         _editingName = name;
@@ -43,12 +44,17 @@ public partial class LayerTreeItemViewModel : ObservableObject
     public Guid ModelEntityId { get; }
 
     /// <summary>
-    /// Gets whether this row represents an imported model or a support group.
+    /// Gets the owning support group id when this row represents support data.
+    /// </summary>
+    public Guid SupportLayerGroupId { get; }
+
+    /// <summary>
+    /// Gets whether this row represents an imported model, support group, or support modifier.
     /// </summary>
     public LayerTreeItemKind Kind { get; }
 
     /// <summary>
-    /// Gets the child support groups shown under model rows.
+    /// Gets the child rows shown beneath this layer.
     /// </summary>
     public ObservableCollection<LayerTreeItemViewModel> Children { get; } = new ObservableCollection<LayerTreeItemViewModel>();
 
@@ -95,6 +101,22 @@ public partial class LayerTreeItemViewModel : ObservableObject
     public bool CanEditSupportGroup
     {
         get { return Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
+    /// Gets whether this row should show a support modifier edit button.
+    /// </summary>
+    public bool CanEditSupportModifier
+    {
+        get { return Kind == LayerTreeItemKind.SupportModifier; }
+    }
+
+    /// <summary>
+    /// Gets whether this row should show any tool-edit button.
+    /// </summary>
+    public bool CanEditLayerTool
+    {
+        get { return CanEditSupportGroup || CanEditSupportModifier; }
     }
 
     /// <summary>

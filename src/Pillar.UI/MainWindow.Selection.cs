@@ -19,6 +19,7 @@ public partial class MainWindow
         _ = addedIds;
         _ = removedIds;
         _layerPanelViewModel.SetSelectedModelCount(GetSelectedMeshEntityCount());
+        _layerPanelViewModel.SetSelectedSupportLayerGroupCount(GetSelectedSupportLayerGroupCount());
         UpdateSelectedModelBoundsClipIndicator();
         UpdateGeneratedSupportDeleteButtonState();
 
@@ -103,6 +104,24 @@ public partial class MainWindow
         }
 
         return selectedMeshCount;
+    }
+
+    /// <summary>
+    /// Counts how many distinct support layer groups are represented in the current support selection.
+    /// </summary>
+    private int GetSelectedSupportLayerGroupCount()
+    {
+        HashSet<Guid> selectedSupportLayerGroupIds = new HashSet<Guid>();
+
+        foreach (Guid selectedId in _scene.SelectionManager.SelectedEntityIds)
+        {
+            if (FindEntityById(selectedId) is SupportEntity selectedSupport)
+            {
+                selectedSupportLayerGroupIds.Add(selectedSupport.SupportLayerGroupId);
+            }
+        }
+
+        return selectedSupportLayerGroupIds.Count;
     }
 
     /// <summary>
@@ -244,6 +263,7 @@ public partial class MainWindow
         _layerPanelViewModel.SelectSupportGroupLayer(activeEditingSupportLayerGroupId.Value);
         return true;
     }
+
     /// <summary>
     /// Updates the Layer Panel directly from the entity under the cursor so non-selection tools still keep the tree context aligned.
     /// </summary>

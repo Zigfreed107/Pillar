@@ -8,5 +8,6 @@ namespace Pillar.ViewModels;
 public enum LayerTreeItemKind
 {
     Model,
-    SupportGroup
+    SupportGroup,
+    SupportModifier
 }

@@ -3,6 +3,7 @@
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
 
@@ -19,6 +20,10 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
     private readonly RingSupportSettings _newSettings;
     private readonly IReadOnlyList<SupportEntity> _oldSupportEntities;
     private readonly IReadOnlyList<SupportEntity> _newSupportEntities;
+    private readonly IReadOnlyList<SupportModifierDefinition> _oldModifiers;
+    private readonly IReadOnlyList<SupportModifierDefinition> _newModifiers;
+    private readonly int _oldSourceGeneratorRevision;
+    private readonly int _newSourceGeneratorRevision;
     private bool _hasExecuted;
 
     /// <summary>
@@ -37,9 +42,16 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
         _oldSettings = oldSettings?.Clone() ?? throw new ArgumentNullException(nameof(oldSettings));
         _newSettings = newSettings?.Clone() ?? throw new ArgumentNullException(nameof(newSettings));
         _oldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
-        _newSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
+        IReadOnlyList<SupportEntity> rawNewSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
 
         ValidateSupportOwnership(_oldSupportEntities, _supportLayerGroup.Id, nameof(oldSupportEntities), false);
+        ValidateSupportOwnership(rawNewSupportEntities, _supportLayerGroup.Id, nameof(newSupportEntities), true);
+
+        _oldSourceGeneratorRevision = _supportLayerGroup.SourceGeneratorRevision;
+        _newSourceGeneratorRevision = _oldSourceGeneratorRevision + 1;
+        _oldModifiers = _supportLayerGroup.SupportModifiers;
+        _newModifiers = CreateModifiersForRegeneratedOutput(_oldModifiers);
+        _newSupportEntities = SupportModifierPipeline.ApplyModifiers(rawNewSupportEntities, _newModifiers);
         ValidateSupportOwnership(_newSupportEntities, _supportLayerGroup.Id, nameof(newSupportEntities), true);
     }
 
@@ -61,7 +73,7 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
             return;
         }
 
-        ReplaceSupports(_oldSupportEntities, _newSupportEntities, _newSettings);
+        ReplaceSupports(_oldSupportEntities, _newSupportEntities, _newSettings, _newModifiers, _newSourceGeneratorRevision);
         _hasExecuted = true;
     }
 
@@ -75,7 +87,7 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
             return;
         }
 
-        ReplaceSupports(_newSupportEntities, _oldSupportEntities, _oldSettings);
+        ReplaceSupports(_newSupportEntities, _oldSupportEntities, _oldSettings, _oldModifiers, _oldSourceGeneratorRevision);
         _hasExecuted = false;
     }
 
@@ -85,7 +97,9 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
     private void ReplaceSupports(
         IReadOnlyList<SupportEntity> supportsToRemove,
         IReadOnlyList<SupportEntity> supportsToAdd,
-        RingSupportSettings settings)
+        RingSupportSettings settings,
+        IReadOnlyList<SupportModifierDefinition> modifiers,
+        int sourceGeneratorRevision)
     {
         for (int i = supportsToRemove.Count - 1; i >= 0; i--)
         {
@@ -93,11 +107,31 @@ public sealed class UpdateRingSupportGroupCommand : ICadCommand
         }
 
         _supportLayerGroup.SetRingSupportSettings(settings);
+        _supportLayerGroup.SetSourceGeneratorRevision(sourceGeneratorRevision);
+        _supportLayerGroup.SetSupportModifiers(modifiers);
 
         for (int i = 0; i < supportsToAdd.Count; i++)
         {
             _document.AddEntity(supportsToAdd[i]);
         }
+    }
+
+    /// <summary>
+    /// Keeps replayable whole-layer modifiers and discards revision-bound selection modifiers after regeneration.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierDefinition> CreateModifiersForRegeneratedOutput(IReadOnlyList<SupportModifierDefinition> oldModifiers)
+    {
+        List<SupportModifierDefinition> retainedModifiers = new List<SupportModifierDefinition>();
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            if (oldModifiers[i].Scope == SupportModifierScope.WholeLayer)
+            {
+                retainedModifiers.Add(oldModifiers[i]);
+            }
+        }
+
+        return retainedModifiers;
     }
 
     /// <summary>
