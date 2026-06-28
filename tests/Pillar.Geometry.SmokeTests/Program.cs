@@ -56,6 +56,11 @@ public static class Program
         RunTest(failures, "Individual branched supports remain cluster eligible", ValidateIndividualBranchedSupportsRemainClusterEligible);
         RunTest(failures, "Cluster modifier redirects nearby supports", ValidateClusterModifierRedirectsNearbySupports);
         RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
+        RunTest(failures, "Later selection cluster preserves existing clusters", ValidateLaterSelectionClusterPreservesExistingClusters);
+        RunTest(failures, "Selected individual joins selected cluster", ValidateSelectedIndividualJoinsSelectedCluster);
+        RunTest(failures, "Selected individual joins nearest feasible selected cluster", ValidateSelectedIndividualJoinsNearestFeasibleCluster);
+        RunTest(failures, "Remaining selected individuals cluster after merge attempts", ValidateRemainingSelectedIndividualsClusterAfterMergeAttempts);
+        RunTest(failures, "Unselected clustered supports remain unchanged", ValidateUnselectedClusteredSupportsRemainUnchanged);
         RunTest(failures, "Support placement rejects crossing angled head", ValidateSupportPlacementRejectsCrossingAngledHead);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Vertical projection handles vertical side faces", ValidateVerticalProjectionHandlesVerticalSideFaces);
@@ -794,6 +799,195 @@ public static class Program
         {
             throw new InvalidOperationException("Expected the unselected nearby support to remain individual.");
         }
+    }
+    /// <summary>
+    /// Validates that appending a later selection-scoped Cluster modifier preserves earlier clustered output.
+    /// </summary>
+    private static void ValidateLaterSelectionClusterPreservesExistingClusters()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(10.0f, 0.0f, 0.0f), new Vector3(10.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(12.0f, 0.0f, 0.0f), new Vector3(12.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
+        List<SupportModifierDefinition> modifiers = new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
+        };
+        IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(supports, modifiers);
+
+        if (result[0].Style.Kind != SupportStyleKind.Clustered || result[1].Style.Kind != SupportStyleKind.Clustered)
+        {
+            throw new InvalidOperationException("Expected the first selected cluster to remain clustered after a later selection cluster is applied.");
+        }
+
+        if (MathF.Abs(result[0].BasePosition.X - 1.0f) > 0.0001f || MathF.Abs(result[1].BasePosition.X - 1.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the first selected cluster stem center to be preserved.");
+        }
+
+        if (result[2].Style.Kind != SupportStyleKind.Clustered || result[3].Style.Kind != SupportStyleKind.Clustered)
+        {
+            throw new InvalidOperationException("Expected the later selected supports to become clustered.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that selecting a clustered member and a nearby individual support replans the whole selected cluster.
+    /// </summary>
+    private static void ValidateSelectedIndividualJoinsSelectedCluster()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(3.0f, 0.0f, 0.0f), new Vector3(3.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
+        SupportClusterEvaluationResult existingCluster = SupportClusterPlanner.Evaluate(
+            supports,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
+            existingCluster.SupportEntities,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
+
+        if (result.SupportEntities[0].Style.Kind != SupportStyleKind.Clustered
+            || result.SupportEntities[1].Style.Kind != SupportStyleKind.Clustered
+            || result.SupportEntities[2].Style.Kind != SupportStyleKind.Clustered)
+        {
+            throw new InvalidOperationException("Expected the selected individual support to join the selected existing cluster.");
+        }
+
+        if (MathF.Abs(result.SupportEntities[0].BasePosition.X - result.SupportEntities[2].BasePosition.X) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the joined individual and selected cluster members to share a replanned stem center.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a selected individual joins the nearest feasible selected cluster when more than one can accept it.
+    /// </summary>
+    private static void ValidateSelectedIndividualJoinsNearestFeasibleCluster()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(8.0f, 0.0f, 0.0f), new Vector3(8.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(10.0f, 0.0f, 0.0f), new Vector3(10.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(5.5f, 0.0f, 0.0f), new Vector3(5.5f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.1f, 4);
+        List<SupportModifierDefinition> setupModifiers = new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
+        };
+        IReadOnlyList<SupportEntity> clusteredSupports = SupportModifierPipeline.ApplyModifiers(supports, setupModifiers);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
+            clusteredSupports,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[4].Id }, 0));
+
+        if (MathF.Abs(result.SupportEntities[4].BasePosition.X - result.SupportEntities[2].BasePosition.X) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the individual support to join the nearer selected cluster.");
+        }
+
+        if (MathF.Abs(result.SupportEntities[0].BasePosition.X - 1.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the farther selected cluster to remain unchanged.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that individuals which do not join selected clusters still cluster with other selected individuals.
+    /// </summary>
+    private static void ValidateRemainingSelectedIndividualsClusterAfterMergeAttempts()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(3.0f, 0.0f, 0.0f), new Vector3(3.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(10.0f, 0.0f, 0.0f), new Vector3(10.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(12.0f, 0.0f, 0.0f), new Vector3(12.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 3);
+        SupportClusterEvaluationResult existingCluster = SupportClusterPlanner.Evaluate(
+            supports,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
+            existingCluster.SupportEntities,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[3].Id, supports[4].Id }, 0));
+
+        if (result.SupportEntities[2].Style.Kind != SupportStyleKind.Clustered
+            || MathF.Abs(result.SupportEntities[2].BasePosition.X - result.SupportEntities[0].BasePosition.X) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the nearby individual support to join the selected existing cluster.");
+        }
+
+        if (result.SupportEntities[3].Style.Kind != SupportStyleKind.Clustered
+            || result.SupportEntities[4].Style.Kind != SupportStyleKind.Clustered
+            || MathF.Abs(result.SupportEntities[3].BasePosition.X - result.SupportEntities[4].BasePosition.X) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected remaining selected individuals to form their own cluster.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that selected mixed clustering does not disturb unselected existing clusters.
+    /// </summary>
+    private static void ValidateUnselectedClusteredSupportsRemainUnchanged()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(3.0f, 0.0f, 0.0f), new Vector3(3.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(10.0f, 0.0f, 0.0f), new Vector3(10.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(12.0f, 0.0f, 0.0f), new Vector3(12.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
+        List<SupportModifierDefinition> setupModifiers = new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[3].Id, supports[4].Id }, 0)
+        };
+        IReadOnlyList<SupportEntity> clusteredSupports = SupportModifierPipeline.ApplyModifiers(supports, setupModifiers);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
+            clusteredSupports,
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
+
+        if (MathF.Abs(result.SupportEntities[3].BasePosition.X - clusteredSupports[3].BasePosition.X) > 0.0001f
+            || MathF.Abs(result.SupportEntities[4].BasePosition.X - clusteredSupports[4].BasePosition.X) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the unselected existing cluster to remain unchanged.");
+        }
+    }
+
+    /// <summary>
+    /// Creates reusable cluster settings for support-clustering smoke tests.
+    /// </summary>
+    private static SupportClusterModifierSettings CreateSmokeClusterSettings(float maximumClusterRadius, int maximumSupportsPerCluster)
+    {
+        return new SupportClusterModifierSettings(
+            maximumClusterRadius,
+            2,
+            maximumSupportsPerCluster,
+            45.0f,
+            SupportClusterStemSizingMode.Automatic,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            0.42f);
     }
     private static void ValidateSupportPlacementRejectsCrossingAngledHead()
     {

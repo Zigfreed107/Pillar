@@ -6,6 +6,7 @@ using Pillar.Core.Layers;
 using Pillar.Core.Supports;
 using Pillar.UI.Layers;
 using Pillar.Core.Tools;
+using Pillar.Rendering.Tools;
 using Pillar.UI.Modes;
 using System;
 using System.Collections.Generic;
@@ -499,6 +500,8 @@ public partial class MainWindow
             return;
         }
 
+        _selectTool.ResetSelectionFilter();
+
         if (string.Equals(selectedToolName, "Translate", StringComparison.Ordinal))
         {
             ClearTransformScaleToolState();
@@ -575,6 +578,7 @@ public partial class MainWindow
     /// </summary>
     private void HideToolOptionsOverlay()
     {
+        _selectTool.ResetSelectionFilter();
         ClearTransformScaleToolState();
         ClearTransformRotationToolState();
         _activePlaceholderToolFinishAction = null;
@@ -587,6 +591,7 @@ public partial class MainWindow
     /// </summary>
     private void CancelActiveDocumentMutationSessions()
     {
+        _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
         HideToolOptionsOverlay();
@@ -897,11 +902,12 @@ public partial class MainWindow
             return;
         }
 
+        bool isEditingExistingClusterModifier = _activeEditingClusterModifierId.HasValue;
         IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-        IReadOnlyList<SupportEntity> sourceSupportEntities = _activeEditingClusterModifierId.HasValue
+        IReadOnlyList<SupportEntity> sourceSupportEntities = isEditingExistingClusterModifier
             ? RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities)
             : oldSupportEntities;
-        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(sourceSupportEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
+        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
 
         if (_supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection && targetSupportIds.Count < 2)
         {
@@ -929,10 +935,19 @@ public partial class MainWindow
             newSupportEntities,
             oldModifiers,
             newModifiers,
-            _activeEditingClusterModifierId.HasValue ? "Update Cluster Supports" : "Cluster Supports"));
+            isEditingExistingClusterModifier ? "Update Cluster Supports" : "Cluster Supports"));
 
-        _activeEditingClusterModifierId = appliedClusterModifier.Id;
-        _supportClusterToolOptionsControl.SetClusterSettings(settings, _supportClusterToolOptionsControl.SelectedScope, true);
+        if (isEditingExistingClusterModifier || _supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.WholeLayer)
+        {
+            _activeEditingClusterModifierId = appliedClusterModifier.Id;
+        }
+        else
+        {
+            _activeEditingClusterModifierId = null;
+        }
+
+        bool isEditingAfterApply = _activeEditingClusterModifierId.HasValue;
+        _supportClusterToolOptionsControl.SetClusterSettings(settings, _supportClusterToolOptionsControl.SelectedScope, isEditingAfterApply);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
         _supportClusterToolOptionsControl.SetStatusText(CreateClusterStatusText(previewResult));
         _viewModel.SetStatusText(CreateClusterStatusText(previewResult));
@@ -1051,7 +1066,9 @@ public partial class MainWindow
         _ = sender;
         _ = e;
         _activeEditingClusterModifierId = null;
+        _selectTool.ResetSelectionFilter();
         HideToolOptionsOverlay();
+        RestoreViewportToolForActiveMode();
     }
 
     /// <summary>
@@ -1068,10 +1085,38 @@ public partial class MainWindow
         SupportClusterModifierSettings settings = modifier?.ClusterSettings ?? SupportClusterModifierSettings.CreateDefault();
         SupportModifierScope scope = modifier?.Scope ?? SupportModifierScope.WholeLayer;
         _supportClusterToolOptionsControl.SetClusterSettings(settings, scope, modifier != null);
+        ActivateNormalSelectionForSupportClusterTool(supportLayerGroup.Id);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
         RefreshSupportClusterPreviewStatus();
         _viewModel.SetStatusText("Cluster Supports tool active.");
         _ = supportLayerGroup;
+    }
+
+    /// <summary>
+    /// Routes Cluster Supports viewport input through the normal selection tool so selected-support scope behaves like ordinary selection.
+    /// </summary>
+    private void ActivateNormalSelectionForSupportClusterTool(Guid supportLayerGroupId)
+    {
+        _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
+        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+        _selectTool.SetSelectionFilter(SelectionFilter.SupportsInLayer(supportLayerGroupId));
+        _selectTool.PruneSelectionToActiveFilter();
+        _toolManager.SetTool(_selectTool);
+    }
+
+    /// <summary>
+    /// Restores viewport routing to the current workspace mode after a helper tool temporarily used normal selection.
+    /// </summary>
+    private void RestoreViewportToolForActiveMode()
+    {
+        if (!_modeDefinitions.TryGetValue(_activeModeId, out WorkspaceModeDefinition? mode)
+            || !mode.IsAvailable
+            || mode.Tool == null)
+        {
+            return;
+        }
+
+        _toolManager.SetTool(mode.Tool);
     }
 
     /// <summary>
@@ -1101,7 +1146,7 @@ public partial class MainWindow
         IReadOnlyList<SupportEntity> previewSourceEntities = _activeEditingClusterModifierId.HasValue
             ? RestoreIndividualSupportsForClusteredOutputs(currentSupportEntities)
             : currentSupportEntities;
-        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(previewSourceEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
+        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
 
         if (_supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection && targetSupportIds.Count < 2)
         {
@@ -1119,6 +1164,19 @@ public partial class MainWindow
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(previewSourceEntities, previewModifier);
         _supportClusterToolOptionsControl.SetStatusText(CreateClusterStatusText(result));
         SetAutomaticStemDiameterFields(previewSourceEntities, targetSupportIds, _supportClusterToolOptionsControl.SelectedScope);
+    }
+
+    /// <summary>
+    /// Keeps selected-support clustering feedback aligned with normal viewport selection changes.
+    /// </summary>
+    private void RefreshSupportClusterPreviewStatusForSelectionChange()
+    {
+        if (ToolOptionsHostOverlay.Content != _supportClusterToolOptionsControl)
+        {
+            return;
+        }
+
+        RefreshSupportClusterPreviewStatus();
     }
 
     /// <summary>
@@ -1160,28 +1218,50 @@ public partial class MainWindow
             return Array.Empty<Guid>();
         }
 
-        HashSet<Guid> supportIdsInLayer = new HashSet<Guid>();
+        HashSet<Guid> targetSupportIds = new HashSet<Guid>();
+        HashSet<Guid> selectedEntityIds = new HashSet<Guid>(_scene.SelectionManager.SelectedEntityIds);
+        List<Vector2> selectedClusterCenters = new List<Vector2>();
 
         for (int i = 0; i < supportEntities.Count; i++)
         {
-            if (supportEntities[i].SupportLayerGroupId == supportLayerGroupId)
+            SupportEntity support = supportEntities[i];
+
+            if (support.SupportLayerGroupId != supportLayerGroupId || !selectedEntityIds.Contains(support.Id))
             {
-                supportIdsInLayer.Add(supportEntities[i].Id);
+                continue;
+            }
+
+            targetSupportIds.Add(support.Id);
+
+            if (support.Style.Kind == SupportStyleKind.Clustered)
+            {
+                Vector2 center = new Vector2(support.BasePosition.X, support.BasePosition.Y);
+
+                if (!ContainsCenter(selectedClusterCenters, center))
+                {
+                    selectedClusterCenters.Add(center);
+                }
             }
         }
 
-        List<Guid> targetSupportIds = new List<Guid>();
-
-        foreach (Guid selectedEntityId in _scene.SelectionManager.SelectedEntityIds)
+        if (selectedClusterCenters.Count > 0)
         {
-            if (supportIdsInLayer.Contains(selectedEntityId))
+            for (int i = 0; i < supportEntities.Count; i++)
             {
-                targetSupportIds.Add(selectedEntityId);
+                SupportEntity support = supportEntities[i];
+
+                if (support.SupportLayerGroupId == supportLayerGroupId
+                    && support.Style.Kind == SupportStyleKind.Clustered
+                    && IsClusterCenterSelected(support.BasePosition, selectedClusterCenters))
+                {
+                    targetSupportIds.Add(support.Id);
+                }
             }
         }
 
-        targetSupportIds.Sort();
-        return targetSupportIds;
+        List<Guid> sortedTargetSupportIds = new List<Guid>(targetSupportIds);
+        sortedTargetSupportIds.Sort();
+        return sortedTargetSupportIds;
     }
 
     /// <summary>
@@ -1506,6 +1586,7 @@ public partial class MainWindow
         }
 
         _activeModeId = modeId;
+        _selectTool.ResetSelectionFilter();
         string statusText = GetWorkspaceModeStatusText(mode);
         _activeToolStatusText = statusText;
         _toolManager.SetTool(mode.Tool);
@@ -1619,4 +1700,3 @@ public partial class MainWindow
             ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasSelectedClusteredSupportsInSelectedSupportLayer());
     }
 }
-

@@ -14,6 +14,7 @@ namespace Pillar.Core.Supports;
 public static class SupportClusterPlanner
 {
     private const float AxialTolerance = 0.0001f;
+    private const float ClusterCenterToleranceSquared = 0.000001f;
 
     /// <summary>
     /// Evaluates one Cluster modifier against the supplied support population.
@@ -37,9 +38,99 @@ public static class SupportClusterPlanner
             throw new ArgumentException("Only Cluster modifiers can be evaluated by the cluster planner.", nameof(modifier));
         }
 
+        if (modifier.Scope == SupportModifierScope.Selection && HasTargetedClusteredSupport(sourceSupports, modifier.TargetSupportIds))
+        {
+            return EvaluateSelectionWithClusterTargets(sourceSupports, modifier);
+        }
+
         SupportClusterModifierSettings settings = modifier.ClusterSettings;
         List<CandidateSupport> candidates = CreateEligibleCandidates(sourceSupports, modifier);
         Dictionary<Guid, SupportEntity> replacementsById = new Dictionary<Guid, SupportEntity>();
+        ClusterPlanSummary summary = PlanCandidateGroups(candidates, settings, replacementsById);
+        return CreateEvaluationResult(sourceSupports, replacementsById, summary.ClusterCount, summary.ClusteredSupportCount, summary.RejectedCandidateCount);
+    }
+
+    /// <summary>
+    /// Evaluates a selection that includes existing clustered supports before clustering remaining selected individuals.
+    /// </summary>
+    private static SupportClusterEvaluationResult EvaluateSelectionWithClusterTargets(
+        IReadOnlyList<SupportEntity> sourceSupports,
+        SupportModifierDefinition modifier)
+    {
+        SupportClusterModifierSettings settings = modifier.ClusterSettings!;
+        HashSet<Guid> targetIds = new HashSet<Guid>(modifier.TargetSupportIds);
+        List<ClusterCandidateGroup> selectedClusters = CreateSelectedClusterGroups(sourceSupports, targetIds);
+        List<CandidateSupport> individualCandidates = CreateSelectionIndividualCandidates(sourceSupports, targetIds);
+        Dictionary<Guid, SupportEntity> replacementsById = new Dictionary<Guid, SupportEntity>();
+        HashSet<Guid> mergedIndividualIds = new HashSet<Guid>();
+        int clusterCount = 0;
+        int clusteredSupportCount = 0;
+
+        selectedClusters.Sort(CompareClusterGroupIdentity);
+        individualCandidates.Sort(CompareCandidateIdentity);
+
+        for (int i = 0; i < individualCandidates.Count; i++)
+        {
+            CandidateSupport individual = individualCandidates[i];
+
+            if (TryFindNearestFeasibleCluster(selectedClusters, individual, settings, out ClusterCandidateGroup? selectedCluster) && selectedCluster != null)
+            {
+                selectedCluster.AddMember(individual);
+                mergedIndividualIds.Add(individual.Support.Id);
+            }
+        }
+
+        for (int i = 0; i < selectedClusters.Count; i++)
+        {
+            ClusterCandidateGroup selectedCluster = selectedClusters[i];
+
+            if (!selectedCluster.HasAddedMembers)
+            {
+                continue;
+            }
+
+            if (!TryCreateClusterPlan(selectedCluster.Members, settings, out ClusterPlan plan))
+            {
+                continue;
+            }
+
+            ApplyClusterPlan(selectedCluster.Members, plan, replacementsById);
+            clusterCount++;
+            clusteredSupportCount += selectedCluster.Members.Count;
+        }
+
+        List<CandidateSupport> remainingCandidates = new List<CandidateSupport>();
+
+        for (int i = 0; i < individualCandidates.Count; i++)
+        {
+            CandidateSupport individual = individualCandidates[i];
+
+            if (!mergedIndividualIds.Contains(individual.Support.Id))
+            {
+                remainingCandidates.Add(individual);
+            }
+        }
+
+        ClusterPlanSummary remainingSummary = PlanCandidateGroups(remainingCandidates, settings, replacementsById);
+        clusterCount += remainingSummary.ClusterCount;
+        clusteredSupportCount += remainingSummary.ClusteredSupportCount;
+
+        return CreateEvaluationResult(
+            sourceSupports,
+            replacementsById,
+            clusterCount,
+            clusteredSupportCount,
+            remainingSummary.RejectedCandidateCount);
+    }
+
+    /// <summary>
+    /// Plans normal clusters from the supplied individual candidates and appends replacements to the caller-owned map.
+    /// </summary>
+    private static ClusterPlanSummary PlanCandidateGroups(
+        List<CandidateSupport> candidates,
+        SupportClusterModifierSettings settings,
+        Dictionary<Guid, SupportEntity> replacementsById)
+    {
         HashSet<Guid> assignedSupportIds = new HashSet<Guid>();
         SpatialCandidateGrid grid = new SpatialCandidateGrid(candidates, settings.MaximumClusterRadius);
         int clusterCount = 0;
@@ -74,11 +165,11 @@ public static class SupportClusterPlanner
             if (group.Count >= settings.MinimumSupportsPerCluster
                 && TryCreateClusterPlan(group, settings, out ClusterPlan plan))
             {
+                ApplyClusterPlan(group, plan, replacementsById);
+
                 for (int i = 0; i < group.Count; i++)
                 {
-                    CandidateSupport member = group[i];
-                    replacementsById[member.Support.Id] = CreateClusteredSupport(member, plan);
-                    assignedSupportIds.Add(member.Support.Id);
+                    assignedSupportIds.Add(group[i].Support.Id);
                 }
 
                 clusterCount++;
@@ -90,6 +181,19 @@ public static class SupportClusterPlanner
             rejectedCandidateCount++;
         }
 
+        return new ClusterPlanSummary(clusterCount, clusteredSupportCount, rejectedCandidateCount);
+    }
+
+    /// <summary>
+    /// Creates the final ordered result from source supports and planned replacements.
+    /// </summary>
+    private static SupportClusterEvaluationResult CreateEvaluationResult(
+        IReadOnlyList<SupportEntity> sourceSupports,
+        Dictionary<Guid, SupportEntity> replacementsById,
+        int clusterCount,
+        int clusteredSupportCount,
+        int rejectedCandidateCount)
+    {
         List<SupportEntity> resultSupports = new List<SupportEntity>(sourceSupports.Count);
 
         for (int i = 0; i < sourceSupports.Count; i++)
@@ -113,7 +217,6 @@ public static class SupportClusterPlanner
             resultSupports.Count - clusteredSupportCount,
             rejectedCandidateCount);
     }
-
     /// <summary>
     /// Creates eligible clustering candidates from individual supports in the requested scope.
     /// </summary>
@@ -147,6 +250,126 @@ public static class SupportClusterPlanner
         return candidates;
     }
 
+    /// <summary>
+    /// Creates individual candidates explicitly selected by a selection-scoped modifier.
+    /// </summary>
+    private static List<CandidateSupport> CreateSelectionIndividualCandidates(
+        IReadOnlyList<SupportEntity> sourceSupports,
+        HashSet<Guid> targetIds)
+    {
+        List<CandidateSupport> candidates = new List<CandidateSupport>();
+
+        for (int i = 0; i < sourceSupports.Count; i++)
+        {
+            SupportEntity support = sourceSupports[i];
+
+            if (!targetIds.Contains(support.Id)
+                || support.Style.Kind != SupportStyleKind.Individual
+                || !TryCreateCandidate(support, out CandidateSupport candidate))
+            {
+                continue;
+            }
+
+            candidates.Add(candidate);
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Builds selected existing cluster groups, expanding any selected cluster member to the full shared-stem group.
+    /// </summary>
+    private static List<ClusterCandidateGroup> CreateSelectedClusterGroups(
+        IReadOnlyList<SupportEntity> sourceSupports,
+        HashSet<Guid> targetIds)
+    {
+        List<Vector2> selectedCenters = new List<Vector2>();
+
+        for (int i = 0; i < sourceSupports.Count; i++)
+        {
+            SupportEntity support = sourceSupports[i];
+
+            if (targetIds.Contains(support.Id) && support.Style.Kind == SupportStyleKind.Clustered)
+            {
+                AddClusterCenterIfMissing(selectedCenters, new Vector2(support.BasePosition.X, support.BasePosition.Y));
+            }
+        }
+
+        List<ClusterCandidateGroup> groups = new List<ClusterCandidateGroup>();
+
+        for (int centerIndex = 0; centerIndex < selectedCenters.Count; centerIndex++)
+        {
+            Vector2 selectedCenter = selectedCenters[centerIndex];
+            ClusterCandidateGroup group = new ClusterCandidateGroup(selectedCenter);
+
+            for (int supportIndex = 0; supportIndex < sourceSupports.Count; supportIndex++)
+            {
+                SupportEntity support = sourceSupports[supportIndex];
+
+                if (support.Style.Kind != SupportStyleKind.Clustered
+                    || !AreClusterCentersEqual(selectedCenter, new Vector2(support.BasePosition.X, support.BasePosition.Y))
+                    || !TryCreateCandidate(support, out CandidateSupport candidate))
+                {
+                    continue;
+                }
+
+                group.AddExistingMember(candidate);
+            }
+
+            if (group.Members.Count > 0)
+            {
+                groups.Add(group);
+            }
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// Finds the nearest selected cluster that can absorb the individual support while preserving a valid cluster plan.
+    /// </summary>
+    private static bool TryFindNearestFeasibleCluster(
+        List<ClusterCandidateGroup> selectedClusters,
+        CandidateSupport individual,
+        SupportClusterModifierSettings settings,
+        out ClusterCandidateGroup? selectedCluster)
+    {
+        selectedCluster = null;
+        float bestDistanceSquared = float.MaxValue;
+
+        for (int i = 0; i < selectedClusters.Count; i++)
+        {
+            ClusterCandidateGroup candidateCluster = selectedClusters[i];
+
+            if (candidateCluster.Members.Count >= settings.MaximumSupportsPerCluster)
+            {
+                continue;
+            }
+
+            List<CandidateSupport> trialMembers = new List<CandidateSupport>(candidateCluster.Members.Count + 1);
+            trialMembers.AddRange(candidateCluster.Members);
+            trialMembers.Add(individual);
+
+            if (!TryCreateClusterPlan(trialMembers, settings, out ClusterPlan _))
+            {
+                continue;
+            }
+
+            float distanceSquared = Vector2.DistanceSquared(
+                new Vector2(individual.HeadJointPosition.X, individual.HeadJointPosition.Y),
+                candidateCluster.Center);
+
+            if (selectedCluster == null
+                || distanceSquared < bestDistanceSquared
+                || (MathF.Abs(distanceSquared - bestDistanceSquared) <= AxialTolerance && CompareClusterGroupIdentity(candidateCluster, selectedCluster) < 0))
+            {
+                selectedCluster = candidateCluster;
+                bestDistanceSquared = distanceSquared;
+            }
+        }
+
+        return selectedCluster != null;
+    }
     /// <summary>
     /// Converts one support into the geometry fields used by cluster planning.
     /// </summary>
@@ -273,6 +496,20 @@ public static class SupportClusterPlanner
     }
 
     /// <summary>
+    /// Adds all member replacements for one valid cluster plan.
+    /// </summary>
+    private static void ApplyClusterPlan(
+        List<CandidateSupport> group,
+        ClusterPlan plan,
+        Dictionary<Guid, SupportEntity> replacementsById)
+    {
+        for (int i = 0; i < group.Count; i++)
+        {
+            CandidateSupport member = group[i];
+            replacementsById[member.Support.Id] = CreateClusteredSupport(member, plan);
+        }
+    }
+    /// <summary>
     /// Creates a branched support that preserves the original contact and redirects the stem to the cluster axis.
     /// </summary>
     private static SupportEntity CreateClusteredSupport(CandidateSupport member, ClusterPlan plan)
@@ -298,7 +535,8 @@ public static class SupportClusterPlanner
             profile,
             new ClusteredSupportStyle(plan.CentralStemBottomDiameter, plan.CentralStemTopDiameter, plan.ClusterBranchDiameter));
     }
-
+
+
     /// <summary>
     /// Calculates automatic stem diameter from combined source cross-sectional area, or uses validated manual sizing.
     /// </summary>
@@ -387,11 +625,60 @@ public static class SupportClusterPlanner
     }
 
     /// <summary>
+    /// Checks whether target ids include at least one currently clustered support.
+    /// </summary>
+    private static bool HasTargetedClusteredSupport(IReadOnlyList<SupportEntity> sourceSupports, IReadOnlyList<Guid> targetSupportIds)
+    {
+        HashSet<Guid> targetIds = new HashSet<Guid>(targetSupportIds);
+
+        for (int i = 0; i < sourceSupports.Count; i++)
+        {
+            if (targetIds.Contains(sourceSupports[i].Id) && sourceSupports[i].Style.Kind == SupportStyleKind.Clustered)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Adds a selected shared-stem center if it has not already been recorded.
+    /// </summary>
+    private static void AddClusterCenterIfMissing(List<Vector2> centers, Vector2 center)
+    {
+        for (int i = 0; i < centers.Count; i++)
+        {
+            if (AreClusterCentersEqual(centers[i], center))
+            {
+                return;
+            }
+        }
+
+        centers.Add(center);
+    }
+
+    /// <summary>
+    /// Checks whether two shared-stem centers represent the same cluster.
+    /// </summary>
+    private static bool AreClusterCentersEqual(Vector2 left, Vector2 right)
+    {
+        return Vector2.DistanceSquared(left, right) <= ClusterCenterToleranceSquared;
+    }
+    /// <summary>
     /// Orders candidates by support identity.
     /// </summary>
     private static int CompareCandidateIdentity(CandidateSupport left, CandidateSupport right)
     {
         return left.Support.Id.CompareTo(right.Support.Id);
+    }
+
+    /// <summary>
+    /// Orders existing selected cluster groups by representative support identity.
+    /// </summary>
+    private static int CompareClusterGroupIdentity(ClusterCandidateGroup left, ClusterCandidateGroup right)
+    {
+        return left.RepresentativeSupportId.CompareTo(right.RepresentativeSupportId);
     }
 
     /// <summary>
@@ -427,6 +714,102 @@ public static class SupportClusterPlanner
         public Vector3 HeadJointPosition { get; }
     }
 
+    /// <summary>
+    /// Stores one selected existing cluster and any individual members merged into it.
+    /// </summary>
+    private sealed class ClusterCandidateGroup
+    {
+        /// <summary>
+        /// Creates one selected cluster group for a shared-stem center.
+        /// </summary>
+        public ClusterCandidateGroup(Vector2 center)
+        {
+            Center = center;
+            Members = new List<CandidateSupport>();
+            RepresentativeSupportId = Guid.Empty;
+        }
+
+        /// <summary>
+        /// Gets the original shared-stem XY center used for nearest-cluster assignment.
+        /// </summary>
+        public Vector2 Center { get; }
+
+        /// <summary>
+        /// Gets the current group members used for replanning.
+        /// </summary>
+        public List<CandidateSupport> Members { get; }
+
+        /// <summary>
+        /// Gets the stable representative identity for tie-breaking.
+        /// </summary>
+        public Guid RepresentativeSupportId { get; private set; }
+
+        /// <summary>
+        /// Gets whether this existing cluster has absorbed selected individual supports.
+        /// </summary>
+        public bool HasAddedMembers { get; private set; }
+
+        /// <summary>
+        /// Adds one original clustered member without marking the group as changed.
+        /// </summary>
+        public void AddExistingMember(CandidateSupport member)
+        {
+            Members.Add(member);
+            UpdateRepresentativeSupportId(member.Support.Id);
+        }
+
+        /// <summary>
+        /// Adds one selected individual member and marks the group for replanning.
+        /// </summary>
+        public void AddMember(CandidateSupport member)
+        {
+            Members.Add(member);
+            HasAddedMembers = true;
+            UpdateRepresentativeSupportId(member.Support.Id);
+        }
+
+        /// <summary>
+        /// Updates the stable representative identity from a new member.
+        /// </summary>
+        private void UpdateRepresentativeSupportId(Guid supportId)
+        {
+            if (RepresentativeSupportId == Guid.Empty || supportId.CompareTo(RepresentativeSupportId) < 0)
+            {
+                RepresentativeSupportId = supportId;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stores aggregate diagnostics from a candidate-planning pass.
+    /// </summary>
+    private readonly struct ClusterPlanSummary
+    {
+        /// <summary>
+        /// Creates one cluster planning diagnostic summary.
+        /// </summary>
+        public ClusterPlanSummary(int clusterCount, int clusteredSupportCount, int rejectedCandidateCount)
+        {
+            ClusterCount = clusterCount;
+            ClusteredSupportCount = clusteredSupportCount;
+            RejectedCandidateCount = rejectedCandidateCount;
+        }
+
+        /// <summary>
+        /// Gets the number of valid clusters produced by the pass.
+        /// </summary>
+        public int ClusterCount { get; }
+
+        /// <summary>
+        /// Gets the number of supports redirected by the pass.
+        /// </summary>
+        public int ClusteredSupportCount { get; }
+
+        /// <summary>
+        /// Gets the number of candidate seeds that could not form a cluster.
+        /// </summary>
+        public int RejectedCandidateCount { get; }
+    }
     /// <summary>
     /// Stores a valid plan for one cluster group.
     /// </summary>

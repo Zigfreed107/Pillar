@@ -363,6 +363,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void CancelTransientToolState()
     {
+        _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
     }
 

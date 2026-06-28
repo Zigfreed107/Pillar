@@ -340,6 +340,19 @@ public class SceneManager
     /// </summary>
     public bool TryHitEntity(Vector2 screenPosition, out CadEntity entity)
     {
+        return TryHitEntity(screenPosition, static entity => true, out entity);
+    }
+
+    /// <summary>
+    /// Hit-tests the viewport and returns the front-most document entity accepted by the supplied predicate.
+    /// </summary>
+    public bool TryHitEntity(Vector2 screenPosition, Func<CadEntity, bool> canSelect, out CadEntity entity)
+    {
+        if (canSelect == null)
+        {
+            throw new ArgumentNullException(nameof(canSelect));
+        }
+
         IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
         for (int i = 0; i < hits.Count; i++)
         {
@@ -348,7 +361,7 @@ public class SceneManager
                 continue;
             }
             CadEntity? hitEntity = GetEntityFromVisual(hitModel);
-            if (hitEntity == null)
+            if (hitEntity == null || !canSelect(hitEntity))
             {
                 continue;
             }

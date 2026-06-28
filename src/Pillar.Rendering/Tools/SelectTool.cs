@@ -77,6 +77,8 @@ public class SelectTool : Pillar.Core.Tools.ITool
     private readonly SceneManager _scene;
     private readonly SelectionManager _selection;
     private readonly List<CadEntity> _windowSelectionBuffer = new List<CadEntity>(64);
+    private readonly List<CadEntity> _selectionPruneBuffer = new List<CadEntity>(64);
+    private SelectionFilter _selectionFilter = SelectionFilter.AllowAll;
 
     private Vector2 _mouseDownPosition;
     private bool _isMouseDown;
@@ -98,6 +100,41 @@ public class SelectTool : Pillar.Core.Tools.ITool
     /// Raised while the user drags a window selection rectangle.
     /// </summary>
     public event Action<SelectionWindowOverlayState>? SelectionWindowChanged;
+
+    /// <summary>
+    /// Sets the entity eligibility rule used by click and window selection.
+    /// </summary>
+    public void SetSelectionFilter(SelectionFilter selectionFilter)
+    {
+        _selectionFilter = selectionFilter ?? throw new ArgumentNullException(nameof(selectionFilter));
+    }
+
+    /// <summary>
+    /// Restores normal selection eligibility for all selectable document entities.
+    /// </summary>
+    public void ResetSelectionFilter()
+    {
+        _selectionFilter = SelectionFilter.AllowAll;
+    }
+
+    /// <summary>
+    /// Removes currently selected entities that are not eligible under the active filter.
+    /// </summary>
+    public void PruneSelectionToActiveFilter()
+    {
+        _selectionPruneBuffer.Clear();
+
+        foreach (CadEntity entity in _document.Entities)
+        {
+            if (_selection.IsSelected(entity.Id) && !_selectionFilter.Allows(entity))
+            {
+                _selectionPruneBuffer.Add(entity);
+            }
+        }
+
+        _selection.RemoveRangeFromSelection(_selectionPruneBuffer);
+        _selectionPruneBuffer.Clear();
+    }
 
     /// <summary>
     /// Starts a possible click or window-selection gesture.
@@ -207,7 +244,8 @@ public class SelectTool : Pillar.Core.Tools.ITool
 
         foreach (CadEntity entity in _document.Entities)
         {
-            if (IsEntitySelectedByWindow(entity, selectionRect, selectsCrossingEntities))
+            if (_selectionFilter.Allows(entity)
+                && IsEntitySelectedByWindow(entity, selectionRect, selectsCrossingEntities))
             {
                 _windowSelectionBuffer.Add(entity);
             }
@@ -233,7 +271,7 @@ public class SelectTool : Pillar.Core.Tools.ITool
     /// </summary>
     private CadEntity? FindHitEntity(Vector2 screenPosition)
     {
-        if (_scene.TryHitEntity(screenPosition, out CadEntity hitEntity))
+        if (_scene.TryHitEntity(screenPosition, _selectionFilter.Allows, out CadEntity hitEntity))
         {
             return hitEntity;
         }

@@ -22,6 +22,7 @@ public partial class MainWindow
         _layerPanelViewModel.SetSelectedSupportLayerGroupCount(GetSelectedSupportLayerGroupCount());
         UpdateSelectedModelBoundsClipIndicator();
         UpdateGeneratedSupportDeleteButtonState();
+        RefreshSupportClusterPreviewStatusForSelectionChange();
 
         if (_scene.SelectionManager.SelectedCount == 1)
         {
@@ -206,7 +207,7 @@ public partial class MainWindow
         {
             if (_scene.SelectionManager.SelectedCount != 1)
             {
-                if (TrySelectActiveEditingSupportGroupLayer())
+                if (TrySelectActiveEditingSupportGroupLayer() || TrySelectSingleSelectedSupportGroupLayer())
                 {
                     return;
                 }
@@ -248,6 +249,51 @@ public partial class MainWindow
         {
             _isSynchronizingLayerAndViewportSelection = false;
         }
+    }
+
+    /// <summary>
+    /// Keeps the single selected support group as Cluster Supports context during normal multi-selection gestures.
+    /// </summary>
+    private bool TrySelectSingleSelectedSupportGroupLayer()
+    {
+        if (!IsSupportClusterToolActive())
+        {
+            return false;
+        }
+
+        if (_layerPanelViewModel.GetSelectedSupportLayerGroupId().HasValue)
+        {
+            return true;
+        }
+
+        Guid? selectedSupportLayerGroupId = null;
+
+        foreach (Guid selectedId in _scene.SelectionManager.SelectedEntityIds)
+        {
+            if (FindEntityById(selectedId) is not SupportEntity selectedSupport)
+            {
+                continue;
+            }
+
+            if (!selectedSupportLayerGroupId.HasValue)
+            {
+                selectedSupportLayerGroupId = selectedSupport.SupportLayerGroupId;
+                continue;
+            }
+
+            if (selectedSupportLayerGroupId.Value != selectedSupport.SupportLayerGroupId)
+            {
+                return false;
+            }
+        }
+
+        if (!selectedSupportLayerGroupId.HasValue)
+        {
+            return false;
+        }
+
+        _layerPanelViewModel.SelectSupportGroupLayer(selectedSupportLayerGroupId.Value);
+        return true;
     }
 
     /// <summary>

@@ -78,6 +78,10 @@ The same clustering parameters used for whole-layer clustering should be shown.
 
 Only supports in the selected support layer participate. Unselected supports must not be absorbed merely because they are nearby.
 
+Selecting any member of an existing clustered shared-stem assembly counts as selecting that whole cluster for Cluster Supports operations. This keeps the shared stem internally consistent and avoids editing only one branch of a cluster.
+
+When Selected Supports includes both individual supports and existing clustered supports, Apply first tries to merge selected individual supports into the selected existing cluster or clusters. If an individual support can fit more than one selected cluster, it joins the nearest feasible selected cluster with stable identity ordering used only as a tie-break. Selected individual supports that cannot join a selected cluster remain eligible to form new clusters with the other remaining selected individual supports.
+
 Apply should remain disabled when fewer than two eligible supports are selected. If the selected supports form several separated groups, one selection-scoped modifier may create several clusters; the preview and status text should make that result clear.
 
 When an existing selection-scoped modifier is edited, the options panel should restore its saved parameters and identify its stored target set. The targets should be highlighted even if the user entered the tool from the modifier row rather than from an active viewport selection.
@@ -94,7 +98,7 @@ The user selects **Selected Supports** from the Tool Options Panel.
 3. Run the same deterministic grouping and geometry validation used for whole-layer clustering, but only against the captured target set.
 4. Preserve selected supports that cannot form a valid cluster as unchanged individual supports.
 5. Preview the proposed shared stems and branches without mutating the document.
-6. On Apply, create one revision-bound Cluster modifier containing the target identities, source revision, parameters, and resulting modifier order.
+6. On Apply, create one revision-bound Cluster modifier containing the target identities, source revision, parameters, and resulting modifier order. A normal tool-session Apply appends a new selection-scoped modifier; it replaces an existing Cluster modifier only when the tool was opened from that modifier row for editing.
 7. Rebuild the support layer from its generator output and complete modifier stack.
 8. Add one child row such as **Cluster - Selection (12)** beneath the support layer.
 
