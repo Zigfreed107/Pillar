@@ -31,6 +31,7 @@ public class SceneManager
     private const string MeshHighlightPostEffect = "highlight";
     private const float FullyOpaqueSupportOpacity = 1.0f;
     private const float FaceLineSelectionSampleSpacingPixels = 2.0f;
+    private const float DefaultSelectionOutlineSize = 4.0f;
     private static readonly MediaColor DefaultSelectionOutlineColor = MediaColor.FromRgb(255, 215, 0);
 
     private readonly Viewport3DX _viewport;
@@ -58,6 +59,7 @@ public class SceneManager
     private readonly PrintableVolumeDefinition _printableVolumeDefinition;
     private readonly PhongMaterial _defaultMeshMaterial = MeshRenderer.CreateDefaultMaterial();
     private readonly MediaColor _selectionOutlineColor;
+    private readonly float _selectionOutlineSize;
     private readonly PhongMaterial _highlightMaterial;
     private readonly Dictionary<Guid, List<int>> _faceSelectionByMeshId = new Dictionary<Guid, List<int>>();
     private bool _isFaceAngleHighlightEnabled;
@@ -104,7 +106,15 @@ public class SceneManager
     /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
     /// </summary>
     public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides, MediaColor selectionOutlineColor)
-        : this(viewport, document, supportSides, selectionOutlineColor, BackgroundGridDefinition.Default)
+        : this(viewport, document, supportSides, selectionOutlineColor, DefaultSelectionOutlineSize, BackgroundGridDefinition.Default)
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with explicit selection rendering settings and subscribes to document changes.
+    /// </summary>
+    public SceneManager(Viewport3DX viewport, CadDocument document, int supportSides, MediaColor selectionOutlineColor, float selectionOutlineSize)
+        : this(viewport, document, supportSides, selectionOutlineColor, selectionOutlineSize, BackgroundGridDefinition.Default)
     {
     }
 
@@ -117,7 +127,7 @@ public class SceneManager
         int supportSides,
         MediaColor selectionOutlineColor,
         BackgroundGridDefinition backgroundGridDefinition)
-        : this(viewport, document, supportSides, selectionOutlineColor, backgroundGridDefinition, MeshRenderer.CreateDefaultMaterial())
+        : this(viewport, document, supportSides, selectionOutlineColor, DefaultSelectionOutlineSize, backgroundGridDefinition, MeshRenderer.CreateDefaultMaterial())
     {
     }
 
@@ -129,6 +139,21 @@ public class SceneManager
         CadDocument document,
         int supportSides,
         MediaColor selectionOutlineColor,
+        float selectionOutlineSize,
+        BackgroundGridDefinition backgroundGridDefinition)
+        : this(viewport, document, supportSides, selectionOutlineColor, selectionOutlineSize, backgroundGridDefinition, MeshRenderer.CreateDefaultMaterial())
+    {
+    }
+
+    /// <summary>
+    /// Creates the scene manager with explicit rendering settings and subscribes to document changes.
+    /// </summary>
+    public SceneManager(
+        Viewport3DX viewport,
+        CadDocument document,
+        int supportSides,
+        MediaColor selectionOutlineColor,
+        float selectionOutlineSize,
         BackgroundGridDefinition backgroundGridDefinition,
         PhongMaterial defaultMeshMaterial)
     {
@@ -136,6 +161,7 @@ public class SceneManager
         _document = document;
         _supportSides = supportSides;
         _selectionOutlineColor = selectionOutlineColor;
+        _selectionOutlineSize = selectionOutlineSize > 0.0f ? selectionOutlineSize : DefaultSelectionOutlineSize;
         _defaultMeshMaterial = defaultMeshMaterial ?? throw new ArgumentNullException(nameof(defaultMeshMaterial));
         _highlightMaterial = CreateSelectionMaterial(_selectionOutlineColor);
         _selectionManager = new SelectionManager(_document);
@@ -145,7 +171,10 @@ public class SceneManager
         _viewport.Items.Add(new PostEffectMeshBorderHighlight
         {
             EffectName = MeshHighlightPostEffect,
-            Color = _selectionOutlineColor
+            Color = _selectionOutlineColor,
+            ScaleX = _selectionOutlineSize,
+            ScaleY = _selectionOutlineSize,
+            NumberOfBlurPass = 1
         });
 
         _backgroundGridRenderer = new BackgroundGridRenderer(_backgroundGridRoot, resolvedBackgroundGridDefinition);
@@ -911,7 +940,7 @@ public class SceneManager
     {
         if (entity is LineEntity line)
         {
-            return LineRenderer.Create(line, _selectionOutlineColor);
+            return LineRenderer.Create(line, _selectionOutlineColor, _selectionOutlineSize);
         }
 
         if (entity is MeshEntity mesh)

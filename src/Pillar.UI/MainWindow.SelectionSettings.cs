@@ -9,6 +9,9 @@ namespace Pillar.UI;
 public partial class MainWindow
 {
     private const string DefaultSelectionOutlineColor = "#FFFFD700";
+    private const float DefaultSelectionOutlineSize = 4.0f;
+    private const float MinimumSelectionOutlineSize = 1.0f;
+    private const float MaximumSelectionOutlineSize = 12.0f;
 
     /// <summary>
     /// Reads the user-configurable selection outline color from settings, falling back to gold if the setting is invalid.
@@ -36,5 +39,23 @@ public partial class MainWindow
         }
 
         return Color.FromRgb(255, 215, 0);
+    }
+
+    /// <summary>
+    /// Reads the user-configurable selection outline size and clamps it to practical viewport values.
+    /// </summary>
+    private static float ReadSelectionOutlineSize()
+    {
+        double configuredSize = Settings.Default.SelectionOutlineSize;
+
+        if (double.IsNaN(configuredSize) || double.IsInfinity(configuredSize))
+        {
+            return DefaultSelectionOutlineSize;
+        }
+
+        return (float)Math.Clamp(
+            configuredSize <= 0.0 ? DefaultSelectionOutlineSize : configuredSize,
+            MinimumSelectionOutlineSize,
+            MaximumSelectionOutlineSize);
     }
 }

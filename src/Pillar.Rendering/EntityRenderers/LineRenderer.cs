@@ -13,6 +13,7 @@ namespace Pillar.Rendering.EntityRenderers;
 public static class LineRenderer
 {
     private const string SelectionOverlayName = "SelectionOverlay";
+    private const double DefaultSelectionOutlineThickness = 4.0;
 
     /// <summary>
     /// Creates a composite visual for a line entity.
@@ -28,6 +29,14 @@ public static class LineRenderer
     /// Creates a composite visual for a line entity with an explicit selection overlay color.
     /// </summary>
     public static GroupModel3D Create(LineEntity line, Color selectionOutlineColor)
+    {
+        return Create(line, selectionOutlineColor, DefaultSelectionOutlineThickness);
+    }
+
+    /// <summary>
+    /// Creates a composite visual for a line entity with explicit selection overlay styling.
+    /// </summary>
+    public static GroupModel3D Create(LineEntity line, Color selectionOutlineColor, double selectionOutlineThickness)
     {
         LineBuilder builder = new LineBuilder();
         builder.AddLine(
@@ -51,7 +60,7 @@ public static class LineRenderer
             Name = SelectionOverlayName,
             Geometry = geometry,
             Color = selectionOutlineColor,
-            Thickness = 4.0,
+            Thickness = selectionOutlineThickness > 0.0 ? selectionOutlineThickness : DefaultSelectionOutlineThickness,
             Smoothness = 1,
             DepthBias = 1000,
             SlopeScaledDepthBias = -1.5f,

@@ -36,7 +36,10 @@
       <Value Profile="(Default)">#fc037b</Value>
     </Setting>
     <Setting Name="SelectionOutlineColor" Type="System.String" Scope="User">
-      <Value Profile="(Default)">#00ce19</Value>
+      <Value Profile="(Default)">#BC4C17</Value>
+    </Setting>
+    <Setting Name="SelectionOutlineSize" Type="System.Double" Scope="User">
+      <Value Profile="(Default)">2</Value>
     </Setting>
     <Setting Name="ViewportRenderScale" Type="System.Double" Scope="User">
       <Value Profile="(Default)">2</Value>
@@ -51,7 +54,7 @@
       <Value Profile="(Default)">#FFB3B3B3</Value>
     </Setting>
     <Setting Name="FaceSetSelectionColor" Type="System.String" Scope="Application">
-      <Value Profile="(Default)">#CCFFD700</Value>
+      <Value Profile="(Default)">#D29322</Value>
     </Setting>
   </Settings>
 </SettingsFile>

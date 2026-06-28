@@ -106,6 +106,7 @@ public partial class MainWindow : Window
             _document,
             Properties.Settings.Default.SupportSides,
             ReadSelectionOutlineColor(),
+            ReadSelectionOutlineSize(),
             backgroundGridDefinition,
             ReadDefaultModelMaterial());
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
