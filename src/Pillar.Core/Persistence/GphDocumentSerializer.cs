@@ -598,6 +598,7 @@ public sealed class GphDocumentSerializer
             MaxHeadAngleFromVerticalDegrees = profile.MaxHeadAngleFromVerticalDegrees
         };
     }
+
     /// <summary>
     /// Converts one runtime support style into its persisted representation.
     /// </summary>
@@ -781,8 +782,24 @@ public sealed class GphDocumentSerializer
                 Order = modifier.Order,
                 SourceGeneratorRevision = modifier.SourceGeneratorRevision,
                 TargetSupportIds = new List<Guid>(modifier.TargetSupportIds),
+                TargetSupportIdBatches = CreateTargetSupportIdBatchDtos(modifier.TargetSupportIdBatches),
                 ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings)
             });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Converts cumulative target batches into their persisted representation.
+    /// </summary>
+    private static List<List<Guid>> CreateTargetSupportIdBatchDtos(IReadOnlyList<SupportModifierTargetBatch> targetSupportIdBatches)
+    {
+        List<List<Guid>> result = new List<List<Guid>>(targetSupportIdBatches.Count);
+
+        for (int i = 0; i < targetSupportIdBatches.Count; i++)
+        {
+            result.Add(new List<Guid>(targetSupportIdBatches[i].TargetSupportIds));
         }
 
         return result;
@@ -891,6 +908,7 @@ public sealed class GphDocumentSerializer
             supportProfileDto.HeadTopDiameter,
             supportProfileDto.MaxHeadAngleFromVerticalDegrees);
     }
+
     /// <summary>
     /// Converts one serialized support style into the runtime style type, defaulting old files to individual supports.
     /// </summary>
@@ -1169,11 +1187,39 @@ public sealed class GphDocumentSerializer
                 Math.Max(0, modifierDto.Order),
                 CreateClusterModifierSettingsOrDefault(modifierDto),
                 modifierDto.TargetSupportIds ?? new List<Guid>(),
+                CreateTargetSupportIdBatchesOrDefault(modifierDto),
                 modifierDto.SourceGeneratorRevision));
         }
 
         modifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
         return modifiers;
+    }
+
+    /// <summary>
+    /// Converts saved cumulative target batches into runtime modifier batches.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierTargetBatch>? CreateTargetSupportIdBatchesOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (modifierDto.TargetSupportIdBatches == null || modifierDto.TargetSupportIdBatches.Count == 0)
+        {
+            return null;
+        }
+
+        List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>(modifierDto.TargetSupportIdBatches.Count);
+
+        for (int i = 0; i < modifierDto.TargetSupportIdBatches.Count; i++)
+        {
+            List<Guid>? targetSupportIds = modifierDto.TargetSupportIdBatches[i];
+
+            if (targetSupportIds == null)
+            {
+                throw new InvalidDataException($"A support modifier has a null target batch at index {i}.");
+            }
+
+            result.Add(new SupportModifierTargetBatch(targetSupportIds));
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -1375,6 +1421,7 @@ public sealed class GphDocumentSerializer
         public GphQuaternionDto? Rotation { get; set; }
         public GphVector3Dto? Scale { get; set; }
     }
+
     /// <summary>
     /// DTO for persisted support style values.
     /// </summary>
@@ -1434,6 +1481,7 @@ public sealed class GphDocumentSerializer
         public int Order { get; set; }
         public int? SourceGeneratorRevision { get; set; }
         public List<Guid>? TargetSupportIds { get; set; }
+        public List<List<Guid>>? TargetSupportIdBatches { get; set; }
         public GphClusterModifierSettingsDto? ClusterSettings { get; set; }
     }
 

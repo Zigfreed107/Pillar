@@ -15,7 +15,7 @@ A generated support layer should retain three separate kinds of data:
 
 The source generator and modifier stack are the authoritative definition of the support layer. Concrete support entities are derived output and may be replaced whenever the generator or a modifier changes.
 
-Each modifier invocation creates a separate modifier definition, even when several modifiers use the same editing tool. A modifier should store:
+Most modifier invocations create a separate modifier definition, even when several modifiers use the same editing tool. Tool-specific cumulative workflows may update one existing modifier instead when the user is manually building one logical edit across several Apply clicks. A modifier should store:
 
 - stable modifier identity
 - modifier or tool type
@@ -82,7 +82,7 @@ Area Supports
 
 A modifier stack entry in the layer panel should have an edit button to the right of the label.
 
-Each invocation receives its own row so different scopes and parameter sets remain independently editable. Removing the final modifier should leave the support layer with no modifier children.
+Each independent modifier receives its own row so different scopes and parameter sets remain independently editable. Cumulative workflows such as manual selected-support clustering should keep one row and append ordered target batches inside that modifier as the user applies separate selections. Removing the final modifier should leave the support layer with no modifier children.
 
 Selecting the edit action for a modifier should:
 
@@ -118,5 +118,5 @@ The initial architecture should support:
 - revision-bound selected-support clustering
 - revision-bound selected-support bracing
 - revision-bound selected-support deletion
-- one modifier row per editing invocation
+- one modifier row per independent edit, with cumulative manual clustering represented by one Cluster row containing ordered Apply batches
 - modifier editing, reset, removal, undo, redo, save, and load

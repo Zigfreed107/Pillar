@@ -11,6 +11,7 @@ namespace Pillar.Core.Layers;
 public sealed class SupportModifierDefinition
 {
     private readonly List<Guid> _targetSupportIds;
+    private readonly List<SupportModifierTargetBatch> _targetSupportIdBatches;
 
     /// <summary>
     /// Creates one support modifier definition with a stable document identity.
@@ -23,6 +24,23 @@ public sealed class SupportModifierDefinition
         int order,
         SupportClusterModifierSettings? clusterSettings,
         IReadOnlyList<Guid>? targetSupportIds,
+        int? sourceGeneratorRevision)
+        : this(id, kind, scope, isEnabled, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision)
+    {
+    }
+
+    /// <summary>
+    /// Creates one support modifier definition with ordered target batches for cumulative edits.
+    /// </summary>
+    public SupportModifierDefinition(
+        Guid id,
+        SupportModifierKind kind,
+        SupportModifierScope scope,
+        bool isEnabled,
+        int order,
+        SupportClusterModifierSettings? clusterSettings,
+        IReadOnlyList<Guid>? targetSupportIds,
+        IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches,
         int? sourceGeneratorRevision)
     {
         if (id == Guid.Empty)
@@ -42,7 +60,8 @@ public sealed class SupportModifierDefinition
         Order = order;
         ClusterSettings = clusterSettings?.Clone();
         SourceGeneratorRevision = sourceGeneratorRevision;
-        _targetSupportIds = CreateTargetSupportIdList(targetSupportIds);
+        _targetSupportIdBatches = CreateTargetSupportIdBatchList(scope, targetSupportIds, targetSupportIdBatches);
+        _targetSupportIds = CreateFlattenedTargetSupportIdList(targetSupportIds, _targetSupportIdBatches);
 
         ValidateScope();
         ValidateSettings();
@@ -59,6 +78,21 @@ public sealed class SupportModifierDefinition
         IReadOnlyList<Guid>? targetSupportIds,
         int? sourceGeneratorRevision)
     {
+        return CreateNew(kind, scope, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision);
+    }
+
+    /// <summary>
+    /// Creates a new modifier definition with a generated identity and ordered target batches.
+    /// </summary>
+    public static SupportModifierDefinition CreateNew(
+        SupportModifierKind kind,
+        SupportModifierScope scope,
+        int order,
+        SupportClusterModifierSettings? clusterSettings,
+        IReadOnlyList<Guid>? targetSupportIds,
+        IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches,
+        int? sourceGeneratorRevision)
+    {
         return new SupportModifierDefinition(
             Guid.NewGuid(),
             kind,
@@ -67,6 +101,7 @@ public sealed class SupportModifierDefinition
             order,
             clusterSettings,
             targetSupportIds,
+            targetSupportIdBatches,
             sourceGeneratorRevision);
     }
 
@@ -109,6 +144,14 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
+    /// Gets the ordered target batches captured by cumulative selection-scoped edits.
+    /// </summary>
+    public IReadOnlyList<SupportModifierTargetBatch> TargetSupportIdBatches
+    {
+        get { return _targetSupportIdBatches; }
+    }
+
+    /// <summary>
     /// Gets the generator revision captured by a selection-scoped modifier.
     /// </summary>
     public int? SourceGeneratorRevision { get; }
@@ -144,6 +187,7 @@ public sealed class SupportModifierDefinition
             Order,
             ClusterSettings,
             _targetSupportIds,
+            _targetSupportIdBatches,
             SourceGeneratorRevision);
     }
 
@@ -160,6 +204,7 @@ public sealed class SupportModifierDefinition
             order,
             ClusterSettings,
             _targetSupportIds,
+            _targetSupportIdBatches,
             SourceGeneratorRevision);
     }
 
@@ -185,36 +230,80 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Copies and validates target support identifiers.
+    /// Copies ordered selection target batches, or creates one batch for older flat target data.
     /// </summary>
-    private static List<Guid> CreateTargetSupportIdList(IReadOnlyList<Guid>? targetSupportIds)
+    private static List<SupportModifierTargetBatch> CreateTargetSupportIdBatchList(
+        SupportModifierScope scope,
+        IReadOnlyList<Guid>? targetSupportIds,
+        IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches)
     {
-        if (targetSupportIds == null)
+        List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>();
+
+        if (scope == SupportModifierScope.WholeLayer)
         {
-            return new List<Guid>();
+            return result;
         }
 
-        List<Guid> result = new List<Guid>(targetSupportIds.Count);
+        if (targetSupportIdBatches != null && targetSupportIdBatches.Count > 0)
+        {
+            for (int i = 0; i < targetSupportIdBatches.Count; i++)
+            {
+                result.Add(targetSupportIdBatches[i].Clone());
+            }
+
+            return result;
+        }
+
+        if (targetSupportIds != null && targetSupportIds.Count > 0)
+        {
+            result.Add(new SupportModifierTargetBatch(targetSupportIds));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the unique target list used by labels, validation, and older persistence fields.
+    /// </summary>
+    private static List<Guid> CreateFlattenedTargetSupportIdList(
+        IReadOnlyList<Guid>? targetSupportIds,
+        IReadOnlyList<SupportModifierTargetBatch> targetSupportIdBatches)
+    {
+        List<Guid> result = new List<Guid>();
         HashSet<Guid> seenIds = new HashSet<Guid>();
 
+        if (targetSupportIds != null)
+        {
+            AddTargetSupportIds(targetSupportIds, result, seenIds, nameof(targetSupportIds));
+        }
+
+        for (int i = 0; i < targetSupportIdBatches.Count; i++)
+        {
+            AddTargetSupportIds(targetSupportIdBatches[i].TargetSupportIds, result, seenIds, nameof(targetSupportIdBatches));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Adds valid unique support identities to the flattened target list.
+    /// </summary>
+    private static void AddTargetSupportIds(IReadOnlyList<Guid> targetSupportIds, List<Guid> result, HashSet<Guid> seenIds, string parameterName)
+    {
         for (int i = 0; i < targetSupportIds.Count; i++)
         {
             Guid targetSupportId = targetSupportIds[i];
 
             if (targetSupportId == Guid.Empty)
             {
-                throw new ArgumentException("Support modifier targets cannot contain an empty support id.", nameof(targetSupportIds));
+                throw new ArgumentException("Support modifier targets cannot contain an empty support id.", parameterName);
             }
 
-            if (!seenIds.Add(targetSupportId))
+            if (seenIds.Add(targetSupportId))
             {
-                throw new ArgumentException("Support modifier targets cannot contain duplicate support ids.", nameof(targetSupportIds));
+                result.Add(targetSupportId);
             }
-
-            result.Add(targetSupportId);
         }
-
-        return result;
     }
 
     /// <summary>

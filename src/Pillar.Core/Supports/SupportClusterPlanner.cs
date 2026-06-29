@@ -38,6 +38,11 @@ public static class SupportClusterPlanner
             throw new ArgumentException("Only Cluster modifiers can be evaluated by the cluster planner.", nameof(modifier));
         }
 
+        if (modifier.Scope == SupportModifierScope.Selection && modifier.TargetSupportIdBatches.Count > 1)
+        {
+            return EvaluateSelectionBatches(sourceSupports, modifier);
+        }
+
         if (modifier.Scope == SupportModifierScope.Selection && HasTargetedClusteredSupport(sourceSupports, modifier.TargetSupportIds))
         {
             return EvaluateSelectionWithClusterTargets(sourceSupports, modifier);
@@ -48,6 +53,44 @@ public static class SupportClusterPlanner
         Dictionary<Guid, SupportEntity> replacementsById = new Dictionary<Guid, SupportEntity>();
         ClusterPlanSummary summary = PlanCandidateGroups(candidates, settings, replacementsById);
         return CreateEvaluationResult(sourceSupports, replacementsById, summary.ClusterCount, summary.ClusteredSupportCount, summary.RejectedCandidateCount);
+    }
+
+    /// <summary>
+    /// Replays cumulative selection batches independently while preserving one modifier stack entry.
+    /// </summary>
+    private static SupportClusterEvaluationResult EvaluateSelectionBatches(
+        IReadOnlyList<SupportEntity> sourceSupports,
+        SupportModifierDefinition modifier)
+    {
+        List<SupportEntity> currentSupports = new List<SupportEntity>(sourceSupports);
+        int clusterCount = 0;
+        int rejectedCandidateCount = 0;
+
+        for (int i = 0; i < modifier.TargetSupportIdBatches.Count; i++)
+        {
+            SupportModifierTargetBatch batch = modifier.TargetSupportIdBatches[i];
+            SupportModifierDefinition batchModifier = new SupportModifierDefinition(
+                modifier.Id,
+                modifier.Kind,
+                modifier.Scope,
+                modifier.IsEnabled,
+                modifier.Order,
+                modifier.ClusterSettings,
+                batch.TargetSupportIds,
+                modifier.SourceGeneratorRevision);
+            SupportClusterEvaluationResult batchResult = Evaluate(currentSupports, batchModifier);
+            currentSupports = new List<SupportEntity>(batchResult.SupportEntities);
+            clusterCount += batchResult.ClusterCount;
+            rejectedCandidateCount += batchResult.RejectedCandidateCount;
+        }
+
+        int clusteredSupportCount = CountClusteredSupports(currentSupports);
+        return new SupportClusterEvaluationResult(
+            currentSupports,
+            clusterCount,
+            clusteredSupportCount,
+            currentSupports.Count - clusteredSupportCount,
+            rejectedCandidateCount);
     }
 
     /// <summary>
@@ -217,6 +260,7 @@ public static class SupportClusterPlanner
             resultSupports.Count - clusteredSupportCount,
             rejectedCandidateCount);
     }
+
     /// <summary>
     /// Creates eligible clustering candidates from individual supports in the requested scope.
     /// </summary>
@@ -370,6 +414,7 @@ public static class SupportClusterPlanner
 
         return selectedCluster != null;
     }
+
     /// <summary>
     /// Converts one support into the geometry fields used by cluster planning.
     /// </summary>
@@ -509,6 +554,7 @@ public static class SupportClusterPlanner
             replacementsById[member.Support.Id] = CreateClusteredSupport(member, plan);
         }
     }
+
     /// <summary>
     /// Creates a branched support that preserves the original contact and redirects the stem to the cluster axis.
     /// </summary>
@@ -625,6 +671,24 @@ public static class SupportClusterPlanner
     }
 
     /// <summary>
+    /// Counts final clustered supports for cumulative-batch diagnostics.
+    /// </summary>
+    private static int CountClusteredSupports(IReadOnlyList<SupportEntity> supportEntities)
+    {
+        int count = 0;
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            if (supportEntities[i].Style.Kind == SupportStyleKind.Clustered)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// Checks whether target ids include at least one currently clustered support.
     /// </summary>
     private static bool HasTargetedClusteredSupport(IReadOnlyList<SupportEntity> sourceSupports, IReadOnlyList<Guid> targetSupportIds)
@@ -665,6 +729,7 @@ public static class SupportClusterPlanner
     {
         return Vector2.DistanceSquared(left, right) <= ClusterCenterToleranceSquared;
     }
+
     /// <summary>
     /// Orders candidates by support identity.
     /// </summary>
@@ -810,6 +875,7 @@ public static class SupportClusterPlanner
         /// </summary>
         public int RejectedCandidateCount { get; }
     }
+
     /// <summary>
     /// Stores a valid plan for one cluster group.
     /// </summary>

@@ -57,6 +57,7 @@ public static class Program
         RunTest(failures, "Cluster modifier redirects nearby supports", ValidateClusterModifierRedirectsNearbySupports);
         RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
         RunTest(failures, "Later selection cluster preserves existing clusters", ValidateLaterSelectionClusterPreservesExistingClusters);
+        RunTest(failures, "Cumulative cluster modifier keeps Apply batches separate", ValidateCumulativeClusterModifierKeepsApplyBatchesSeparate);
         RunTest(failures, "Selected individual joins selected cluster", ValidateSelectedIndividualJoinsSelectedCluster);
         RunTest(failures, "Selected individual joins nearest feasible selected cluster", ValidateSelectedIndividualJoinsNearestFeasibleCluster);
         RunTest(failures, "Remaining selected individuals cluster after merge attempts", ValidateRemainingSelectedIndividualsClusterAfterMergeAttempts);
@@ -104,6 +105,7 @@ public static class Program
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Support style and cluster branch diameter survive save and load", ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad);
+        RunTest(failures, "Cluster modifier target batches survive save and load", ValidateClusterModifierTargetBatchesSurviveSaveAndLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -598,6 +600,7 @@ public static class Program
             throw new InvalidOperationException("Expected clustered branch diameter to visibly widen the generated support mesh.");
         }
     }
+
     /// <summary>
     /// Validates that the clustered head-to-branch ball uses the branch diameter, not the central stem top diameter.
     /// </summary>
@@ -656,6 +659,7 @@ public static class Program
             throw new InvalidOperationException("Expected clustered head branch joint ball not to use the central stem top radius.");
         }
     }
+
     /// <summary>
     /// Validates that individual supports with ordinary branches can still become clustered supports.
     /// </summary>
@@ -690,6 +694,7 @@ public static class Program
             throw new InvalidOperationException("Expected individual branched supports to remain eligible for clustering.");
         }
     }
+
     /// <summary>
     /// Validates that a whole-layer Cluster modifier redirects nearby supports onto shared stem axes.
     /// </summary>
@@ -800,6 +805,7 @@ public static class Program
             throw new InvalidOperationException("Expected the unselected nearby support to remain individual.");
         }
     }
+
     /// <summary>
     /// Validates that appending a later selection-scoped Cluster modifier preserves earlier clustered output.
     /// </summary>
@@ -834,6 +840,65 @@ public static class Program
         if (result[2].Style.Kind != SupportStyleKind.Clustered || result[3].Style.Kind != SupportStyleKind.Clustered)
         {
             throw new InvalidOperationException("Expected the later selected supports to become clustered.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that one cumulative Cluster modifier preserves separate Apply batch boundaries.
+    /// </summary>
+    private static void ValidateCumulativeClusterModifierKeepsApplyBatchesSeparate()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(1.0f, 0.0f, 0.0f), new Vector3(1.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(2.0f, 0.0f, 0.0f), new Vector3(2.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(3.0f, 0.0f, 0.0f), new Vector3(3.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(4.0f, 0.0f, 0.0f), new Vector3(4.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(5.0f, 0.0f, 0.0f), new Vector3(5.0f, 0.0f, 12.0f), profile)
+        };
+        SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 6);
+        List<SupportModifierTargetBatch> batches = new List<SupportModifierTargetBatch>
+        {
+            new SupportModifierTargetBatch(new List<Guid> { supports[0].Id, supports[1].Id, supports[2].Id }),
+            new SupportModifierTargetBatch(new List<Guid> { supports[3].Id, supports[4].Id, supports[5].Id })
+        };
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            SupportModifierScope.Selection,
+            0,
+            settings,
+            null,
+            batches,
+            0);
+        SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
+
+        if (result.ClusterCount != 2)
+        {
+            throw new InvalidOperationException("Expected cumulative selected-support clustering to preserve two Apply batches as two clusters.");
+        }
+
+        for (int i = 0; i < result.SupportEntities.Count; i++)
+        {
+            if (result.SupportEntities[i].Style.Kind != SupportStyleKind.Clustered)
+            {
+                throw new InvalidOperationException("Expected every batched support to be clustered.");
+            }
+        }
+
+        if (MathF.Abs(result.SupportEntities[0].BasePosition.X - 1.0f) > 0.0001f
+            || MathF.Abs(result.SupportEntities[1].BasePosition.X - 1.0f) > 0.0001f
+            || MathF.Abs(result.SupportEntities[2].BasePosition.X - 1.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the first Apply batch to keep its own shared stem center.");
+        }
+
+        if (MathF.Abs(result.SupportEntities[3].BasePosition.X - 4.0f) > 0.0001f
+            || MathF.Abs(result.SupportEntities[4].BasePosition.X - 4.0f) > 0.0001f
+            || MathF.Abs(result.SupportEntities[5].BasePosition.X - 4.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the second Apply batch to keep its own shared stem center.");
         }
     }
 
@@ -1227,6 +1292,7 @@ public static class Program
         ValidateVectorNear(rotatedTransform.Scale, resetTransform.Scale, 0.0001f, "Expected Reset to preserve user scale.");
         ValidateVectorNear(originalWorldOrigin, resetWorldOrigin, 0.0001f, "Expected Reset to keep the model pivot fixed.");
     }
+
     /// <summary>
     /// Validates that positive X input rotates around the fixed world X axis.
     /// </summary>
@@ -2394,6 +2460,77 @@ public static class Program
     /// <summary>
     /// Validates that removing file versioning does not remove the Graphite file identity check.
     /// </summary>
+    /// <summary>
+    /// Validates that cumulative Cluster modifier target batches survive project persistence.
+    /// </summary>
+    private static void ValidateClusterModifierTargetBatchesSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Batched Cluster Supports");
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            new SupportEntity(supportLayerGroup.Id, new Vector3(0.0f, 0.0f, 6.0f), new Vector3(0.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile),
+            new SupportEntity(supportLayerGroup.Id, new Vector3(1.0f, 0.0f, 6.0f), new Vector3(1.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile),
+            new SupportEntity(supportLayerGroup.Id, new Vector3(2.0f, 0.0f, 6.0f), new Vector3(2.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile),
+            new SupportEntity(supportLayerGroup.Id, new Vector3(3.0f, 0.0f, 6.0f), new Vector3(3.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile)
+        };
+        List<SupportModifierTargetBatch> batches = new List<SupportModifierTargetBatch>
+        {
+            new SupportModifierTargetBatch(new List<Guid> { supports[0].Id, supports[1].Id }),
+            new SupportModifierTargetBatch(new List<Guid> { supports[2].Id, supports[3].Id })
+        };
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(
+                SupportModifierKind.Cluster,
+                SupportModifierScope.Selection,
+                0,
+                CreateSmokeClusterSettings(3.0f, 4),
+                null,
+                batches,
+                supportLayerGroup.SourceGeneratorRevision)
+        });
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        for (int i = 0; i < supports.Count; i++)
+        {
+            document.AddEntity(supports[i]);
+        }
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "ClusterBatchSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+            IReadOnlyList<SupportModifierTargetBatch> loadedBatches = loadedDocument.SupportLayerGroups[0].SupportModifiers[0].TargetSupportIdBatches;
+
+            if (loadedBatches.Count != 2)
+            {
+                throw new InvalidOperationException("Expected Cluster modifier target batches to survive save and load.");
+            }
+
+            if (loadedBatches[0].TargetSupportIds.Count != 2 || loadedBatches[1].TargetSupportIds.Count != 2)
+            {
+                throw new InvalidOperationException("Expected loaded Cluster modifier target batches to preserve their target counts.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
     /// <summary>
     /// Validates that support styles and cluster branch diameter settings are saved and loaded with the project.
     /// </summary>

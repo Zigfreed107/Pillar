@@ -84,7 +84,7 @@ When Selected Supports includes both individual supports and existing clustered 
 
 Apply should remain disabled when fewer than two eligible supports are selected. If the selected supports form several separated groups, one selection-scoped modifier may create several clusters; the preview and status text should make that result clear.
 
-When an existing selection-scoped modifier is edited, the options panel should restore its saved parameters and identify its stored target set. The targets should be highlighted even if the user entered the tool from the modifier row rather than from an active viewport selection.
+When an existing selection-scoped modifier is edited, the options panel should restore its saved parameters and identify its stored cumulative target set. The targets should be highlighted even if the user entered the tool from the modifier row rather than from an active viewport selection.
 
 ### Workflow
 The user selects a support layer, opens the **Edit Supports** mode, and chooses **Cluster Supports**. If more than one layer is selected when the choose **Cluster Supports**, then a warning dialog is shown that instructs the user to select only one support layer and try again, with an OK button that exits out of the tool.
@@ -98,9 +98,9 @@ The user selects **Selected Supports** from the Tool Options Panel.
 3. Run the same deterministic grouping and geometry validation used for whole-layer clustering, but only against the captured target set.
 4. Preserve selected supports that cannot form a valid cluster as unchanged individual supports.
 5. Preview the proposed shared stems and branches without mutating the document.
-6. On Apply, create one revision-bound Cluster modifier containing the target identities, source revision, parameters, and resulting modifier order. A normal tool-session Apply appends a new selection-scoped modifier; it replaces an existing Cluster modifier only when the tool was opened from that modifier row for editing.
+6. On Apply, create or update one revision-bound Cluster modifier containing ordered Apply batches, source revision, parameters, and resulting modifier order. Normal tool-session Apply clicks append the newly selected support identities as a separate batch inside the existing Cluster modifier for that support layer instead of appending another Cluster modifier row.
 7. Rebuild the support layer from its generator output and complete modifier stack.
-8. Add one child row such as **Cluster - Selection (12)** beneath the support layer.
+8. Add or update one child row such as **Cluster - Selection (12)** beneath the support layer.
 
 A user should be able to choose an individual cluster in the viewer, and click the "Uncluster Selected" button. This would remove the clustering from all supports in that cluster, returning them to individual supports.
 
@@ -174,7 +174,7 @@ This favors predictable and bounded behavior over globally optimal packing. More
 
 Cluster modifiers run in creation order with the rest of the support layer's modifier stack. Changing a Cluster modifier rebuilds the layer from generator output and reapplies all modifiers in order.
 
-The initial version should not create clusters from the derived shared stems of earlier Cluster modifiers. Later Cluster modifiers may operate on individual supports left unclustered by preceding modifiers.
+The initial version keeps manual selection clustering for a support layer in one cumulative Cluster modifier. Repeated Apply clicks append separate target batches to that modifier, so the Layer Panel shows one Cluster child row while Undo and Redo still step through each Apply command. Each batch is evaluated in Apply order; neighboring supports selected in different Apply clicks should not be regrouped together unless a later batch explicitly selects an existing clustered member and another support to merge them.
 
 Editing or removing a Cluster modifier may invalidate later selection-scoped modifiers that target its derived output. Invalid downstream modifiers should be discarded with a notice as part of the same undoable command. Whole-layer downstream modifiers should be reevaluated.
 
@@ -187,7 +187,7 @@ A Cluster modifier should store user intent rather than cached meshes:
 - enabled state
 - ordered position
 - clustering parameters
-- target support identities and generator revision for selection scope
+- ordered target support identity batches and generator revision for selection scope
 
 The evaluated result should use renderer-independent cluster assembly data describing the shared base, stem, junction, branches, and preserved heads. The current single-head **SupportEntity** shape should not be stretched to become the authoritative definition of a multi-head cluster.
 
