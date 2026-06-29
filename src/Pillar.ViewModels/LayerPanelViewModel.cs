@@ -18,6 +18,8 @@ namespace Pillar.ViewModels;
 public partial class LayerPanelViewModel : ObservableObject
 {
     private readonly CadDocument _document;
+    private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _supportLayerVisibilityById = new Dictionary<Guid, bool>();
     private LayerTreeItemViewModel? _selectedLayer;
     private int _selectedModelCount;
     private int _selectedSupportLayerGroupCount;
@@ -220,6 +222,7 @@ public partial class LayerPanelViewModel : ObservableObject
                     LayerTreeItemKind.Model,
                     entity.Name,
                     default);
+                modelRow.IsVisible = GetModelLayerVisibility(entity.Id);
 
                 modelRowsById.Add(entity.Id, modelRow);
                 ModelLayers.Add(modelRow);
@@ -237,6 +240,7 @@ public partial class LayerPanelViewModel : ObservableObject
                     supportLayerGroup.Name,
                     supportLayerGroup.Color,
                     supportLayerGroup.Id);
+                supportGroupRow.IsVisible = GetSupportLayerVisibility(supportLayerGroup.Id);
 
                 IReadOnlyList<SupportModifierDefinition> supportModifiers = supportLayerGroup.SupportModifiers;
 
@@ -255,6 +259,8 @@ public partial class LayerPanelViewModel : ObservableObject
                 modelRow.Children.Add(supportGroupRow);
             }
         }
+
+        PruneVisibilityState();
 
         LayerTreeItemViewModel? restoredSelection = FindLayer(selectedId, selectedKind);
         SelectedLayer = restoredSelection ?? GetDefaultSelectedLayer();
@@ -368,6 +374,62 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Updates one model layer's session visibility state and matching tree row.
+    /// </summary>
+    public void SetModelLayerVisibility(Guid modelEntityId, bool isVisible)
+    {
+        _modelLayerVisibilityById[modelEntityId] = isVisible;
+
+        LayerTreeItemViewModel? layer = FindLayer(modelEntityId, LayerTreeItemKind.Model);
+
+        if (layer != null)
+        {
+            layer.IsVisible = isVisible;
+        }
+    }
+
+    /// <summary>
+    /// Updates one support group layer's session visibility state and matching tree row.
+    /// </summary>
+    public void SetSupportLayerVisibility(Guid supportLayerGroupId, bool isVisible)
+    {
+        _supportLayerVisibilityById[supportLayerGroupId] = isVisible;
+
+        LayerTreeItemViewModel? layer = FindLayer(supportLayerGroupId, LayerTreeItemKind.SupportGroup);
+
+        if (layer != null)
+        {
+            layer.IsVisible = isVisible;
+        }
+    }
+
+    /// <summary>
+    /// Gets one model layer's current session visibility state.
+    /// </summary>
+    public bool GetModelLayerVisibility(Guid modelEntityId)
+    {
+        if (_modelLayerVisibilityById.TryGetValue(modelEntityId, out bool isVisible))
+        {
+            return isVisible;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets one support group layer's current session visibility state.
+    /// </summary>
+    public bool GetSupportLayerVisibility(Guid supportLayerGroupId)
+    {
+        if (_supportLayerVisibilityById.TryGetValue(supportLayerGroupId, out bool isVisible))
+        {
+            return isVisible;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Finds a layer row by id and kind in the current tree.
     /// </summary>
     private LayerTreeItemViewModel? FindLayer(Guid? id, LayerTreeItemKind? kind)
@@ -388,6 +450,52 @@ public partial class LayerPanelViewModel : ObservableObject
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Removes visibility entries for layers that are no longer present in the document.
+    /// </summary>
+    private void PruneVisibilityState()
+    {
+        HashSet<Guid> modelIds = new HashSet<Guid>();
+        HashSet<Guid> supportLayerGroupIds = new HashSet<Guid>();
+
+        foreach (CadEntity entity in _document.Entities)
+        {
+            if (entity is MeshEntity)
+            {
+                modelIds.Add(entity.Id);
+            }
+        }
+
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            supportLayerGroupIds.Add(supportLayerGroup.Id);
+        }
+
+        RemoveMissingVisibilityEntries(_modelLayerVisibilityById, modelIds);
+        RemoveMissingVisibilityEntries(_supportLayerVisibilityById, supportLayerGroupIds);
+    }
+
+    /// <summary>
+    /// Removes stale visibility state from one visibility map.
+    /// </summary>
+    private static void RemoveMissingVisibilityEntries(Dictionary<Guid, bool> visibilityById, HashSet<Guid> existingIds)
+    {
+        List<Guid> removedIds = new List<Guid>();
+
+        foreach (Guid id in visibilityById.Keys)
+        {
+            if (!existingIds.Contains(id))
+            {
+                removedIds.Add(id);
+            }
+        }
+
+        for (int i = 0; i < removedIds.Count; i++)
+        {
+            visibilityById.Remove(removedIds[i]);
+        }
     }
 
     /// <summary>

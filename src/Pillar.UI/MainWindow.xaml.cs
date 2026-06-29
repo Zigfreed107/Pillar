@@ -64,6 +64,7 @@ public partial class MainWindow : Window
     private bool _hasFramedStartupView;
     private bool _isSynchronizingLayerAndViewportSelection;
     private Guid? _activeEditingClusterModifierId;
+    private Dictionary<Guid, bool>? _clusterToolSupportLayerVisibilitySnapshot;
     private bool _isPrecisionSelectCursorActive;
     private Cursor? _viewportCursorBeforePrecisionSelect;
     private int _previewCalculationCursorDepth;
@@ -354,6 +355,7 @@ public partial class MainWindow : Window
         LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
         LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
         LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
+        LayerPanelOverlay.ChangeLayerVisibilityRequested += LayerPanel_ChangeLayerVisibilityRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
         LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
         LayerPanelOverlay.EditSupportModifierRequested += LayerPanel_EditSupportModifierRequested;

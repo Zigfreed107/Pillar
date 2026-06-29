@@ -45,6 +45,22 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
 
+        <Style x:Key="LayerVisibilityToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="IsChecked" Value="{Binding IsVisibilityToggleChecked, Mode=OneWay}" />
+            <Setter Property="Content" Value="{Binding VisibilityToggleLabel}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding CanToggleVisibility}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="SupportGroupColorButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="18" />
@@ -91,18 +107,24 @@
                       VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
+                    <ToggleButton Style="{StaticResource LayerVisibilityToggleButtonStyle}"
+                                  Grid.Column="0"
+                                  ToolTip="Toggle layer visibility"
+                                  Click="LayerVisibilityToggleButton_Click" />
+
                     <Button Style="{StaticResource SupportGroupColorButtonStyle}"
-                            Grid.Column="0"
+                            Grid.Column="1"
                             ToolTip="Choose support color"
                             Click="SupportGroupColorButton_Click"
                             Background="{Binding SupportColor, Converter={StaticResource SupportLayerColorToBrushConverter}}" />
 
                     <TextBlock x:Name="LayerNameTextBlock"
-                               Grid.Column="1"
+                               Grid.Column="2"
                                VerticalAlignment="Center"
                                Text="{Binding Name}">
                         <TextBlock.ContextMenu>
@@ -139,7 +161,7 @@
                             </ContextMenu>
                         </TextBlock.ContextMenu>
                     </TextBlock>
-                    <Button Grid.Column="2"
+                    <Button Grid.Column="3"
                             Style="{StaticResource SupportGroupEditButtonStyle}"
                             ToolTip="Edit"
                             Click="SupportGroupEditButton_Click"

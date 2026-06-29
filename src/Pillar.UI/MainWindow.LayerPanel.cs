@@ -385,6 +385,128 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Applies a model or support group layer visibility request to session UI and render state.
+    /// </summary>
+    private void LayerPanel_ChangeLayerVisibilityRequested(object? sender, LayerVisibilityChangeRequestedEventArgs e)
+    {
+        _ = sender;
+
+        if (e.LayerKind == LayerTreeItemKind.Model)
+        {
+            SetModelLayerVisibility(e.LayerId, e.IsVisible);
+            return;
+        }
+
+        if (e.LayerKind == LayerTreeItemKind.SupportGroup)
+        {
+            SetSupportLayerVisibility(e.LayerId, e.IsVisible);
+        }
+    }
+
+    /// <summary>
+    /// Applies one model layer visibility value to the Layer Panel and viewport.
+    /// </summary>
+    private void SetModelLayerVisibility(Guid modelEntityId, bool isVisible)
+    {
+        MeshEntity? mesh = FindEntityById(modelEntityId) as MeshEntity;
+
+        if (mesh == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _layerPanelViewModel.SetModelLayerVisibility(modelEntityId, isVisible);
+        _scene.SetModelLayerVisibility(modelEntityId, isVisible);
+        _viewModel.SetStatusText(isVisible ? $"Showed {mesh.Name}" : $"Hid {mesh.Name}");
+    }
+
+    /// <summary>
+    /// Applies one support group layer visibility value to the Layer Panel and viewport.
+    /// </summary>
+    private void SetSupportLayerVisibility(Guid supportLayerGroupId, bool isVisible)
+    {
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(supportLayerGroupId);
+
+        if (supportLayerGroup == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _layerPanelViewModel.SetSupportLayerVisibility(supportLayerGroupId, isVisible);
+        _scene.SetSupportLayerGroupVisibility(supportLayerGroupId, isVisible);
+        _viewModel.SetStatusText(isVisible ? $"Showed {supportLayerGroup.Name}" : $"Hid {supportLayerGroup.Name}");
+    }
+
+    /// <summary>
+    /// Shows one support layer and hides all other support layers for focused editing workflows.
+    /// </summary>
+    private void ShowOnlySupportLayer(Guid visibleSupportLayerGroupId)
+    {
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            bool isVisible = supportLayerGroup.Id == visibleSupportLayerGroupId;
+            _layerPanelViewModel.SetSupportLayerVisibility(supportLayerGroup.Id, isVisible);
+            _scene.SetSupportLayerGroupVisibility(supportLayerGroup.Id, isVisible);
+        }
+    }
+
+    /// <summary>
+    /// Captures current support-layer visibility and focuses the viewport on one support layer for the Cluster tool.
+    /// </summary>
+    private void FocusSupportLayerForClusterTool(Guid visibleSupportLayerGroupId)
+    {
+        if (_clusterToolSupportLayerVisibilitySnapshot == null)
+        {
+            _clusterToolSupportLayerVisibilitySnapshot = CaptureSupportLayerVisibility();
+        }
+
+        ShowOnlySupportLayer(visibleSupportLayerGroupId);
+    }
+
+    /// <summary>
+    /// Restores support-layer visibility captured before the Cluster tool focused one layer.
+    /// </summary>
+    private void RestoreSupportLayerVisibilityAfterClusterTool()
+    {
+        if (_clusterToolSupportLayerVisibilitySnapshot == null)
+        {
+            return;
+        }
+
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            bool isVisible = true;
+
+            if (_clusterToolSupportLayerVisibilitySnapshot.TryGetValue(supportLayerGroup.Id, out bool capturedVisibility))
+            {
+                isVisible = capturedVisibility;
+            }
+
+            _layerPanelViewModel.SetSupportLayerVisibility(supportLayerGroup.Id, isVisible);
+            _scene.SetSupportLayerGroupVisibility(supportLayerGroup.Id, isVisible);
+        }
+
+        _clusterToolSupportLayerVisibilitySnapshot = null;
+    }
+
+    /// <summary>
+    /// Captures current session visibility for every support layer before a focused editing workflow changes it.
+    /// </summary>
+    private Dictionary<Guid, bool> CaptureSupportLayerVisibility()
+    {
+        Dictionary<Guid, bool> visibilityBySupportLayerId = new Dictionary<Guid, bool>();
+
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            visibilityBySupportLayerId.Add(supportLayerGroup.Id, _layerPanelViewModel.GetSupportLayerVisibility(supportLayerGroup.Id));
+        }
+
+        return visibilityBySupportLayerId;
+    }
+
+    /// <summary>
     /// Applies a completed support group color change as one undoable command.
     /// </summary>
     private void LayerPanel_ChangeSupportGroupColorRequested(object? sender, LayerColorChangeRequestedEventArgs e)

@@ -5,6 +5,7 @@ using Pillar.ViewModels;
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Forms = System.Windows.Forms;
 
@@ -57,6 +58,11 @@ public partial class LayerPanel : UserControl
     /// Raised when a completed inline rename should be applied to a model or support group layer.
     /// </summary>
     public event EventHandler<LayerRenameRequestedEventArgs>? RenameLayerRequested;
+
+    /// <summary>
+    /// Raised when a model or support group layer visibility should change.
+    /// </summary>
+    public event EventHandler<LayerVisibilityChangeRequestedEventArgs>? ChangeLayerVisibilityRequested;
 
     /// <summary>
     /// Raised when a support group color should be changed.
@@ -187,6 +193,22 @@ public partial class LayerPanel : UserControl
         {
             layer.BeginRename();
         }
+    }
+
+    /// <summary>
+    /// Publishes a visibility request for one model or support group layer row.
+    /// </summary>
+    private void LayerVisibilityToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = e;
+
+        if (sender is not ToggleButton toggleButton || toggleButton.DataContext is not LayerTreeItemViewModel layer || !layer.CanToggleVisibility)
+        {
+            return;
+        }
+
+        bool requestedVisibility = toggleButton.IsChecked != true;
+        ChangeLayerVisibilityRequested?.Invoke(this, new LayerVisibilityChangeRequestedEventArgs(layer.Id, layer.Kind, requestedVisibility));
     }
 
     /// <summary>
@@ -395,6 +417,37 @@ public sealed class LayerRenameRequestedEventArgs : EventArgs
     /// Gets the requested name from inline editing.
     /// </summary>
     public string NewName { get; }
+}
+
+/// <summary>
+/// Carries one layer visibility change request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerVisibilityChangeRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates layer visibility change request data.
+    /// </summary>
+    public LayerVisibilityChangeRequestedEventArgs(Guid layerId, LayerTreeItemKind layerKind, bool isVisible)
+    {
+        LayerId = layerId;
+        LayerKind = layerKind;
+        IsVisible = isVisible;
+    }
+
+    /// <summary>
+    /// Gets the document id represented by the layer row.
+    /// </summary>
+    public Guid LayerId { get; }
+
+    /// <summary>
+    /// Gets the kind of layer row being changed.
+    /// </summary>
+    public LayerTreeItemKind LayerKind { get; }
+
+    /// <summary>
+    /// Gets whether the layer should be visible in the viewport.
+    /// </summary>
+    public bool IsVisible { get; }
 }
 
 /// <summary>

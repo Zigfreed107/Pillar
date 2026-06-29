@@ -40,6 +40,8 @@ public class SceneManager
     private readonly Dictionary<CadEntity, GroupModel3D> _entityToVisual = new Dictionary<CadEntity, GroupModel3D>();
     private readonly Dictionary<Element3D, GroupModel3D> _elementToVisual = new Dictionary<Element3D, GroupModel3D>();
     private readonly Dictionary<Guid, float> _supportLayerGroupOpacityOverrides = new Dictionary<Guid, float>();
+    private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
     private readonly GroupModel3D _entityRoot = new GroupModel3D();
     private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
@@ -244,6 +246,7 @@ public class SceneManager
             {
                 supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
                 _supportLayerGroupOpacityOverrides.Remove(supportLayerGroup.Id);
+                _supportLayerGroupVisibilityById.Remove(supportLayerGroup.Id);
             }
         }
     }
@@ -349,6 +352,8 @@ public class SceneManager
             {
                 ApplyFaceAngleHighlight(visual, mesh);
             }
+
+            ApplyEntityVisibility(entity, visual);
         }
     }
 
@@ -390,7 +395,7 @@ public class SceneManager
                 continue;
             }
             CadEntity? hitEntity = GetEntityFromVisual(hitModel);
-            if (hitEntity == null || !canSelect(hitEntity))
+            if (hitEntity == null || !IsEntityVisible(hitEntity) || !canSelect(hitEntity))
             {
                 continue;
             }
@@ -484,6 +489,7 @@ public class SceneManager
         {
             if (hits[i].ModelHit is Element3D hitModel
                 && GetEntityFromVisual(hitModel) is SupportEntity hitSupportEntity
+                && IsEntityVisible(hitSupportEntity)
                 && hitSupportEntity.SupportLayerGroupId == supportLayerGroupId)
             {
                 supportEntity = hitSupportEntity;
@@ -504,6 +510,11 @@ public class SceneManager
         bool selectsCrossingEntities,
         List<CadEntity> selectedEntities)
     {
+        if (!IsSupportLayerGroupVisible(supportLayerGroupId))
+        {
+            return;
+        }
+
         if (selectedEntities == null)
         {
             throw new ArgumentNullException(nameof(selectedEntities));
@@ -749,6 +760,67 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies session visibility to one imported model layer visual.
+    /// </summary>
+    public void SetModelLayerVisibility(Guid modelEntityId, bool isVisible)
+    {
+        _modelLayerVisibilityById[modelEntityId] = isVisible;
+        CadEntity? entity = FindEntityById(modelEntityId);
+
+        if (entity == null)
+        {
+            return;
+        }
+
+        if (_entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
+        {
+            ApplyEntityVisibility(entity, visual);
+        }
+
+        if (!isVisible)
+        {
+            _selectionManager.RemoveFromSelection(entity);
+        }
+    }
+
+    /// <summary>
+    /// Applies session visibility to every support visual in one support group layer.
+    /// </summary>
+    public void SetSupportLayerGroupVisibility(Guid supportLayerGroupId, bool isVisible)
+    {
+        if (_document.FindSupportLayerGroupById(supportLayerGroupId) == null)
+        {
+            return;
+        }
+
+        _supportLayerGroupVisibilityById[supportLayerGroupId] = isVisible;
+        _supportGroupQueryBuffer.Clear();
+        _document.FillSupportEntitiesForGroup(supportLayerGroupId, _supportGroupQueryBuffer);
+
+        try
+        {
+            for (int i = 0; i < _supportGroupQueryBuffer.Count; i++)
+            {
+                SupportEntity supportEntity = _supportGroupQueryBuffer[i];
+
+                if (_entityToVisual.TryGetValue(supportEntity, out GroupModel3D? visual))
+                {
+                    ApplyEntityVisibility(supportEntity, visual);
+                }
+            }
+
+            if (!isVisible)
+            {
+                _selectionManager.RemoveRangeFromSelection(_supportGroupQueryBuffer);
+            }
+        }
+        finally
+        {
+            _supportGroupQueryBuffer.Clear();
+        }
+    }
+
+    /// <summary>
     /// Shows the snapping marker at the supplied world position.
     /// </summary>
     public void ShowSnappingPoint(Vector3 position)
@@ -846,7 +918,7 @@ public class SceneManager
 
         for (int i = 0; i < hits.Count; i++)
         {
-            if (hits[i].ModelHit is not Element3D hitModel || GetEntityFromVisual(hitModel) is not MeshEntity hitMesh)
+            if (hits[i].ModelHit is not Element3D hitModel || GetEntityFromVisual(hitModel) is not MeshEntity hitMesh || !IsEntityVisible(hitMesh))
             {
                 continue;
             }
@@ -982,6 +1054,8 @@ public class SceneManager
         {
             ApplyFaceAngleHighlight(visual, mesh);
         }
+
+        ApplyEntityVisibility(entity, visual);
     }
 
     /// <summary>
@@ -1002,6 +1076,11 @@ public class SceneManager
         _entityRoot.Children.Remove(visualToRemove);
         _entityToVisual.Remove(entity);
         _visualToEntity.Remove(visualToRemove);
+
+        if (entity is MeshEntity)
+        {
+            _modelLayerVisibilityById.Remove(entity.Id);
+        }
     }
 
     /// <summary>
@@ -1144,6 +1223,59 @@ public class SceneManager
         }
 
         ApplyModelClipRangeIfConfigured(visual);
+    }
+
+    /// <summary>
+    /// Applies current session visibility to one entity root visual.
+    /// </summary>
+    private void ApplyEntityVisibility(CadEntity entity, GroupModel3D visual)
+    {
+        bool isVisible = IsEntityVisible(entity);
+        visual.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Gets whether one entity is visible according to session layer state.
+    /// </summary>
+    private bool IsEntityVisible(CadEntity entity)
+    {
+        if (entity is MeshEntity)
+        {
+            return IsModelLayerVisible(entity.Id);
+        }
+
+        if (entity is SupportEntity supportEntity)
+        {
+            return IsSupportLayerGroupVisible(supportEntity.SupportLayerGroupId);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets whether one model layer is visible in the current session.
+    /// </summary>
+    private bool IsModelLayerVisible(Guid modelEntityId)
+    {
+        if (_modelLayerVisibilityById.TryGetValue(modelEntityId, out bool isVisible))
+        {
+            return isVisible;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Gets whether one support group layer is visible in the current session.
+    /// </summary>
+    private bool IsSupportLayerGroupVisible(Guid supportLayerGroupId)
+    {
+        if (_supportLayerGroupVisibilityById.TryGetValue(supportLayerGroupId, out bool isVisible))
+        {
+            return isVisible;
+        }
+
+        return true;
     }
 
     /// <summary>

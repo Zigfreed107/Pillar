@@ -15,6 +15,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     private bool _isExpanded;
     private bool _isSelected;
     private bool _isEditing;
+    private bool _isVisible;
     private string _editingName;
     private SupportLayerColor _supportColor;
 
@@ -31,6 +32,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
         _supportColor = supportColor;
         _editingName = name;
         _isExpanded = kind == LayerTreeItemKind.Model;
+        _isVisible = true;
     }
 
     /// <summary>
@@ -117,6 +119,46 @@ public partial class LayerTreeItemViewModel : ObservableObject
     public bool CanEditLayerTool
     {
         get { return CanEditSupportGroup || CanEditSupportModifier; }
+    }
+
+    /// <summary>
+    /// Gets whether this row should show a layer visibility toggle.
+    /// </summary>
+    public bool CanToggleVisibility
+    {
+        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
+    /// Gets or sets whether this layer row is currently visible in the viewport.
+    /// </summary>
+    public bool IsVisible
+    {
+        get { return _isVisible; }
+        set
+        {
+            if (SetProperty(ref _isVisible, value))
+            {
+                OnPropertyChanged(nameof(IsVisibilityToggleChecked));
+                OnPropertyChanged(nameof(VisibilityToggleLabel));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the visibility toggle should appear pressed for a hidden layer.
+    /// </summary>
+    public bool IsVisibilityToggleChecked
+    {
+        get { return !IsVisible; }
+    }
+
+    /// <summary>
+    /// Gets the compact visibility label required by the Layer Panel.
+    /// </summary>
+    public string VisibilityToggleLabel
+    {
+        get { return IsVisible ? "V" : "H"; }
     }
 
     /// <summary>

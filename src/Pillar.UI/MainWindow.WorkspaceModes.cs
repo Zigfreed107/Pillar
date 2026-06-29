@@ -1066,6 +1066,7 @@ public partial class MainWindow
         _ = sender;
         _ = e;
         _activeEditingClusterModifierId = null;
+        RestoreSupportLayerVisibilityAfterClusterTool();
         _selectTool.ResetSelectionFilter();
         HideToolOptionsOverlay();
         RestoreViewportToolForActiveMode();
@@ -1085,6 +1086,7 @@ public partial class MainWindow
         SupportClusterModifierSettings settings = modifier?.ClusterSettings ?? SupportClusterModifierSettings.CreateDefault();
         SupportModifierScope scope = modifier?.Scope ?? SupportModifierScope.WholeLayer;
         _supportClusterToolOptionsControl.SetClusterSettings(settings, scope, modifier != null);
+        FocusSupportLayerForClusterTool(supportLayerGroup.Id);
         ActivateNormalSelectionForSupportClusterTool(supportLayerGroup.Id);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
         RefreshSupportClusterPreviewStatus();
