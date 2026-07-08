@@ -763,6 +763,12 @@ public partial class MainWindow
                 return;
             }
 
+            if (!ConfirmEditSupportLayerWillRemoveModifiers(supportLayerGroup))
+            {
+                _viewModel.SetStatusText("Support layer edit cancelled.");
+                return;
+            }
+
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _lineSupportToolOptionsControl.SetLineSupportSpacing(settings.Spacing);
             _lineSupportToolOptionsControl.SetPlaceSupportsAtBends(settings.PlaceSupportsAtBends);
@@ -780,6 +786,12 @@ public partial class MainWindow
             {
                 HideToolOptionsOverlay();
                 _viewModel.SetStatusText("This support group is missing Ring Support settings.");
+                return;
+            }
+
+            if (!ConfirmEditSupportLayerWillRemoveModifiers(supportLayerGroup))
+            {
+                _viewModel.SetStatusText("Support layer edit cancelled.");
                 return;
             }
 
@@ -802,6 +814,12 @@ public partial class MainWindow
                 return;
             }
 
+            if (!ConfirmEditSupportLayerWillRemoveModifiers(supportLayerGroup))
+            {
+                _viewModel.SetStatusText("Support layer edit cancelled.");
+                return;
+            }
+
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _contourSupportToolOptionsControl.SetContourSupportSettings(settings);
             ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
@@ -818,6 +836,12 @@ public partial class MainWindow
             {
                 HideToolOptionsOverlay();
                 _viewModel.SetStatusText("This support group is missing Area Support settings.");
+                return;
+            }
+
+            if (!ConfirmEditSupportLayerWillRemoveModifiers(supportLayerGroup))
+            {
+                _viewModel.SetStatusText("Support layer edit cancelled.");
                 return;
             }
 
@@ -855,10 +879,15 @@ public partial class MainWindow
         {
             if (modifiers[i].Id == e.ModifierId)
             {
-                SetActiveMode(WorkspaceModeId.ManualSupport);
-
                 if (modifiers[i].Kind == SupportModifierKind.Cluster)
                 {
+                    if (!ConfirmEditSupportModifierWillRemoveDownstreamModifiers(modifiers, i))
+                    {
+                        _viewModel.SetStatusText("Support modifier edit cancelled.");
+                        return;
+                    }
+
+                    SetActiveMode(WorkspaceModeId.ManualSupport);
                     _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroup.Id);
                     ShowSupportClusterTool(modifiers[i]);
                     return;
@@ -874,6 +903,44 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Confirms support generator edits that will invalidate the complete modifier stack.
+    /// </summary>
+    private bool ConfirmEditSupportLayerWillRemoveModifiers(SupportLayerGroup supportLayerGroup)
+    {
+        if (supportLayerGroup.SupportModifiers.Count == 0)
+        {
+            return true;
+        }
+
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            "Editing this support layer will regenerate its supports and delete all modifiers below it.\n\nContinue?",
+            "Edit Support Layer",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        return result == MessageBoxResult.OK;
+    }
+
+    /// <summary>
+    /// Confirms modifier edits that will remove later modifier stack entries.
+    /// </summary>
+    private bool ConfirmEditSupportModifierWillRemoveDownstreamModifiers(IReadOnlyList<SupportModifierDefinition> modifiers, int modifierIndex)
+    {
+        if (modifierIndex >= modifiers.Count - 1)
+        {
+            return true;
+        }
+
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            "Editing this modifier will delete all modifiers underneath it.\n\nContinue?",
+            "Edit Support Modifier",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        return result == MessageBoxResult.OK;
+    }
+
+    /// <summary>
     /// Refreshes Cluster Supports diagnostics when options change.
     /// </summary>
     private void SupportClusterToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
@@ -884,13 +951,30 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies the Cluster Supports modifier to the selected support layer.
+    /// Applies the Cluster Supports modifier to the current support selection.
     /// </summary>
-    private void SupportClusterToolOptionsControl_ApplyRequested(object? sender, System.EventArgs e)
+    private void SupportClusterToolOptionsControl_ApplyToSelectedRequested(object? sender, System.EventArgs e)
     {
         _ = sender;
         _ = e;
+        RunWithWaitCursor(() => ApplyClusterSupports(false));
+    }
 
+    /// <summary>
+    /// Applies the Cluster Supports modifier to the whole selected support layer.
+    /// </summary>
+    private void SupportClusterToolOptionsControl_ApplyToAllRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => ApplyClusterSupports(true));
+    }
+
+    /// <summary>
+    /// Applies the Cluster Supports modifier to explicit support targets.
+    /// </summary>
+    private void ApplyClusterSupports(bool targetAllSupports)
+    {
         if (!TryGetSelectedSupportLayerGroupForClustering(out SupportLayerGroup? supportLayerGroup))
         {
             return;
@@ -909,23 +993,25 @@ public partial class MainWindow
         IReadOnlyList<SupportEntity> sourceSupportEntities = isReplacingExistingClusterModifier
             ? RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities)
             : oldSupportEntities;
-        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
+        IReadOnlyList<Guid> targetSupportIds = targetAllSupports
+            ? CreateAllClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id)
+            : CreateSelectedClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id);
 
-        if (_supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection && targetSupportIds.Count < 2)
+        if (targetSupportIds.Count < 2)
         {
-            _viewModel.SetStatusText("Select at least two supports in this support layer before applying selection clustering.");
+            _viewModel.SetStatusText(targetAllSupports
+                ? "The selected support layer needs at least two supports before applying clustering."
+                : "Select at least two supports in this support layer before applying clustering.");
             return;
         }
 
         IReadOnlyList<SupportModifierTargetBatch> effectiveTargetSupportIdBatches = CreateEffectiveClusterTargetSupportIdBatches(
             oldModifiers,
-            _supportClusterToolOptionsControl.SelectedScope,
             targetSupportIds);
         List<SupportModifierDefinition> newModifiers = CreateClusterModifierReplacementList(
             oldModifiers,
             replacementClusterModifier,
             settings,
-            _supportClusterToolOptionsControl.SelectedScope,
             effectiveTargetSupportIdBatches,
             supportLayerGroup.SourceGeneratorRevision);
         IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
@@ -946,10 +1032,11 @@ public partial class MainWindow
         _activeEditingClusterModifierId = appliedClusterModifier.Id;
 
         bool isEditingAfterApply = _activeEditingClusterModifierId.HasValue;
-        _supportClusterToolOptionsControl.SetClusterSettings(settings, _supportClusterToolOptionsControl.SelectedScope, isEditingAfterApply);
+        _supportClusterToolOptionsControl.SetClusterSettings(settings, isEditingAfterApply);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
         _supportClusterToolOptionsControl.SetStatusText(CreateClusterStatusText(previewResult));
         _viewModel.SetStatusText(CreateClusterStatusText(previewResult));
+        UpdateGeneratedSupportDeleteButtonState();
     }
 
     /// <summary>
@@ -959,54 +1046,56 @@ public partial class MainWindow
     {
         _ = sender;
         _ = e;
-
-        if (!TryGetSelectedSupportLayerGroupForClustering(out SupportLayerGroup? supportLayerGroup))
+        RunWithWaitCursor(() =>
         {
-            return;
-        }
+            if (!TryGetSelectedSupportLayerGroupForClustering(out SupportLayerGroup? supportLayerGroup))
+            {
+                return;
+            }
 
-        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-        List<Vector2> selectedClusterCenters = CreateSelectedClusterCenters(oldSupportEntities);
+            IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+            List<Vector2> selectedClusterCenters = CreateSelectedClusterCenters(oldSupportEntities);
 
-        if (selectedClusterCenters.Count == 0)
-        {
-            _viewModel.SetStatusText("Select a clustered support before using Uncluster Selected.");
-            return;
-        }
+            if (selectedClusterCenters.Count == 0)
+            {
+                _viewModel.SetStatusText("Select a clustered support before using Uncluster Selected.");
+                return;
+            }
 
-        SupportModifierDefinition? clusterModifier = FindFirstClusterModifier(supportLayerGroup.SupportModifiers);
+            SupportModifierDefinition? clusterModifier = FindFirstClusterModifier(supportLayerGroup.SupportModifiers);
 
-        if (clusterModifier == null || clusterModifier.ClusterSettings == null)
-        {
-            _viewModel.SetStatusText("No Cluster modifier is available for the selected support layer.");
-            return;
-        }
+            if (clusterModifier == null || clusterModifier.ClusterSettings == null)
+            {
+                _viewModel.SetStatusText("No Cluster modifier is available for the selected support layer.");
+                return;
+            }
 
-        IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
-        IReadOnlyList<SupportModifierTargetBatch> remainingClusterTargetBatches = CreateRemainingClusterTargetBatches(
-            clusterModifier,
-            oldSupportEntities,
-            selectedClusterCenters);
+            IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
+            IReadOnlyList<SupportModifierTargetBatch> remainingClusterTargetBatches = CreateRemainingClusterTargetBatches(
+                clusterModifier,
+                oldSupportEntities,
+                selectedClusterCenters);
 
-        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
-        List<SupportModifierDefinition> newModifiers = CreateModifiersAfterUnclusterSelected(
-            oldModifiers,
-            clusterModifier,
-            remainingClusterTargetBatches,
-            supportLayerGroup.SourceGeneratorRevision);
-        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(restoredSourceEntities, newModifiers);
-        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
-            _document,
-            supportLayerGroup,
-            oldSupportEntities,
-            newSupportEntities,
-            oldModifiers,
-            newModifiers,
-            "Uncluster Selected Supports"));
+            IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+            List<SupportModifierDefinition> newModifiers = CreateModifiersAfterUnclusterSelected(
+                oldModifiers,
+                clusterModifier,
+                remainingClusterTargetBatches,
+                supportLayerGroup.SourceGeneratorRevision);
+            IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(restoredSourceEntities, newModifiers);
+            _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
+                _document,
+                supportLayerGroup,
+                oldSupportEntities,
+                newSupportEntities,
+                oldModifiers,
+                newModifiers,
+                "Uncluster Selected Supports"));
 
-        _viewModel.SetStatusText("Unclustered selected support cluster.");
-        RefreshSupportClusterPreviewStatus();
-        UpdateGeneratedSupportDeleteButtonState();
+            _viewModel.SetStatusText("Unclustered selected support cluster.");
+            RefreshSupportClusterPreviewStatus();
+            UpdateGeneratedSupportDeleteButtonState();
+        });
     }
 
     /// <summary>
@@ -1016,39 +1105,42 @@ public partial class MainWindow
     {
         _ = sender;
         _ = e;
-
-        if (!_activeEditingClusterModifierId.HasValue || !TryGetSelectedSupportLayerGroupForClustering(out SupportLayerGroup? supportLayerGroup))
+        RunWithWaitCursor(() =>
         {
-            return;
-        }
-
-        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
-        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
-        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
-
-        for (int i = 0; i < oldModifiers.Count; i++)
-        {
-            if (oldModifiers[i].Id != _activeEditingClusterModifierId.Value)
+            if (!_activeEditingClusterModifierId.HasValue || !TryGetSelectedSupportLayerGroupForClustering(out SupportLayerGroup? supportLayerGroup))
             {
-                newModifiers.Add(oldModifiers[i]);
+                return;
             }
-        }
 
-        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
-        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
-            _document,
-            supportLayerGroup,
-            oldSupportEntities,
-            newSupportEntities,
-            oldModifiers,
-            newModifiers,
-            "Remove Cluster Supports"));
+            IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+            IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
+            IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+            List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
 
-        _activeEditingClusterModifierId = null;
-        _supportClusterToolOptionsControl.SetClusterSettings(SupportClusterModifierSettings.CreateDefault(), SupportModifierScope.WholeLayer, false);
-        _supportClusterToolOptionsControl.SetStatusText("Cluster modifier removed.");
-        _viewModel.SetStatusText("Cluster modifier removed.");
+            for (int i = 0; i < oldModifiers.Count; i++)
+            {
+                if (oldModifiers[i].Id != _activeEditingClusterModifierId.Value)
+                {
+                    newModifiers.Add(oldModifiers[i]);
+                }
+            }
+
+            IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
+            _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
+                _document,
+                supportLayerGroup,
+                oldSupportEntities,
+                newSupportEntities,
+                oldModifiers,
+                newModifiers,
+                "Remove Cluster Supports"));
+
+            _activeEditingClusterModifierId = null;
+            _supportClusterToolOptionsControl.SetClusterSettings(SupportClusterModifierSettings.CreateDefault(), false);
+            _supportClusterToolOptionsControl.SetStatusText("Cluster modifier removed.");
+            _viewModel.SetStatusText("Cluster modifier removed.");
+            UpdateGeneratedSupportDeleteButtonState();
+        });
     }
 
     /// <summary>
@@ -1077,8 +1169,7 @@ public partial class MainWindow
 
         _activeEditingClusterModifierId = modifier?.Id;
         SupportClusterModifierSettings settings = modifier?.ClusterSettings ?? SupportClusterModifierSettings.CreateDefault();
-        SupportModifierScope scope = modifier?.Scope ?? SupportModifierScope.WholeLayer;
-        _supportClusterToolOptionsControl.SetClusterSettings(settings, scope, modifier != null);
+        _supportClusterToolOptionsControl.SetClusterSettings(settings, modifier != null);
         FocusSupportLayerForClusterTool(supportLayerGroup.Id);
         ActivateNormalSelectionForSupportClusterTool(supportLayerGroup.Id);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
@@ -1088,7 +1179,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Routes Cluster Supports viewport input through the normal selection tool so selected-support scope behaves like ordinary selection.
+    /// Routes Cluster Supports viewport input through the normal selection tool so support targeting behaves like ordinary selection.
     /// </summary>
     private void ActivateNormalSelectionForSupportClusterTool(Guid supportLayerGroupId)
     {
@@ -1141,24 +1232,29 @@ public partial class MainWindow
         IReadOnlyList<SupportEntity> previewSourceEntities = _activeEditingClusterModifierId.HasValue
             ? RestoreIndividualSupportsForClusteredOutputs(currentSupportEntities)
             : currentSupportEntities;
-        IReadOnlyList<Guid> targetSupportIds = CreateClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id, _supportClusterToolOptionsControl.SelectedScope);
+        IReadOnlyList<Guid> selectedTargetSupportIds = CreateSelectedClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id);
+        bool isPreviewingSelection = selectedTargetSupportIds.Count > 0;
+        IReadOnlyList<Guid> previewTargetSupportIds = isPreviewingSelection
+            ? selectedTargetSupportIds
+            : CreateAllClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id);
 
-        if (_supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection && targetSupportIds.Count < 2)
+        if (previewTargetSupportIds.Count < 2)
         {
-            _supportClusterToolOptionsControl.SetStatusText("Select at least two supports in this support layer to preview selection clustering.");
+            _supportClusterToolOptionsControl.SetStatusText(isPreviewingSelection
+                ? "Select at least two supports in this support layer to preview selected clustering."
+                : "The selected support layer needs at least two supports to preview clustering.");
             return;
         }
 
         SupportModifierDefinition previewModifier = SupportModifierDefinition.CreateNew(
             SupportModifierKind.Cluster,
-            _supportClusterToolOptionsControl.SelectedScope,
             0,
             settings,
-            _supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection ? targetSupportIds : null,
-            _supportClusterToolOptionsControl.SelectedScope == SupportModifierScope.Selection ? supportLayerGroup.SourceGeneratorRevision : null);
+            previewTargetSupportIds,
+            supportLayerGroup.SourceGeneratorRevision);
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(previewSourceEntities, previewModifier);
-        _supportClusterToolOptionsControl.SetStatusText(CreateClusterStatusText(result));
-        SetAutomaticStemDiameterFields(previewSourceEntities, targetSupportIds, _supportClusterToolOptionsControl.SelectedScope);
+        _supportClusterToolOptionsControl.SetStatusText($"{GetClusterPreviewTargetLabel(isPreviewingSelection)} preview: {CreateClusterStatusText(result)}");
+        SetAutomaticStemDiameterFields(previewSourceEntities, previewTargetSupportIds);
     }
 
     /// <summary>
@@ -1173,6 +1269,7 @@ public partial class MainWindow
 
         RefreshSupportClusterPreviewStatus();
     }
+
 
     /// <summary>
     /// Finds the currently selected support layer group or reports why clustering cannot start.
@@ -1201,18 +1298,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Builds the target support identities for the selected clustering scope.
+    /// Builds target support identities from the current viewport support selection.
     /// </summary>
-    private IReadOnlyList<Guid> CreateClusterTargetSupportIds(
+    private IReadOnlyList<Guid> CreateSelectedClusterTargetSupportIds(
         IReadOnlyList<SupportEntity> supportEntities,
-        Guid supportLayerGroupId,
-        SupportModifierScope scope)
+        Guid supportLayerGroupId)
     {
-        if (scope == SupportModifierScope.WholeLayer)
-        {
-            return Array.Empty<Guid>();
-        }
-
         HashSet<Guid> targetSupportIds = new HashSet<Guid>();
         HashSet<Guid> selectedEntityIds = new HashSet<Guid>(_scene.SelectionManager.SelectedEntityIds);
         List<Vector2> selectedClusterCenters = new List<Vector2>();
@@ -1254,6 +1345,37 @@ public partial class MainWindow
             }
         }
 
+        return SortClusterTargetSupportIds(targetSupportIds);
+    }
+
+    /// <summary>
+    /// Builds target support identities from every support in the selected support layer.
+    /// </summary>
+    private static IReadOnlyList<Guid> CreateAllClusterTargetSupportIds(
+        IReadOnlyList<SupportEntity> supportEntities,
+        Guid supportLayerGroupId)
+    {
+        List<Guid> targetSupportIds = new List<Guid>();
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            SupportEntity support = supportEntities[i];
+
+            if (support.SupportLayerGroupId == supportLayerGroupId)
+            {
+                targetSupportIds.Add(support.Id);
+            }
+        }
+
+        targetSupportIds.Sort();
+        return targetSupportIds;
+    }
+
+    /// <summary>
+    /// Creates a stable ordered target list from unique support ids.
+    /// </summary>
+    private static IReadOnlyList<Guid> SortClusterTargetSupportIds(HashSet<Guid> targetSupportIds)
+    {
         List<Guid> sortedTargetSupportIds = new List<Guid>(targetSupportIds);
         sortedTargetSupportIds.Sort();
         return sortedTargetSupportIds;
@@ -1266,7 +1388,6 @@ public partial class MainWindow
         IReadOnlyList<SupportModifierDefinition> oldModifiers,
         SupportModifierDefinition? replacementClusterModifier,
         SupportClusterModifierSettings settings,
-        SupportModifierScope scope,
         IReadOnlyList<SupportModifierTargetBatch> targetSupportIdBatches,
         int sourceGeneratorRevision)
     {
@@ -1282,35 +1403,28 @@ public partial class MainWindow
                 newModifiers.Add(new SupportModifierDefinition(
                     oldModifier.Id,
                     SupportModifierKind.Cluster,
-                    scope,
                     oldModifier.IsEnabled,
-                    i,
+                    newModifiers.Count,
                     settings,
                     null,
-                    scope == SupportModifierScope.Selection ? targetSupportIdBatches : null,
-                    scope == SupportModifierScope.Selection ? sourceGeneratorRevision : null));
+                    targetSupportIdBatches,
+                    sourceGeneratorRevision));
                 replacedExistingModifier = true;
+                break;
             }
-            else if (replacementClusterModifier != null && oldModifier.Kind == SupportModifierKind.Cluster)
-            {
-                continue;
-            }
-            else
-            {
-                newModifiers.Add(oldModifier);
-            }
+
+            newModifiers.Add(oldModifier);
         }
 
         if (!replacedExistingModifier)
         {
             newModifiers.Add(SupportModifierDefinition.CreateNew(
                 SupportModifierKind.Cluster,
-                scope,
                 newModifiers.Count,
                 settings,
                 null,
-                scope == SupportModifierScope.Selection ? targetSupportIdBatches : null,
-                scope == SupportModifierScope.Selection ? sourceGeneratorRevision : null));
+                targetSupportIdBatches,
+                sourceGeneratorRevision));
         }
 
         return newModifiers;
@@ -1355,23 +1469,17 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Appends the current selection as a separate clustering batch on the layer's cumulative Cluster modifier.
+    /// Appends the current target set as a separate clustering batch on the layer's cumulative Cluster modifier.
     /// </summary>
     private static IReadOnlyList<SupportModifierTargetBatch> CreateEffectiveClusterTargetSupportIdBatches(
         IReadOnlyList<SupportModifierDefinition> oldModifiers,
-        SupportModifierScope scope,
         IReadOnlyList<Guid> selectedTargetSupportIds)
     {
-        if (scope == SupportModifierScope.WholeLayer)
-        {
-            return Array.Empty<SupportModifierTargetBatch>();
-        }
-
         List<SupportModifierTargetBatch> targetSupportIdBatches = new List<SupportModifierTargetBatch>();
 
         for (int i = 0; i < oldModifiers.Count; i++)
         {
-            if (oldModifiers[i].Kind != SupportModifierKind.Cluster || oldModifiers[i].Scope != SupportModifierScope.Selection)
+            if (oldModifiers[i].Kind != SupportModifierKind.Cluster)
             {
                 continue;
             }
@@ -1428,12 +1536,9 @@ public partial class MainWindow
     /// </summary>
     private void SetAutomaticStemDiameterFields(
         IReadOnlyList<SupportEntity> supportEntities,
-        IReadOnlyList<Guid> targetSupportIds,
-        SupportModifierScope scope)
+        IReadOnlyList<Guid> targetSupportIds)
     {
-        HashSet<Guid>? targetIdSet = scope == SupportModifierScope.Selection
-            ? new HashSet<Guid>(targetSupportIds)
-            : null;
+        HashSet<Guid> targetIdSet = new HashSet<Guid>(targetSupportIds);
         float bottomSum = 0.0f;
         float topSum = 0.0f;
 
@@ -1441,7 +1546,7 @@ public partial class MainWindow
         {
             SupportEntity support = supportEntities[i];
 
-            if (support.Style.Kind != SupportStyleKind.Individual || (targetIdSet != null && !targetIdSet.Contains(support.Id)))
+            if (support.Style.Kind != SupportStyleKind.Individual || !targetIdSet.Contains(support.Id))
             {
                 continue;
             }
@@ -1455,9 +1560,6 @@ public partial class MainWindow
             Math.Clamp(MathF.Sqrt(topSum), SupportClusterModifierSettings.MinimumCentralStemDiameter, SupportClusterModifierSettings.MaximumCentralStemDiameter));
     }
 
-    /// <summary>
-    /// Creates concise user-facing cluster diagnostics.
-    /// </summary>
     /// <summary>
     /// Gets selected cluster centers from selected branched supports in the current support layer.
     /// </summary>
@@ -1508,6 +1610,44 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Gets whether the current support selection can be applied as a Cluster modifier target set.
+    /// </summary>
+    private bool HasValidClusterSelectionForSelectedApply()
+    {
+        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+
+        if (!selectedSupportLayerGroupId.HasValue)
+        {
+            return false;
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(selectedSupportLayerGroupId.Value);
+        IReadOnlyList<Guid> targetSupportIds = CreateSelectedClusterTargetSupportIds(
+            supportEntities,
+            selectedSupportLayerGroupId.Value);
+        return targetSupportIds.Count >= 2;
+    }
+
+    /// <summary>
+    /// Gets whether every support in the selected layer can be applied as one Cluster target set.
+    /// </summary>
+    private bool HasEnoughSupportsForApplyAll()
+    {
+        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+
+        if (!selectedSupportLayerGroupId.HasValue)
+        {
+            return false;
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(selectedSupportLayerGroupId.Value);
+        IReadOnlyList<Guid> targetSupportIds = CreateAllClusterTargetSupportIds(
+            supportEntities,
+            selectedSupportLayerGroupId.Value);
+        return targetSupportIds.Count >= 2;
     }
 
     /// <summary>
@@ -1581,7 +1721,6 @@ public partial class MainWindow
                 newModifiers.Add(new SupportModifierDefinition(
                     oldModifier.Id,
                     SupportModifierKind.Cluster,
-                    SupportModifierScope.Selection,
                     oldModifier.IsEnabled,
                     i,
                     removedClusterModifier.ClusterSettings,
@@ -1634,9 +1773,23 @@ public partial class MainWindow
         Vector2 center = new Vector2(basePosition.X, basePosition.Y);
         return ContainsCenter(selectedClusterCenters, center);
     }
+
+    /// <summary>
+    /// Creates concise user-facing cluster diagnostics.
+    /// </summary>
     private static string CreateClusterStatusText(SupportClusterEvaluationResult result)
     {
         return $"{result.ClusterCount} cluster(s), {result.ClusteredSupportCount} clustered support(s), {result.UnchangedSupportCount} unchanged, {result.RejectedCandidateCount} rejected candidate(s).";
+    }
+
+    /// <summary>
+    /// Converts the current preview target source into concise preview text.
+    /// </summary>
+    private static string GetClusterPreviewTargetLabel(bool isPreviewingSelection)
+    {
+        return isPreviewingSelection
+            ? "Selected"
+            : "All supports";
     }
 
     /// <summary>
@@ -1800,6 +1953,10 @@ public partial class MainWindow
             ToolOptionsHostOverlay.Content == _contourSupportToolOptionsControl && canDeleteSelectedSupports);
         _areaSupportToolOptionsControl.SetDeleteSelectedSupportsEnabled(
             ToolOptionsHostOverlay.Content == _areaSupportToolOptionsControl && canDeleteSelectedSupports);
+        _supportClusterToolOptionsControl.SetApplyToSelectedEnabled(
+            ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasValidClusterSelectionForSelectedApply());
+        _supportClusterToolOptionsControl.SetApplyToAllEnabled(
+            ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasEnoughSupportsForApplyAll());
         _supportClusterToolOptionsControl.SetUnclusterSelectedEnabled(
             ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasSelectedClusteredSupportsInSelectedSupportLayer());
     }

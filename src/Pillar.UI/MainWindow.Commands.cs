@@ -168,16 +168,26 @@ public partial class MainWindow
             return;
         }
 
-        CancelActiveDocumentMutationSessions();
-        ICadCommand? command = _commandRunner.Undo();
+        ICadCommand? command = null;
+        RunWithWaitCursor(() =>
+        {
+            CancelActiveDocumentMutationSessions();
+            command = _commandRunner.Undo();
+
+            if (command == null)
+            {
+                return;
+            }
+
+            _layerPanelViewModel.RefreshFromDocument();
+            RefreshTransformScaleToolForSelection();
+        });
 
         if (command == null)
         {
             return;
         }
 
-        _layerPanelViewModel.RefreshFromDocument();
-        RefreshTransformScaleToolForSelection();
         _viewModel.SetStatusText($"Undid {command.DisplayName}");
     }
 
@@ -191,16 +201,26 @@ public partial class MainWindow
             return;
         }
 
-        CancelActiveDocumentMutationSessions();
-        ICadCommand? command = _commandRunner.Redo();
+        ICadCommand? command = null;
+        RunWithWaitCursor(() =>
+        {
+            CancelActiveDocumentMutationSessions();
+            command = _commandRunner.Redo();
+
+            if (command == null)
+            {
+                return;
+            }
+
+            _layerPanelViewModel.RefreshFromDocument();
+            RefreshTransformScaleToolForSelection();
+        });
 
         if (command == null)
         {
             return;
         }
 
-        _layerPanelViewModel.RefreshFromDocument();
-        RefreshTransformScaleToolForSelection();
         _viewModel.SetStatusText($"Redid {command.DisplayName}");
     }
 

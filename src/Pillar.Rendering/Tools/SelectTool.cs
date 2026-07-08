@@ -78,6 +78,8 @@ public class SelectTool : Pillar.Core.Tools.ITool
     private readonly SelectionManager _selection;
     private readonly List<CadEntity> _windowSelectionBuffer = new List<CadEntity>(64);
     private readonly List<CadEntity> _selectionPruneBuffer = new List<CadEntity>(64);
+    private readonly Point[] _projectedMeshBoundsBuffer = new Point[8];
+    private readonly Point[] _projectedSupportPathBuffer = new Point[5];
     private SelectionFilter _selectionFilter = SelectionFilter.AllowAll;
 
     private Vector2 _mouseDownPosition;
@@ -288,6 +290,16 @@ public class SelectTool : Pillar.Core.Tools.ITool
             return IsLineSelectedByWindow(line, selectionRect, selectsCrossingEntities);
         }
 
+        if (entity is MeshEntity mesh)
+        {
+            return IsMeshSelectedByWindow(mesh, selectionRect, selectsCrossingEntities);
+        }
+
+        if (entity is SupportEntity support)
+        {
+            return IsSupportSelectedByWindow(support, selectionRect, selectsCrossingEntities);
+        }
+
         Rect projectedBounds;
 
         if (!TryGetProjectedBounds(entity, out projectedBounds))
@@ -326,7 +338,103 @@ public class SelectTool : Pillar.Core.Tools.ITool
             return true;
         }
 
-        return SegmentIntersectsRectangle(startPoint, endPoint, selectionRect);
+        return ScreenSelectionGeometry.SegmentIntersectsRectangle(startPoint, endPoint, selectionRect);
+    }
+
+    /// <summary>
+    /// Tests mesh entities from their transformed local bounds instead of an inflated world AABB.
+    /// </summary>
+    private bool IsMeshSelectedByWindow(MeshEntity mesh, Rect selectionRect, bool selectsCrossingEntities)
+    {
+        if (!TryProjectMeshBounds(mesh, _projectedMeshBoundsBuffer))
+        {
+            return false;
+        }
+
+        if (selectsCrossingEntities)
+        {
+            return selectionRect.IntersectsWith(CreateBoundsRect(_projectedMeshBoundsBuffer));
+        }
+
+        return ScreenSelectionGeometry.ContainsAllPoints(selectionRect, _projectedMeshBoundsBuffer);
+    }
+
+    /// <summary>
+    /// Tests support entities from their visible control path rather than their padded 3D bounds.
+    /// </summary>
+    private bool IsSupportSelectedByWindow(SupportEntity support, Rect selectionRect, bool selectsCrossingEntities)
+    {
+        if (!TryProjectSupportControlPath(support, _projectedSupportPathBuffer))
+        {
+            return false;
+        }
+
+        if (selectsCrossingEntities)
+        {
+            return ScreenSelectionGeometry.ContainsOrCrossesPolyline(selectionRect, _projectedSupportPathBuffer);
+        }
+
+        return ScreenSelectionGeometry.ContainsAllPoints(selectionRect, _projectedSupportPathBuffer);
+    }
+
+    /// <summary>
+    /// Projects the eight transformed local mesh bounds corners into screen coordinates.
+    /// </summary>
+    private bool TryProjectMeshBounds(MeshEntity mesh, Point[] projectedPoints)
+    {
+        (Vector3 Min, Vector3 Max) localBounds = mesh.GetLocalBounds();
+        Matrix4x4 worldTransform = mesh.WorldTransform;
+
+        return TryProjectTransformedPoint(new Vector3(localBounds.Min.X, localBounds.Min.Y, localBounds.Min.Z), worldTransform, out projectedPoints[0])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Max.X, localBounds.Min.Y, localBounds.Min.Z), worldTransform, out projectedPoints[1])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Min.X, localBounds.Max.Y, localBounds.Min.Z), worldTransform, out projectedPoints[2])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Max.X, localBounds.Max.Y, localBounds.Min.Z), worldTransform, out projectedPoints[3])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Min.X, localBounds.Min.Y, localBounds.Max.Z), worldTransform, out projectedPoints[4])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Max.X, localBounds.Min.Y, localBounds.Max.Z), worldTransform, out projectedPoints[5])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Min.X, localBounds.Max.Y, localBounds.Max.Z), worldTransform, out projectedPoints[6])
+            && TryProjectTransformedPoint(new Vector3(localBounds.Max.X, localBounds.Max.Y, localBounds.Max.Z), worldTransform, out projectedPoints[7]);
+    }
+
+    /// <summary>
+    /// Projects one local-space point after applying a mesh world transform.
+    /// </summary>
+    private bool TryProjectTransformedPoint(Vector3 localPoint, Matrix4x4 worldTransform, out Point screenPoint)
+    {
+        Vector3 worldPoint = Vector3.Transform(localPoint, worldTransform);
+        return TryProjectWorldPoint(worldPoint, out screenPoint);
+    }
+
+    /// <summary>
+    /// Projects the main support centerline control points in base-to-tip order.
+    /// </summary>
+    private bool TryProjectSupportControlPath(SupportEntity support, Point[] projectedPoints)
+    {
+        Vector3 headBottom = support.TipPosition - (support.HeadDirection * support.Profile.HeadHeight);
+        Vector3 stemTop = support.BranchLength > 0.0f
+            ? headBottom - (support.BranchDirection * support.BranchLength)
+            : headBottom;
+        Vector3 penetrationTip = support.TipPosition + (support.HeadDirection * support.Profile.HeadPenetrationDepth);
+
+        return TryProjectWorldPoint(support.BasePosition, out projectedPoints[0])
+            && TryProjectWorldPoint(stemTop, out projectedPoints[1])
+            && TryProjectWorldPoint(headBottom, out projectedPoints[2])
+            && TryProjectWorldPoint(support.TipPosition, out projectedPoints[3])
+            && TryProjectWorldPoint(penetrationTip, out projectedPoints[4]);
+    }
+
+    /// <summary>
+    /// Creates the smallest screen-space rectangle containing the projected points.
+    /// </summary>
+    private static Rect CreateBoundsRect(ReadOnlySpan<Point> projectedPoints)
+    {
+        Rect bounds = new Rect(projectedPoints[0], projectedPoints[0]);
+
+        for (int i = 1; i < projectedPoints.Length; i++)
+        {
+            bounds.Union(projectedPoints[i]);
+        }
+
+        return bounds;
     }
 
     /// <summary>
@@ -459,71 +567,6 @@ public class SelectTool : Pillar.Core.Tools.ITool
     private static bool IsRightToLeftDrag(Vector2 startPosition, Vector2 endPosition)
     {
         return endPosition.X < startPosition.X;
-    }
-
-    /// <summary>
-    /// Tests whether a 2D line segment crosses any edge of a rectangle.
-    /// </summary>
-    private static bool SegmentIntersectsRectangle(Point startPoint, Point endPoint, Rect rectangle)
-    {
-        Point topLeft = new Point(rectangle.Left, rectangle.Top);
-        Point topRight = new Point(rectangle.Right, rectangle.Top);
-        Point bottomRight = new Point(rectangle.Right, rectangle.Bottom);
-        Point bottomLeft = new Point(rectangle.Left, rectangle.Bottom);
-
-        return SegmentsIntersect(startPoint, endPoint, topLeft, topRight)
-            || SegmentsIntersect(startPoint, endPoint, topRight, bottomRight)
-            || SegmentsIntersect(startPoint, endPoint, bottomRight, bottomLeft)
-            || SegmentsIntersect(startPoint, endPoint, bottomLeft, topLeft);
-    }
-
-    /// <summary>
-    /// Tests two 2D line segments, including collinear overlap along rectangle edges.
-    /// </summary>
-    private static bool SegmentsIntersect(Point firstStart, Point firstEnd, Point secondStart, Point secondEnd)
-    {
-        double firstDirection = Cross(secondStart, secondEnd, firstStart);
-        double secondDirection = Cross(secondStart, secondEnd, firstEnd);
-        double thirdDirection = Cross(firstStart, firstEnd, secondStart);
-        double fourthDirection = Cross(firstStart, firstEnd, secondEnd);
-
-        if (((firstDirection > 0.0 && secondDirection < 0.0) || (firstDirection < 0.0 && secondDirection > 0.0))
-            && ((thirdDirection > 0.0 && fourthDirection < 0.0) || (thirdDirection < 0.0 && fourthDirection > 0.0)))
-        {
-            return true;
-        }
-
-        return IsPointOnSegment(secondStart, secondEnd, firstStart, firstDirection)
-            || IsPointOnSegment(secondStart, secondEnd, firstEnd, secondDirection)
-            || IsPointOnSegment(firstStart, firstEnd, secondStart, thirdDirection)
-            || IsPointOnSegment(firstStart, firstEnd, secondEnd, fourthDirection);
-    }
-
-    /// <summary>
-    /// Calculates the signed 2D cross product used by segment intersection.
-    /// </summary>
-    private static double Cross(Point lineStart, Point lineEnd, Point point)
-    {
-        return ((point.X - lineStart.X) * (lineEnd.Y - lineStart.Y))
-            - ((point.Y - lineStart.Y) * (lineEnd.X - lineStart.X));
-    }
-
-    /// <summary>
-    /// Tests whether a point lies on a segment when the caller already knows it is collinear.
-    /// </summary>
-    private static bool IsPointOnSegment(Point segmentStart, Point segmentEnd, Point point, double cross)
-    {
-        const double Tolerance = 0.0001;
-
-        if (System.Math.Abs(cross) > Tolerance)
-        {
-            return false;
-        }
-
-        return point.X >= System.Math.Min(segmentStart.X, segmentEnd.X) - Tolerance
-            && point.X <= System.Math.Max(segmentStart.X, segmentEnd.X) + Tolerance
-            && point.Y >= System.Math.Min(segmentStart.Y, segmentEnd.Y) - Tolerance
-            && point.Y <= System.Math.Max(segmentStart.Y, segmentEnd.Y) + Tolerance;
     }
 
     /// <summary>

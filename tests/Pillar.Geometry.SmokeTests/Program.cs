@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
+using System.Text.Json.Nodes;
 
 namespace Pillar.Geometry.SmokeTests;
 
@@ -106,6 +107,8 @@ public static class Program
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Support style and cluster branch diameter survive save and load", ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad);
         RunTest(failures, "Cluster modifier target batches survive save and load", ValidateClusterModifierTargetBatchesSurviveSaveAndLoad);
+        RunTest(failures, "Invalid cluster modifier revision is discarded on load", ValidateInvalidClusterModifierRevisionIsDiscardedOnLoad);
+        RunTest(failures, "Invalid cluster modifier target is discarded on load", ValidateInvalidClusterModifierTargetIsDiscardedOnLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
         RunTest(failures, "Horizontal face angle classifier includes downward horizontal faces", ValidateHorizontalFaceAngleClassifierIncludesDownwardHorizontalFace);
         RunTest(failures, "Horizontal face angle classifier excludes upward horizontal faces", ValidateHorizontalFaceAngleClassifierExcludesUpwardHorizontalFace);
@@ -682,11 +685,10 @@ public static class Program
             0.42f);
         SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
             SupportModifierKind.Cluster,
-            SupportModifierScope.WholeLayer,
             0,
             settings,
-            null,
-            null);
+            new List<Guid> { supports[0].Id, supports[1].Id },
+            0);
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
 
         if (result.ClusteredSupportCount != 2)
@@ -696,7 +698,7 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that a whole-layer Cluster modifier redirects nearby supports onto shared stem axes.
+    /// Validates that an all-target Cluster modifier redirects nearby supports onto shared stem axes.
     /// </summary>
     private static void ValidateClusterModifierRedirectsNearbySupports()
     {
@@ -718,11 +720,10 @@ public static class Program
             0.42f);
         SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
             SupportModifierKind.Cluster,
-            SupportModifierScope.WholeLayer,
             0,
             settings,
-            null,
-            null);
+            new List<Guid> { supports[0].Id, supports[1].Id, supports[2].Id },
+            0);
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(supports, modifier);
 
         if (result.ClusterCount != 1 || result.ClusteredSupportCount != 2)
@@ -766,7 +767,7 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that selection-scoped Cluster modifiers do not absorb nearby unselected supports.
+    /// Validates that targeted Cluster modifiers do not absorb nearby untargeted supports.
     /// </summary>
     private static void ValidateSelectionClusterModifierIgnoresUnselectedSupports()
     {
@@ -788,7 +789,6 @@ public static class Program
             0.42f);
         SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
             SupportModifierKind.Cluster,
-            SupportModifierScope.Selection,
             0,
             settings,
             new List<Guid> { supports[0].Id, supports[1].Id },
@@ -807,7 +807,7 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that appending a later selection-scoped Cluster modifier preserves earlier clustered output.
+    /// Validates that appending a later targeted Cluster modifier preserves earlier clustered output.
     /// </summary>
     private static void ValidateLaterSelectionClusterPreservesExistingClusters()
     {
@@ -822,8 +822,8 @@ public static class Program
         SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
         List<SupportModifierDefinition> modifiers = new List<SupportModifierDefinition>
         {
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
         };
         IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(supports, modifiers);
 
@@ -866,7 +866,6 @@ public static class Program
         };
         SupportModifierDefinition modifier = SupportModifierDefinition.CreateNew(
             SupportModifierKind.Cluster,
-            SupportModifierScope.Selection,
             0,
             settings,
             null,
@@ -876,7 +875,7 @@ public static class Program
 
         if (result.ClusterCount != 2)
         {
-            throw new InvalidOperationException("Expected cumulative selected-support clustering to preserve two Apply batches as two clusters.");
+            throw new InvalidOperationException("Expected cumulative targeted clustering to preserve two Apply batches as two clusters.");
         }
 
         for (int i = 0; i < result.SupportEntities.Count; i++)
@@ -917,10 +916,10 @@ public static class Program
         SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
         SupportClusterEvaluationResult existingCluster = SupportClusterPlanner.Evaluate(
             supports,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
             existingCluster.SupportEntities,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
 
         if (result.SupportEntities[0].Style.Kind != SupportStyleKind.Clustered
             || result.SupportEntities[1].Style.Kind != SupportStyleKind.Clustered
@@ -952,13 +951,13 @@ public static class Program
         SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.1f, 4);
         List<SupportModifierDefinition> setupModifiers = new List<SupportModifierDefinition>
         {
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 1, settings, new List<Guid> { supports[2].Id, supports[3].Id }, 0)
         };
         IReadOnlyList<SupportEntity> clusteredSupports = SupportModifierPipeline.ApplyModifiers(supports, setupModifiers);
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
             clusteredSupports,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[4].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[4].Id }, 0));
 
         if (MathF.Abs(result.SupportEntities[4].BasePosition.X - result.SupportEntities[2].BasePosition.X) > 0.0001f)
         {
@@ -988,10 +987,10 @@ public static class Program
         SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 3);
         SupportClusterEvaluationResult existingCluster = SupportClusterPlanner.Evaluate(
             supports,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0));
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
             existingCluster.SupportEntities,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[3].Id, supports[4].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 1, settings, new List<Guid> { supports[0].Id, supports[2].Id, supports[3].Id, supports[4].Id }, 0));
 
         if (result.SupportEntities[2].Style.Kind != SupportStyleKind.Clustered
             || MathF.Abs(result.SupportEntities[2].BasePosition.X - result.SupportEntities[0].BasePosition.X) > 0.0001f)
@@ -1024,13 +1023,13 @@ public static class Program
         SupportClusterModifierSettings settings = CreateSmokeClusterSettings(3.0f, 4);
         List<SupportModifierDefinition> setupModifiers = new List<SupportModifierDefinition>
         {
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 1, settings, new List<Guid> { supports[3].Id, supports[4].Id }, 0)
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 0, settings, new List<Guid> { supports[0].Id, supports[1].Id }, 0),
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 1, settings, new List<Guid> { supports[3].Id, supports[4].Id }, 0)
         };
         IReadOnlyList<SupportEntity> clusteredSupports = SupportModifierPipeline.ApplyModifiers(supports, setupModifiers);
         SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(
             clusteredSupports,
-            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, SupportModifierScope.Selection, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
+            SupportModifierDefinition.CreateNew(SupportModifierKind.Cluster, 2, settings, new List<Guid> { supports[0].Id, supports[2].Id }, 0));
 
         if (MathF.Abs(result.SupportEntities[3].BasePosition.X - clusteredSupports[3].BasePosition.X) > 0.0001f
             || MathF.Abs(result.SupportEntities[4].BasePosition.X - clusteredSupports[4].BasePosition.X) > 0.0001f)
@@ -2344,6 +2343,7 @@ public static class Program
         try
         {
             serializer.Save(document, filePath);
+
             GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
 
             if (loadedDocument.SupportLayerGroups.Count != 1)
@@ -2408,6 +2408,7 @@ public static class Program
         try
         {
             serializer.Save(document, filePath);
+
             GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
 
             if (loadedDocument.SupportLayerGroups.Count != 1)
@@ -2490,7 +2491,6 @@ public static class Program
         {
             SupportModifierDefinition.CreateNew(
                 SupportModifierKind.Cluster,
-                SupportModifierScope.Selection,
                 0,
                 CreateSmokeClusterSettings(3.0f, 4),
                 null,
@@ -2510,6 +2510,13 @@ public static class Program
         try
         {
             serializer.Save(document, filePath);
+            string savedJson = File.ReadAllText(filePath);
+
+            if (savedJson.Contains("scope", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Expected saved Cluster modifiers to omit the removed scope field.");
+            }
+
             GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
             IReadOnlyList<SupportModifierTargetBatch> loadedBatches = loadedDocument.SupportLayerGroups[0].SupportModifiers[0].TargetSupportIdBatches;
 
@@ -2521,6 +2528,16 @@ public static class Program
             if (loadedBatches[0].TargetSupportIds.Count != 2 || loadedBatches[1].TargetSupportIds.Count != 2)
             {
                 throw new InvalidOperationException("Expected loaded Cluster modifier target batches to preserve their target counts.");
+            }
+
+            if (loadedDocument.SupportLayerGroups[0].SupportModifiers[0].SourceGeneratorRevision != supportLayerGroup.SourceGeneratorRevision)
+            {
+                throw new InvalidOperationException("Expected loaded Cluster modifier source revision to survive save and load.");
+            }
+
+            if (loadedDocument.SupportLayerGroups[0].SupportModifiers[0].TargetSupportIds.Count != 4)
+            {
+                throw new InvalidOperationException("Expected loaded Cluster modifier target identities to survive save and load.");
             }
         }
         finally
@@ -2553,17 +2570,6 @@ public static class Program
             1.25f,
             0.85f,
             0.45f);
-        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
-        {
-            SupportModifierDefinition.CreateNew(
-                SupportModifierKind.Cluster,
-                SupportModifierScope.WholeLayer,
-                0,
-                clusterSettings,
-                null,
-                null)
-        });
-        document.AddSupportLayerGroup(supportLayerGroup);
         SupportEntity clusteredSupport = new SupportEntity(
             supportLayerGroup.Id,
             new Vector3(2.0f, 0.0f, 6.0f),
@@ -2573,6 +2579,16 @@ public static class Program
             Vector3.UnitX,
             SupportDefaults.CreateProfile(),
             new ClusteredSupportStyle(1.25f, 0.85f, 0.45f));
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(
+                SupportModifierKind.Cluster,
+                0,
+                clusterSettings,
+                new List<Guid> { clusteredSupport.Id },
+                supportLayerGroup.SourceGeneratorRevision)
+        });
+        document.AddSupportLayerGroup(supportLayerGroup);
         document.AddEntity(clusteredSupport);
         GphDocumentSerializer serializer = new GphDocumentSerializer();
         string filePath = Path.Combine(Environment.CurrentDirectory, "SupportStyleSmoke.gph");
@@ -2580,6 +2596,7 @@ public static class Program
         try
         {
             serializer.Save(document, filePath);
+
             GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
             SupportEntity? loadedSupport = null;
 
@@ -2621,6 +2638,155 @@ public static class Program
                 File.Delete(filePath);
             }
         }
+    }
+    /// <summary>
+    /// Validates that loaded modifiers with mismatched generator revisions are discarded.
+    /// </summary>
+    private static void ValidateInvalidClusterModifierRevisionIsDiscardedOnLoad()
+    {
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "InvalidClusterRevisionSmoke.gph");
+
+        try
+        {
+            serializer.Save(CreateClusterModifierPersistenceDocument(), filePath);
+            JsonObject root = LoadJsonRoot(filePath);
+            JsonObject modifier = GetFirstSupportModifierJsonObject(root);
+            modifier["sourceGeneratorRevision"] = 999;
+            File.WriteAllText(filePath, root.ToJsonString());
+
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1 || loadedDocument.SupportLayerGroups[0].SupportModifiers.Count != 0)
+            {
+                throw new InvalidOperationException("Expected source revision mismatch to discard the loaded Cluster modifier.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that loaded modifiers targeting missing supports are discarded.
+    /// </summary>
+    private static void ValidateInvalidClusterModifierTargetIsDiscardedOnLoad()
+    {
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "InvalidClusterTargetSmoke.gph");
+
+        try
+        {
+            serializer.Save(CreateClusterModifierPersistenceDocument(), filePath);
+            JsonObject root = LoadJsonRoot(filePath);
+            JsonObject modifier = GetFirstSupportModifierJsonObject(root);
+            string invalidTargetId = Guid.NewGuid().ToString();
+
+            if (modifier["targetSupportIds"] is not JsonArray targetSupportIds || targetSupportIds.Count == 0)
+            {
+                throw new InvalidOperationException("Expected saved Cluster modifier target ids in smoke fixture.");
+            }
+
+            targetSupportIds[0] = invalidTargetId;
+
+            if (modifier["targetSupportIdBatches"] is JsonArray targetBatches
+                && targetBatches.Count > 0
+                && targetBatches[0] is JsonArray firstBatch
+                && firstBatch.Count > 0)
+            {
+                firstBatch[0] = invalidTargetId;
+            }
+
+            File.WriteAllText(filePath, root.ToJsonString());
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1 || loadedDocument.SupportLayerGroups[0].SupportModifiers.Count != 0)
+            {
+                throw new InvalidOperationException("Expected missing target ids to discard the loaded Cluster modifier.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a small document with one valid revision-bound Cluster modifier.
+    /// </summary>
+    private static CadDocument CreateClusterModifierPersistenceDocument()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Invalid Modifier Fixture");
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            new SupportEntity(supportLayerGroup.Id, new Vector3(0.0f, 0.0f, 6.0f), new Vector3(0.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile),
+            new SupportEntity(supportLayerGroup.Id, new Vector3(1.0f, 0.0f, 6.0f), new Vector3(1.0f, 0.0f, 0.0f), Vector3.UnitZ, 0.0f, Vector3.UnitZ, profile)
+        };
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
+        {
+            SupportModifierDefinition.CreateNew(
+                SupportModifierKind.Cluster,
+                0,
+                CreateSmokeClusterSettings(3.0f, 4),
+                new List<Guid> { supports[0].Id, supports[1].Id },
+                supportLayerGroup.SourceGeneratorRevision)
+        });
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        for (int i = 0; i < supports.Count; i++)
+        {
+            document.AddEntity(supports[i]);
+        }
+
+        return document;
+    }
+
+    /// <summary>
+    /// Reads a saved smoke-test project as mutable JSON.
+    /// </summary>
+    private static JsonObject LoadJsonRoot(string filePath)
+    {
+        JsonNode? rootNode = JsonNode.Parse(File.ReadAllText(filePath));
+
+        if (rootNode is JsonObject root)
+        {
+            return root;
+        }
+
+        throw new InvalidOperationException("Expected saved smoke-test project to be a JSON object.");
+    }
+
+    /// <summary>
+    /// Gets the first saved modifier object from a smoke-test project JSON tree.
+    /// </summary>
+    private static JsonObject GetFirstSupportModifierJsonObject(JsonObject root)
+    {
+        if (root["supportLayerGroups"] is JsonArray supportLayerGroups
+            && supportLayerGroups.Count > 0
+            && supportLayerGroups[0] is JsonObject supportLayerGroup
+            && supportLayerGroup["supportModifiers"] is JsonArray supportModifiers
+            && supportModifiers.Count > 0
+            && supportModifiers[0] is JsonObject modifier)
+        {
+            return modifier;
+        }
+
+        throw new InvalidOperationException("Expected saved smoke-test project to contain one support modifier.");
     }
     private static void ValidateGphSerializerRejectsInvalidFormat()
     {

@@ -12,6 +12,7 @@ using Pillar.Geometry.Supports;
 using Pillar.Rendering.BackgroundGrid;
 using Pillar.Rendering.EntityRenderers;
 using Pillar.Rendering.Preview;
+using Pillar.Rendering.Tools;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -43,6 +44,7 @@ public class SceneManager
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
+    private readonly Point[] _supportWindowSelectionPathBuffer = new Point[5];
     private readonly GroupModel3D _entityRoot = new GroupModel3D();
     private readonly GroupModel3D _backgroundGridRoot = new GroupModel3D();
     private readonly GroupModel3D _previewRoot = new GroupModel3D();
@@ -528,20 +530,19 @@ public class SceneManager
             for (int i = 0; i < _supportGroupQueryBuffer.Count; i++)
             {
                 SupportEntity supportEntity = _supportGroupQueryBuffer[i];
-                Rect projectedBounds;
 
-                if (!TryGetProjectedBounds(supportEntity, out projectedBounds))
+                if (!TryProjectSupportControlPath(supportEntity, _supportWindowSelectionPathBuffer))
                 {
                     continue;
                 }
 
-                if (selectsCrossingEntities && selectionRect.IntersectsWith(projectedBounds))
+                if (selectsCrossingEntities && ScreenSelectionGeometry.ContainsOrCrossesPolyline(selectionRect, _supportWindowSelectionPathBuffer))
                 {
                     selectedEntities.Add(supportEntity);
                     continue;
                 }
 
-                if (!selectsCrossingEntities && selectionRect.Contains(projectedBounds))
+                if (!selectsCrossingEntities && ScreenSelectionGeometry.ContainsAllPoints(selectionRect, _supportWindowSelectionPathBuffer))
                 {
                     selectedEntities.Add(supportEntity);
                 }
@@ -1393,6 +1394,24 @@ public class SceneManager
 
         projectedBounds.Union(screenPoint);
         return true;
+    }
+
+    /// <summary>
+    /// Projects the main visible support centerline path for precise support edit window selection.
+    /// </summary>
+    private bool TryProjectSupportControlPath(SupportEntity support, Point[] projectedPoints)
+    {
+        Vector3 headBottom = support.TipPosition - (support.HeadDirection * support.Profile.HeadHeight);
+        Vector3 stemTop = support.BranchLength > 0.0f
+            ? headBottom - (support.BranchDirection * support.BranchLength)
+            : headBottom;
+        Vector3 penetrationTip = support.TipPosition + (support.HeadDirection * support.Profile.HeadPenetrationDepth);
+
+        return TryProjectWorldPoint(support.BasePosition, out projectedPoints[0])
+            && TryProjectWorldPoint(stemTop, out projectedPoints[1])
+            && TryProjectWorldPoint(headBottom, out projectedPoints[2])
+            && TryProjectWorldPoint(support.TipPosition, out projectedPoints[3])
+            && TryProjectWorldPoint(penetrationTip, out projectedPoints[4]);
     }
 
     /// <summary>

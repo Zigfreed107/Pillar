@@ -20,7 +20,7 @@ public partial class SupportClusterToolOptionsControl : UserControl
     public SupportClusterToolOptionsControl()
     {
         InitializeComponent();
-        SetClusterSettings(SupportClusterModifierSettings.CreateDefault(), SupportModifierScope.WholeLayer, false);
+        SetClusterSettings(SupportClusterModifierSettings.CreateDefault(), false);
     }
 
     /// <summary>
@@ -29,9 +29,14 @@ public partial class SupportClusterToolOptionsControl : UserControl
     public event EventHandler? OptionsChanged;
 
     /// <summary>
-    /// Raised when the user applies the current settings.
+    /// Raised when the user applies the current settings to the selected supports.
     /// </summary>
-    public event EventHandler? ApplyRequested;
+    public event EventHandler? ApplyToSelectedRequested;
+
+    /// <summary>
+    /// Raised when the user applies the current settings to the whole support layer.
+    /// </summary>
+    public event EventHandler? ApplyToAllRequested;
 
     /// <summary>
     /// Raised when the user removes the modifier currently being edited.
@@ -39,13 +44,13 @@ public partial class SupportClusterToolOptionsControl : UserControl
     public event EventHandler? RemoveAllRequested;
 
     /// <summary>
-    /// Raised when the user closes the tool options.
-    /// </summary>
-    /// <summary>
     /// Raised when the user requests that selected clusters become individual supports again.
     /// </summary>
     public event EventHandler? UnclusterSelectedRequested;
 
+    /// <summary>
+    /// Raised when the user closes the tool options.
+    /// </summary>
     public event EventHandler? CloseRequested;
 
     /// <summary>
@@ -57,29 +62,15 @@ public partial class SupportClusterToolOptionsControl : UserControl
     }
 
     /// <summary>
-    /// Gets the selected modifier scope.
-    /// </summary>
-    public SupportModifierScope SelectedScope
-    {
-        get
-        {
-            return ScopeComboBox.SelectedIndex == 1
-                ? SupportModifierScope.Selection
-                : SupportModifierScope.WholeLayer;
-        }
-    }
-
-    /// <summary>
     /// Restores settings into the visible controls.
     /// </summary>
-    public void SetClusterSettings(SupportClusterModifierSettings settings, SupportModifierScope scope, bool isEditingExistingModifier)
+    public void SetClusterSettings(SupportClusterModifierSettings settings, bool isEditingExistingModifier)
     {
         if (settings == null)
         {
             throw new ArgumentNullException(nameof(settings));
         }
 
-        ScopeComboBox.SelectedIndex = scope == SupportModifierScope.Selection ? 1 : 0;
         MaximumClusterRadiusTextBox.Text = settings.MaximumClusterRadius.ToString("0.##", CultureInfo.InvariantCulture);
         MinimumSupportsTextBox.Text = settings.MinimumSupportsPerCluster.ToString(CultureInfo.InvariantCulture);
         MaximumSupportsTextBox.Text = settings.MaximumSupportsPerCluster.ToString(CultureInfo.InvariantCulture);
@@ -107,7 +98,23 @@ public partial class SupportClusterToolOptionsControl : UserControl
     }
 
     /// <summary>
-    /// Updates visible preview and result diagnostics.
+    /// Enables or disables the Apply to Selected action from current viewport selection state.
+    /// </summary>
+    public void SetApplyToSelectedEnabled(bool isEnabled)
+    {
+        ApplyToSelectedButton.IsEnabled = isEnabled;
+    }
+
+    /// <summary>
+    /// Enables or disables the Apply to All action from the selected support layer state.
+    /// </summary>
+    public void SetApplyToAllEnabled(bool isEnabled)
+    {
+        ApplyToAllButton.IsEnabled = isEnabled;
+    }
+
+    /// <summary>
+    /// Enables or disables uncluster support actions from current viewport selection state.
     /// </summary>
     public void SetUnclusterSelectedEnabled(bool isEnabled)
     {
@@ -224,17 +231,27 @@ public partial class SupportClusterToolOptionsControl : UserControl
     }
 
     /// <summary>
-    /// Forwards Apply clicks to the owning shell.
+    /// Forwards Apply to Selected clicks to the owning shell.
     /// </summary>
-    private void ApplyButton_Click(object sender, RoutedEventArgs e)
+    private void ApplyToSelectedButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        ApplyRequested?.Invoke(this, EventArgs.Empty);
+        ApplyToSelectedRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Forwards Remove All clicks to the owning shell.
+    /// Forwards Apply to All clicks to the owning shell.
+    /// </summary>
+    private void ApplyToAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        ApplyToAllRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Forwards Uncluster Selected clicks to the owning shell.
     /// </summary>
     private void UnclusterSelectedButton_Click(object sender, RoutedEventArgs e)
     {
@@ -263,5 +280,3 @@ public partial class SupportClusterToolOptionsControl : UserControl
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 }
-
-

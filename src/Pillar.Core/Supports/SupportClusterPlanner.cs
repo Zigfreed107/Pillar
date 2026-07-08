@@ -38,12 +38,12 @@ public static class SupportClusterPlanner
             throw new ArgumentException("Only Cluster modifiers can be evaluated by the cluster planner.", nameof(modifier));
         }
 
-        if (modifier.Scope == SupportModifierScope.Selection && modifier.TargetSupportIdBatches.Count > 1)
+        if (modifier.TargetSupportIdBatches.Count > 1)
         {
             return EvaluateSelectionBatches(sourceSupports, modifier);
         }
 
-        if (modifier.Scope == SupportModifierScope.Selection && HasTargetedClusteredSupport(sourceSupports, modifier.TargetSupportIds))
+        if (HasTargetedClusteredSupport(sourceSupports, modifier.TargetSupportIds))
         {
             return EvaluateSelectionWithClusterTargets(sourceSupports, modifier);
         }
@@ -72,7 +72,6 @@ public static class SupportClusterPlanner
             SupportModifierDefinition batchModifier = new SupportModifierDefinition(
                 modifier.Id,
                 modifier.Kind,
-                modifier.Scope,
                 modifier.IsEnabled,
                 modifier.Order,
                 modifier.ClusterSettings,
@@ -262,22 +261,20 @@ public static class SupportClusterPlanner
     }
 
     /// <summary>
-    /// Creates eligible clustering candidates from individual supports in the requested scope.
+    /// Creates eligible clustering candidates from individual supports targeted by the modifier.
     /// </summary>
     private static List<CandidateSupport> CreateEligibleCandidates(
         IReadOnlyList<SupportEntity> sourceSupports,
         SupportModifierDefinition modifier)
     {
-        HashSet<Guid>? targetIds = modifier.Scope == SupportModifierScope.Selection
-            ? new HashSet<Guid>(modifier.TargetSupportIds)
-            : null;
+        HashSet<Guid> targetIds = new HashSet<Guid>(modifier.TargetSupportIds);
         List<CandidateSupport> candidates = new List<CandidateSupport>();
 
         for (int i = 0; i < sourceSupports.Count; i++)
         {
             SupportEntity support = sourceSupports[i];
 
-            if (targetIds != null && !targetIds.Contains(support.Id))
+            if (!targetIds.Contains(support.Id))
             {
                 continue;
             }
@@ -295,7 +292,7 @@ public static class SupportClusterPlanner
     }
 
     /// <summary>
-    /// Creates individual candidates explicitly selected by a selection-scoped modifier.
+    /// Creates individual candidates explicitly targeted by a modifier.
     /// </summary>
     private static List<CandidateSupport> CreateSelectionIndividualCandidates(
         IReadOnlyList<SupportEntity> sourceSupports,

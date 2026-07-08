@@ -214,29 +214,10 @@
                     <Button x:Name="RemoveModelButton"
                             MinWidth="28"
                             Content="&#xF166;"
-                            ToolTip="Remove selected model"
+                            ToolTip="Remove selected item"
                             Foreground="Red"
-                            IsEnabled="{Binding CanRemoveModel}"
-                            Click="RemoveModelButton_Click"
-                            ToolBar.OverflowMode="Never" />
-                    <Separator ToolBar.OverflowMode="Never" />
-                    <Button x:Name="AddSupportGroupButton"
-                            MinWidth="28"
-                            Content="&#xECC8;"
-                            FontFamily="Segoe Fluent Icons"
-                            ToolTip="Add support group"
-                            Foreground="Green"
-                            IsEnabled="{Binding CanAddSupportGroup}"
-                            Click="AddSupportGroupButton_Click"
-                            ToolBar.OverflowMode="Never" />
-                    <Button x:Name="RemoveSupportGroupButton"
-                            MinWidth="28"
-                            Content="&#xECC9;"
-                            FontFamily="Segoe Fluent Icons"
-                            ToolTip="Remove support group"
-                            Foreground="Red"
-                            IsEnabled="{Binding CanRemoveSupportGroup}"
-                            Click="RemoveSupportGroupButton_Click"
+                            IsEnabled="{Binding CanRemoveSelectedLayer}"
+                            Click="RemoveButton_Click"
                             ToolBar.OverflowMode="Never" />
                 </ToolBar>
             </ToolBarTray>

@@ -13,19 +13,6 @@
 
             <TextBlock Margin="0,10,0,0"
                        Style="{StaticResource ModeOverlayLabelTextStyle}"
-                       Text="Apply To" />
-            <ComboBox x:Name="ScopeComboBox"
-                      Margin="0,4,0,0"
-                      SelectedIndex="0"
-                      SelectionChanged="AnyOption_Changed">
-                <ComboBoxItem Content="Whole Layer"
-                              ToolTip="Recalculates clusters for the whole support layer when the modifier is replayed." />
-                <ComboBoxItem Content="Selected Supports"
-                              ToolTip="Clusters only currently selected supports and stores their support identities." />
-            </ComboBox>
-
-            <TextBlock Margin="0,10,0,0"
-                       Style="{StaticResource ModeOverlayLabelTextStyle}"
                        Text="Maximum Cluster Radius" />
             <TextBox x:Name="MaximumClusterRadiusTextBox"
                      Margin="0,4,0,0"
@@ -124,28 +111,47 @@
                        TextWrapping="Wrap"
                        Text="No preview has been calculated yet." />
 
-            <UniformGrid Margin="0,14,0,0"
-                         Columns="2"
-                         Rows="2">
-                <Button x:Name="ApplyButton"
-                        Margin="0,0,6,6"
-                        Content="Apply"
-                        Click="ApplyButton_Click" />
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="10" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="10" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Button x:Name="ApplyToSelectedButton"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Content="Apply to Selected"
+                        Click="ApplyToSelectedButton_Click" />
+                <Button x:Name="ApplyToAllButton"
+                        Grid.Row="0"
+                        Grid.Column="2"
+                        Content="Apply to All"
+                        Click="ApplyToAllButton_Click" />
                 <Button x:Name="RemoveAllButton"
-                        Margin="6,0,0,6"
+                        Grid.Row="2"
+                        Grid.Column="0"
                         Content="Remove All"
                         IsEnabled="False"
                         Click="RemoveAllButton_Click" />
                 <Button x:Name="UnclusterSelectedButton"
-                        Margin="0,6,6,0"
+                        Grid.Row="2"
+                        Grid.Column="2"
                         Content="Uncluster Selected"
                         IsEnabled="False"
                         Click="UnclusterSelectedButton_Click" />
-                <Button Margin="6,6,0,0"
+                <Button Grid.Row="4"
+                        Grid.ColumnSpan="3"
                         Content="Close"
                         Click="CloseButton_Click" />
-            </UniformGrid>
+            </Grid>
         </StackPanel>
     </Border>
 </UserControl>
-

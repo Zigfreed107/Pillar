@@ -331,7 +331,8 @@ public partial class MainWindow : Window
         _areaSupportToolOptionsControl.CloseRequested += AreaSupportToolOptionsControl_CloseRequested;
         _areaSupportToolOptionsControl.DeleteRequested += AreaSupportToolOptionsControl_DeleteRequested;
         _supportClusterToolOptionsControl.OptionsChanged += SupportClusterToolOptionsControl_OptionsChanged;
-        _supportClusterToolOptionsControl.ApplyRequested += SupportClusterToolOptionsControl_ApplyRequested;
+        _supportClusterToolOptionsControl.ApplyToSelectedRequested += SupportClusterToolOptionsControl_ApplyToSelectedRequested;
+        _supportClusterToolOptionsControl.ApplyToAllRequested += SupportClusterToolOptionsControl_ApplyToAllRequested;
         _supportClusterToolOptionsControl.RemoveAllRequested += SupportClusterToolOptionsControl_RemoveAllRequested;
         _supportClusterToolOptionsControl.UnclusterSelectedRequested += SupportClusterToolOptionsControl_UnclusterSelectedRequested;
         _supportClusterToolOptionsControl.CloseRequested += SupportClusterToolOptionsControl_CloseRequested;
@@ -349,11 +350,9 @@ public partial class MainWindow : Window
         SupportPresetPanelOverlay.AdvancedRequested += SupportPresetPanelOverlay_AdvancedRequested;
         _supportPresetService.SelectedPresetChanged += SupportPresetService_SelectedPresetChanged;
         LayerPanelOverlay.ImportModelRequested += LayerPanel_ImportModelRequested;
-        LayerPanelOverlay.RemoveModelRequested += LayerPanel_RemoveModelRequested;
+        LayerPanelOverlay.RemoveRequested += LayerPanel_RemoveRequested;
         LayerPanelOverlay.ExportModelRequested += LayerPanel_ExportModelRequested;
         LayerPanelOverlay.ExportSupportGroupRequested += LayerPanel_ExportSupportGroupRequested;
-        LayerPanelOverlay.AddSupportGroupRequested += LayerPanel_AddSupportGroupRequested;
-        LayerPanelOverlay.RemoveSupportGroupRequested += LayerPanel_RemoveSupportGroupRequested;
         LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
         LayerPanelOverlay.ChangeLayerVisibilityRequested += LayerPanel_ChangeLayerVisibilityRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;

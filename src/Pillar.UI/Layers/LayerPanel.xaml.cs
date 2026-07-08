@@ -30,9 +30,9 @@ public partial class LayerPanel : UserControl
     public event EventHandler? ImportModelRequested;
 
     /// <summary>
-    /// Raised when the selected imported model layer should be removed.
+    /// Raised when the selected removable layer item should be deleted.
     /// </summary>
-    public event EventHandler? RemoveModelRequested;
+    public event EventHandler? RemoveRequested;
 
     /// <summary>
     /// Raised when one imported model row should be exported with its owned support groups.
@@ -43,16 +43,6 @@ public partial class LayerPanel : UserControl
     /// Raised when one support group row should be exported by itself.
     /// </summary>
     public event EventHandler<LayerSupportGroupExportRequestedEventArgs>? ExportSupportGroupRequested;
-
-    /// <summary>
-    /// Raised when the selected model layer should receive a new support group.
-    /// </summary>
-    public event EventHandler? AddSupportGroupRequested;
-
-    /// <summary>
-    /// Raised when the selected support group should be removed.
-    /// </summary>
-    public event EventHandler? RemoveSupportGroupRequested;
 
     /// <summary>
     /// Raised when a completed inline rename should be applied to a model or support group layer.
@@ -100,33 +90,13 @@ public partial class LayerPanel : UserControl
     }
 
     /// <summary>
-    /// Requests removal of the selected imported model layer.
+    /// Requests removal of the selected removable layer item.
     /// </summary>
-    private void RemoveModelButton_Click(object sender, RoutedEventArgs e)
+    private void RemoveButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        RemoveModelRequested?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
-    /// Requests a new support group under the selected model layer.
-    /// </summary>
-    private void AddSupportGroupButton_Click(object sender, RoutedEventArgs e)
-    {
-        _ = sender;
-        _ = e;
-        AddSupportGroupRequested?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
-    /// Requests removal of the selected support group layer.
-    /// </summary>
-    private void RemoveSupportGroupButton_Click(object sender, RoutedEventArgs e)
-    {
-        _ = sender;
-        _ = e;
-        RemoveSupportGroupRequested?.Invoke(this, EventArgs.Empty);
+        RemoveRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

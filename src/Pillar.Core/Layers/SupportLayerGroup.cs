@@ -184,7 +184,7 @@ public sealed class SupportLayerGroup : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Gets the revision of the source generator output that selection-scoped modifiers bind to.
+    /// Gets the source generator output revision captured by revision-bound modifiers.
     /// </summary>
     public int SourceGeneratorRevision
     {

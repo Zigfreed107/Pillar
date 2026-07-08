@@ -19,13 +19,12 @@ public sealed class SupportModifierDefinition
     public SupportModifierDefinition(
         Guid id,
         SupportModifierKind kind,
-        SupportModifierScope scope,
         bool isEnabled,
         int order,
         SupportClusterModifierSettings? clusterSettings,
         IReadOnlyList<Guid>? targetSupportIds,
         int? sourceGeneratorRevision)
-        : this(id, kind, scope, isEnabled, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision)
+        : this(id, kind, isEnabled, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision)
     {
     }
 
@@ -35,7 +34,6 @@ public sealed class SupportModifierDefinition
     public SupportModifierDefinition(
         Guid id,
         SupportModifierKind kind,
-        SupportModifierScope scope,
         bool isEnabled,
         int order,
         SupportClusterModifierSettings? clusterSettings,
@@ -55,15 +53,14 @@ public sealed class SupportModifierDefinition
 
         Id = id;
         Kind = kind;
-        Scope = scope;
         IsEnabled = isEnabled;
         Order = order;
         ClusterSettings = clusterSettings?.Clone();
         SourceGeneratorRevision = sourceGeneratorRevision;
-        _targetSupportIdBatches = CreateTargetSupportIdBatchList(scope, targetSupportIds, targetSupportIdBatches);
+        _targetSupportIdBatches = CreateTargetSupportIdBatchList(targetSupportIds, targetSupportIdBatches);
         _targetSupportIds = CreateFlattenedTargetSupportIdList(targetSupportIds, _targetSupportIdBatches);
 
-        ValidateScope();
+        ValidateTargets();
         ValidateSettings();
     }
 
@@ -72,13 +69,12 @@ public sealed class SupportModifierDefinition
     /// </summary>
     public static SupportModifierDefinition CreateNew(
         SupportModifierKind kind,
-        SupportModifierScope scope,
         int order,
         SupportClusterModifierSettings? clusterSettings,
         IReadOnlyList<Guid>? targetSupportIds,
         int? sourceGeneratorRevision)
     {
-        return CreateNew(kind, scope, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision);
+        return CreateNew(kind, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision);
     }
 
     /// <summary>
@@ -86,7 +82,6 @@ public sealed class SupportModifierDefinition
     /// </summary>
     public static SupportModifierDefinition CreateNew(
         SupportModifierKind kind,
-        SupportModifierScope scope,
         int order,
         SupportClusterModifierSettings? clusterSettings,
         IReadOnlyList<Guid>? targetSupportIds,
@@ -96,7 +91,6 @@ public sealed class SupportModifierDefinition
         return new SupportModifierDefinition(
             Guid.NewGuid(),
             kind,
-            scope,
             true,
             order,
             clusterSettings,
@@ -116,11 +110,6 @@ public sealed class SupportModifierDefinition
     public SupportModifierKind Kind { get; }
 
     /// <summary>
-    /// Gets whether this modifier targets the full layer or stored support identities.
-    /// </summary>
-    public SupportModifierScope Scope { get; }
-
-    /// <summary>
     /// Gets whether this modifier participates in support-layer evaluation.
     /// </summary>
     public bool IsEnabled { get; }
@@ -136,7 +125,7 @@ public sealed class SupportModifierDefinition
     public SupportClusterModifierSettings? ClusterSettings { get; }
 
     /// <summary>
-    /// Gets the support identities targeted by a selection-scoped modifier.
+    /// Gets the support identities targeted by this revision-bound modifier.
     /// </summary>
     public IReadOnlyList<Guid> TargetSupportIds
     {
@@ -144,7 +133,7 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Gets the ordered target batches captured by cumulative selection-scoped edits.
+    /// Gets the ordered target batches captured by cumulative edits.
     /// </summary>
     public IReadOnlyList<SupportModifierTargetBatch> TargetSupportIdBatches
     {
@@ -152,7 +141,7 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Gets the generator revision captured by a selection-scoped modifier.
+    /// Gets the generator revision captured by this revision-bound modifier.
     /// </summary>
     public int? SourceGeneratorRevision { get; }
 
@@ -164,13 +153,7 @@ public sealed class SupportModifierDefinition
         get
         {
             string kindText = GetKindDisplayName(Kind);
-
-            if (Scope == SupportModifierScope.WholeLayer)
-            {
-                return $"{kindText} - Whole Layer";
-            }
-
-            return $"{kindText} - Selection ({_targetSupportIds.Count})";
+            return $"{kindText} ({_targetSupportIds.Count})";
         }
     }
 
@@ -182,7 +165,6 @@ public sealed class SupportModifierDefinition
         return new SupportModifierDefinition(
             Id,
             Kind,
-            Scope,
             IsEnabled,
             Order,
             ClusterSettings,
@@ -199,7 +181,6 @@ public sealed class SupportModifierDefinition
         return new SupportModifierDefinition(
             Id,
             Kind,
-            Scope,
             IsEnabled,
             order,
             ClusterSettings,
@@ -230,19 +211,13 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Copies ordered selection target batches, or creates one batch for older flat target data.
+    /// Copies ordered target batches, or creates one batch for flat target data.
     /// </summary>
     private static List<SupportModifierTargetBatch> CreateTargetSupportIdBatchList(
-        SupportModifierScope scope,
         IReadOnlyList<Guid>? targetSupportIds,
         IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches)
     {
         List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>();
-
-        if (scope == SupportModifierScope.WholeLayer)
-        {
-            return result;
-        }
 
         if (targetSupportIdBatches != null && targetSupportIdBatches.Count > 0)
         {
@@ -263,7 +238,7 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Builds the unique target list used by labels, validation, and older persistence fields.
+    /// Builds the unique target list used by labels, validation, and persistence fields.
     /// </summary>
     private static List<Guid> CreateFlattenedTargetSupportIdList(
         IReadOnlyList<Guid>? targetSupportIds,
@@ -307,28 +282,18 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
-    /// Verifies whole-layer and selection-scoped modifier metadata.
+    /// Verifies revision-bound modifier target metadata.
     /// </summary>
-    private void ValidateScope()
+    private void ValidateTargets()
     {
-        if (Scope == SupportModifierScope.WholeLayer)
-        {
-            if (_targetSupportIds.Count > 0 || SourceGeneratorRevision.HasValue)
-            {
-                throw new ArgumentException("Whole-layer modifiers cannot store selection targets or a source generator revision.");
-            }
-
-            return;
-        }
-
         if (_targetSupportIds.Count == 0)
         {
-            throw new ArgumentException("Selection-scoped modifiers require at least one target support identity.");
+            throw new ArgumentException("Support modifiers require at least one target support identity.");
         }
 
         if (!SourceGeneratorRevision.HasValue || SourceGeneratorRevision.Value < 0)
         {
-            throw new ArgumentException("Selection-scoped modifiers require a non-negative source generator revision.");
+            throw new ArgumentException("Support modifiers require a non-negative source generator revision.");
         }
     }
 

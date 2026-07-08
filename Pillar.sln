@@ -68,6 +68,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UI", "UI", "{E6E8E711-7624-
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Support Editing Tools", "Support Editing Tools", "{A5F9F35A-2B9F-4CDA-8A1B-121E1E92FD49}"
 	ProjectSection(SolutionItems) = preProject
+		Modify Support Tool.md = Modify Support Tool.md
+		Support Bracing Tool.md = Support Bracing Tool.md
 		Documentation\Support Editing Tools\Support Cluster Tool.md = Documentation\Support Editing Tools\Support Cluster Tool.md
 		Documentation\Support Editing Tools\Support Editing Mode Behaviours.md = Documentation\Support Editing Tools\Support Editing Mode Behaviours.md
 	EndProjectSection

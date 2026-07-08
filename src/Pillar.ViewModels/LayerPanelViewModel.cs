@@ -105,14 +105,6 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Gets whether the add button can create a support group under the selected model.
-    /// </summary>
-    public bool CanAddSupportGroup
-    {
-        get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.Model; }
-    }
-
-    /// <summary>
     /// Gets whether the add model button can start the model import workflow.
     /// </summary>
     public bool CanAddModel
@@ -121,19 +113,17 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Gets whether the remove model button can delete the selected imported model.
+    /// Gets whether the remove button can delete the selected model, support layer, or support modifier.
     /// </summary>
-    public bool CanRemoveModel
+    public bool CanRemoveSelectedLayer
     {
-        get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.Model; }
-    }
-
-    /// <summary>
-    /// Gets whether the remove button can delete the selected support group.
-    /// </summary>
-    public bool CanRemoveSupportGroup
-    {
-        get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.SupportGroup; }
+        get
+        {
+            return _selectedLayer != null
+                && (_selectedLayer.Kind == LayerTreeItemKind.Model
+                    || _selectedLayer.Kind == LayerTreeItemKind.SupportGroup
+                    || _selectedLayer.Kind == LayerTreeItemKind.SupportModifier);
+        }
     }
 
     /// <summary>
@@ -146,9 +136,7 @@ public partial class LayerPanelViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedLayer, value))
             {
-                OnPropertyChanged(nameof(CanAddSupportGroup));
-                OnPropertyChanged(nameof(CanRemoveSupportGroup));
-                OnPropertyChanged(nameof(CanRemoveModel));
+                OnPropertyChanged(nameof(CanRemoveSelectedLayer));
                 OnPropertyChanged(nameof(HasSelectedModelLayer));
                 OnPropertyChanged(nameof(HasSelectedSupportGroupLayer));
                 OnPropertyChanged(nameof(HasMultipleSelectedSupportLayerGroups));
@@ -207,6 +195,8 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         Guid? selectedId = SelectedLayer?.Id;
         LayerTreeItemKind? selectedKind = SelectedLayer?.Kind;
+        Guid? selectedModelEntityId = SelectedLayer?.ModelEntityId;
+        Guid? selectedSupportLayerGroupId = SelectedLayer?.SupportLayerGroupId;
 
         ModelLayers.Clear();
 
@@ -263,6 +253,19 @@ public partial class LayerPanelViewModel : ObservableObject
         PruneVisibilityState();
 
         LayerTreeItemViewModel? restoredSelection = FindLayer(selectedId, selectedKind);
+
+        if (restoredSelection == null && selectedKind == LayerTreeItemKind.SupportModifier && selectedSupportLayerGroupId.HasValue)
+        {
+            restoredSelection = FindLayer(selectedSupportLayerGroupId.Value, LayerTreeItemKind.SupportGroup);
+        }
+
+        if (restoredSelection == null
+            && selectedModelEntityId.HasValue
+            && (selectedKind == LayerTreeItemKind.SupportGroup || selectedKind == LayerTreeItemKind.SupportModifier))
+        {
+            restoredSelection = FindLayer(selectedModelEntityId.Value, LayerTreeItemKind.Model);
+        }
+
         SelectedLayer = restoredSelection ?? GetDefaultSelectedLayer();
         OnPropertyChanged(nameof(HasImportedModels));
     }
@@ -341,36 +344,6 @@ public partial class LayerPanelViewModel : ObservableObject
         }
 
         return SelectedLayer.Id;
-    }
-
-    /// <summary>
-    /// Finds the next available default support group name under one imported model.
-    /// </summary>
-    public string CreateNextSupportGroupName(Guid modelEntityId)
-    {
-        HashSet<string> existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
-        {
-            if (supportLayerGroup.ModelEntityId == modelEntityId)
-            {
-                existingNames.Add(supportLayerGroup.Name);
-            }
-        }
-
-        int index = 1;
-
-        while (true)
-        {
-            string candidateName = $"Supports Group {index}";
-
-            if (!existingNames.Contains(candidateName))
-            {
-                return candidateName;
-            }
-
-            index++;
-        }
     }
 
     /// <summary>

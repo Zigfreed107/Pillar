@@ -104,18 +104,44 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Removes the selected imported model and all support groups owned by it after user confirmation.
+    /// Removes the selected model, support layer, or support modifier through the appropriate undoable command.
     /// </summary>
-    private void LayerPanel_RemoveModelRequested(object? sender, EventArgs e)
+    private void LayerPanel_RemoveRequested(object? sender, EventArgs e)
     {
-        Guid? selectedModelEntityId = _layerPanelViewModel.GetSelectedModelEntityId();
+        _ = sender;
+        _ = e;
 
-        if (!selectedModelEntityId.HasValue)
+        LayerTreeItemViewModel? selectedLayer = _layerPanelViewModel.SelectedLayer;
+
+        if (selectedLayer == null)
         {
             return;
         }
 
-        MeshEntity? selectedModel = FindEntityById(selectedModelEntityId.Value) as MeshEntity;
+        if (selectedLayer.Kind == LayerTreeItemKind.Model)
+        {
+            RemoveSelectedModelLayer(selectedLayer);
+            return;
+        }
+
+        if (selectedLayer.Kind == LayerTreeItemKind.SupportGroup)
+        {
+            RemoveSelectedSupportLayer(selectedLayer);
+            return;
+        }
+
+        if (selectedLayer.Kind == LayerTreeItemKind.SupportModifier)
+        {
+            RemoveSelectedSupportModifier(selectedLayer);
+        }
+    }
+
+    /// <summary>
+    /// Removes the selected imported model and all support groups owned by it after user confirmation.
+    /// </summary>
+    private void RemoveSelectedModelLayer(LayerTreeItemViewModel selectedLayer)
+    {
+        MeshEntity? selectedModel = FindEntityById(selectedLayer.ModelEntityId) as MeshEntity;
 
         if (selectedModel == null)
         {
@@ -136,7 +162,7 @@ public partial class MainWindow
             return;
         }
 
-        CancelActiveDocumentMutationSessions();
+        CancelLayerRemovalSessions();
         List<SupportLayerGroup> supportLayerGroups = GetSupportLayerGroupsForModel(selectedModel.Id);
         _commandRunner.Execute(new RemoveModelWithSupportGroupsCommand(_document, selectedModel, supportLayerGroups));
         _layerPanelViewModel.RefreshFromDocument();
@@ -257,37 +283,11 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Adds a support group under the selected imported model layer.
+    /// Removes the selected support layer without deleting the imported model.
     /// </summary>
-    private void LayerPanel_AddSupportGroupRequested(object? sender, EventArgs e)
+    private void RemoveSelectedSupportLayer(LayerTreeItemViewModel selectedLayer)
     {
-        Guid? selectedModelEntityId = _layerPanelViewModel.GetSelectedModelEntityId();
-
-        if (!selectedModelEntityId.HasValue)
-        {
-            return;
-        }
-
-        string supportGroupName = _layerPanelViewModel.CreateNextSupportGroupName(selectedModelEntityId.Value);
-        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(selectedModelEntityId.Value, supportGroupName);
-
-        _commandRunner.Execute(new AddSupportLayerGroupCommand(_document, supportLayerGroup));
-        _viewModel.SetStatusText($"Added {supportGroupName}");
-    }
-
-    /// <summary>
-    /// Removes the selected support group layer without deleting the imported model.
-    /// </summary>
-    private void LayerPanel_RemoveSupportGroupRequested(object? sender, EventArgs e)
-    {
-        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
-
-        if (!selectedSupportLayerGroupId.HasValue)
-        {
-            return;
-        }
-
-        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(selectedSupportLayerGroupId.Value);
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(selectedLayer.Id);
 
         if (supportLayerGroup == null)
         {
@@ -295,9 +295,29 @@ public partial class MainWindow
             return;
         }
 
-        CancelActiveDocumentMutationSessions();
+        CancelLayerRemovalSessions();
         _commandRunner.Execute(new RemoveSupportLayerGroupCommand(_document, supportLayerGroup));
+        _layerPanelViewModel.SelectModelLayer(supportLayerGroup.ModelEntityId);
         _viewModel.SetStatusText($"Removed {supportLayerGroup.Name}");
+    }
+
+    /// <summary>
+    /// Removes the selected support modifier and rebuilds the support layer output as one undoable edit.
+    /// </summary>
+    private void RemoveSelectedSupportModifier(LayerTreeItemViewModel selectedLayer)
+    {
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(selectedLayer.SupportLayerGroupId);
+
+        if (supportLayerGroup == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        CancelLayerRemovalSessions();
+        _commandRunner.Execute(new RemoveSupportModifierCommand(_document, supportLayerGroup, selectedLayer.Id));
+        _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroup.Id);
+        _viewModel.SetStatusText($"Removed {selectedLayer.Name}");
     }
 
     /// <summary>
@@ -382,6 +402,17 @@ public partial class MainWindow
         }
 
         return name.Trim();
+    }
+
+    /// <summary>
+    /// Cancels transient editing state before a layer-panel removal mutates document ownership.
+    /// </summary>
+    private void CancelLayerRemovalSessions()
+    {
+        CancelActiveDocumentMutationSessions();
+        RestoreSupportLayerVisibilityAfterClusterTool();
+        _activeEditingClusterModifierId = null;
+        RestoreViewportToolForActiveMode();
     }
 
     /// <summary>

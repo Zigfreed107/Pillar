@@ -29,8 +29,6 @@ public sealed class GphDocumentSerializer
     private const string ClusterModifierName = "cluster";
     private const string BraceModifierName = "brace";
     private const string DeleteModifierName = "delete";
-    private const string WholeLayerModifierScopeName = "wholeLayer";
-    private const string SelectionModifierScopeName = "selection";
     private const string AutomaticClusterStemSizingName = "automatic";
     private const string ManualClusterStemSizingName = "manual";
     private const string IndividualSupportStyleName = "individual";
@@ -371,7 +369,7 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
-    /// Removes loaded selection modifiers whose saved targets no longer match the generated support population.
+    /// Removes loaded modifiers whose saved targets no longer match the generated support population.
     /// </summary>
     private static void ValidateLoadedSupportModifiers(IReadOnlyList<SupportLayerGroup> supportLayerGroups, IReadOnlyList<CadEntity> entities)
     {
@@ -403,7 +401,7 @@ public sealed class GphDocumentSerializer
             {
                 SupportModifierDefinition modifier = modifiers[i];
 
-                if (modifier.Scope == SupportModifierScope.WholeLayer || IsSelectionModifierValid(modifier, supportLayerGroup, groupSupportIds))
+                if (IsModifierValid(modifier, supportLayerGroup, groupSupportIds))
                 {
                     validModifiers.Add(modifier);
                 }
@@ -417,9 +415,9 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
-    /// Checks whether a loaded selection modifier still targets support ids from the saved generator revision.
+    /// Checks whether a loaded modifier still targets support ids from the saved generator revision.
     /// </summary>
-    private static bool IsSelectionModifierValid(SupportModifierDefinition modifier, SupportLayerGroup supportLayerGroup, HashSet<Guid>? groupSupportIds)
+    private static bool IsModifierValid(SupportModifierDefinition modifier, SupportLayerGroup supportLayerGroup, HashSet<Guid>? groupSupportIds)
     {
         if (!modifier.SourceGeneratorRevision.HasValue || modifier.SourceGeneratorRevision.Value != supportLayerGroup.SourceGeneratorRevision)
         {
@@ -777,7 +775,6 @@ public sealed class GphDocumentSerializer
             {
                 Id = modifier.Id,
                 Kind = CreateSupportModifierKindDto(modifier.Kind),
-                Scope = CreateSupportModifierScopeDto(modifier.Scope),
                 IsEnabled = modifier.IsEnabled,
                 Order = modifier.Order,
                 SourceGeneratorRevision = modifier.SourceGeneratorRevision,
@@ -826,15 +823,6 @@ public sealed class GphDocumentSerializer
         }
     }
 
-    /// <summary>
-    /// Converts one modifier scope into its persisted wire value.
-    /// </summary>
-    private static string CreateSupportModifierScopeDto(SupportModifierScope scope)
-    {
-        return scope == SupportModifierScope.WholeLayer
-            ? WholeLayerModifierScopeName
-            : SelectionModifierScopeName;
-    }
 
     /// <summary>
     /// Converts cluster modifier settings into their persisted representation when present.
@@ -1182,7 +1170,6 @@ public sealed class GphDocumentSerializer
             modifiers.Add(new SupportModifierDefinition(
                 modifierDto.Id,
                 CreateSupportModifierKind(modifierDto.Kind),
-                CreateSupportModifierScope(modifierDto.Scope),
                 modifierDto.IsEnabled,
                 Math.Max(0, modifierDto.Order),
                 CreateClusterModifierSettingsOrDefault(modifierDto),
@@ -1245,23 +1232,6 @@ public sealed class GphDocumentSerializer
         throw new InvalidDataException($"Support modifier kind '{kind}' is not supported.");
     }
 
-    /// <summary>
-    /// Converts saved modifier scope text into the runtime enum.
-    /// </summary>
-    private static SupportModifierScope CreateSupportModifierScope(string scope)
-    {
-        if (string.Equals(scope, WholeLayerModifierScopeName, StringComparison.OrdinalIgnoreCase))
-        {
-            return SupportModifierScope.WholeLayer;
-        }
-
-        if (string.Equals(scope, SelectionModifierScopeName, StringComparison.OrdinalIgnoreCase))
-        {
-            return SupportModifierScope.Selection;
-        }
-
-        throw new InvalidDataException($"Support modifier scope '{scope}' is not supported.");
-    }
 
     /// <summary>
     /// Converts saved Cluster settings into the runtime settings object when present.
@@ -1476,7 +1446,6 @@ public sealed class GphDocumentSerializer
     {
         public Guid Id { get; set; }
         public string Kind { get; set; } = string.Empty;
-        public string Scope { get; set; } = string.Empty;
         public bool IsEnabled { get; set; } = true;
         public int Order { get; set; }
         public int? SourceGeneratorRevision { get; set; }

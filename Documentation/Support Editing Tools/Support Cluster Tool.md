@@ -9,23 +9,20 @@ The main goals are to:
 - preserve the original support contact positions
 - avoid weakening a support group through branches that are too long, too shallow, or obstructed by the model
 
-
-## Clustering applied to a whole support layer
-
-### GUI
+## GUI
 
 The Tool Options Panel should show:
 
-- **Apply To**: **Whole Layer** or **Selected Supports**. Tool tips on the button mention the difference between the two scopes (mainly that whole-layer will automatically reapply if the way the support layer is generated changes, while selected can not.
 - **Maximum Cluster Radius**: maximum horizontal distance from a cluster's central stem axis to any member's head joint
 - **Minimum Supports Per Cluster**: normally two; smaller candidate groups remain unchanged
 - **Maximum Supports Per Cluster**: limits branch crowding and shared-stem loading
 - **Maximum Branch Angle From Vertical**: prevents shallow, difficult-to-print branches
-- **Stem Sizing**: **Automatic** or **Manual**. Automatic should still populate the control with the calculated value, but the control is disabled until Manual is selected. If switching to manual, the current automatic diameter should be remain in control for editing. Manual sizing must still pass validation to prevent unprintable results with an error dialog displaying a message if it fails validation stating why.
+- **Stem Sizing**: **Automatic** or **Manual**. Automatic should populate the control with the calculated value, but the control is disabled until Manual is selected. Manual sizing must still pass validation to prevent unprintable results, with an error dialog explaining the failure.
 - **Central Stem Bottom Diameter** and **Central Stem Top Diameter**: editable when manual sizing is selected
 - **Preview**: enabled by default and updated when parameters change
-- An **Uncluster Selected** button enabled only when one or more clusters are selected in the viewport, which removes those clusters and returns their members to individual supports in one undoable command. 
-- **Apply**: creates the modifier using the current preview
+- **Uncluster Selected**: enabled only when one or more clusters are selected in the viewport, removing those clusters and returning their members to individual supports in one undoable command
+- **Apply to Selected**: captures the currently selected eligible supports in the selected support layer and applies clustering to that target set
+- **Apply to All**: captures every eligible support in the selected support layer and applies the same revision-bound path as **Apply to Selected**
 - **Remove All**: available when editing an existing Cluster modifier and removes that modifier
 - **Close**: leaves the document unchanged when creating a modifier, or discards uncommitted parameter changes when editing one
 
@@ -42,82 +39,49 @@ The viewport preview should distinguish:
 - supports that remain individual
 - candidates rejected by a geometry or clearance rule
 
+The preview should use the current support selection when it resolves to one or more eligible supports. With no eligible selected supports, it previews all eligible supports in the selected layer. **Apply to Selected** remains disabled until at least two eligible supports are selected. **Apply to All** is enabled when the selected support layer contains at least two eligible supports.
+
 The status text should report the number of proposed clusters, clustered supports, unchanged supports, and rejected candidates. Rejected supports should remain printable individual supports rather than disappearing.
 
-### Workflow
-The user selects a support layer, opens the **Edit Supports** mode, and chooses **Cluster Supports**. If more than one layer is selected when the choose **Cluster Supports**, then a warning dialog is shown that instructs the user to select only one support layer and try again, with an OK button that exits out of the tool.
+## Workflow
 
-All other support layers are now made invisible until the user exits the tool when they are made visible again.
+The user selects a support layer, opens **Edit Supports** mode, and chooses **Cluster Supports**. If more than one layer is selected, a warning dialog instructs the user to select only one support layer and try again.
 
-The user selects **Whole Layer** from the Tool Options Panel.
+All other support layers are hidden until the user exits the tool, then their visibility is restored.
 
-1. Confirm that a support layer is selected and contains at least two eligible individual supports.
-2. Read the input support geometry produced by the generator and any preceding modifiers.
-3. Exclude supports already consumed by an incompatible earlier modifier or represented only by derived cluster geometry.
-4. Find nearby candidates using a spatial index in the XY plane.
-5. Process candidates in a stable order so the same inputs and parameters always produce the same clusters.
-6. Build each candidate cluster without exceeding the maximum member count or maximum cluster radius.
-7. Calculate a proposed shared-stem position and validate its branches.
-8. Reject or reduce candidate clusters that fail branch length, branch angle, model-clearance, or printable-diameter checks.
-9. Preview every valid cluster while leaving unclustered supports visible in their original state.
-10. On Apply, create one whole-layer Cluster modifier. One modifier may produce several separate cluster assemblies.
-11. Rebuild the support layer from its generator output and complete modifier stack.
-12. Add one child row such as **Cluster - Whole Layer** beneath the support layer.
+1. Confirm that one support layer is selected and contains at least two eligible individual supports.
+2. Read the support geometry produced by the generator and any preceding modifiers.
+3. Capture target support identities from either the viewport selection or all supports in the layer.
+4. Capture the support layer's current source generator revision.
+5. Find nearby candidates using a spatial index in the XY plane.
+6. Process candidates in a stable order so the same inputs and parameters always produce the same clusters.
+7. Build each candidate cluster without exceeding the maximum member count or maximum cluster radius.
+8. Calculate a proposed shared-stem position and validate its branches.
+9. Reject or reduce candidate clusters that fail branch length, branch angle, model-clearance, or printable-diameter checks.
+10. Preview every valid cluster while leaving unclustered supports visible in their original state.
+11. On Apply, create or update one revision-bound Cluster modifier containing ordered target batches, source revision, parameters, and modifier order.
+12. Rebuild the support layer from its generator output and complete modifier stack.
+13. Add or update one child row such as **Cluster (12)** beneath the support layer.
 
-Whole-layer clustering is replayable. If the source generator is edited, Pillar regenerates its individual supports and reapplies the Cluster modifier to the new support population using the saved parameters. The resulting cluster memberships may change because they are recalculated from the new positions.
+Normal tool-session Apply clicks append the newly captured target identities as a separate batch inside the existing Cluster modifier for that support layer instead of appending another Cluster modifier row. **Apply to All** does not create a different modifier type; it simply captures all current supports as the next target batch.
 
-Editing the modifier row should activate Edit Supports mode, open Cluster Supports, restore the saved whole-layer parameters, and regenerate the preview. Applying changed parameters replaces the modifier definition through an undoable command.
-
-A user should be able to choose an individual cluster in the viewer, and click the "Uncluster Selected" button. This would remove the clustering from all supports in that cluster, returning them to individual supports. In Whole Layer mode, this would convert the modifier to a Selected Supports scope (including renaming the modifier row in the Layer Panel. The user will be warned (with an option to cancel) that this action will convert to a selection-scoped modifier and lose automatic reapplication behavior if the way supports are generated is edited.
-
-
-## Clustering applied to a selection of supports in a layer
-
-### GUI
-The same clustering parameters used for whole-layer clustering should be shown.
-
-Only supports in the selected support layer participate. Unselected supports must not be absorbed merely because they are nearby.
+Only targets in the captured support layer participate. Untargeted supports must not be absorbed merely because they are nearby.
 
 Selecting any member of an existing clustered shared-stem assembly counts as selecting that whole cluster for Cluster Supports operations. This keeps the shared stem internally consistent and avoids editing only one branch of a cluster.
 
-When Selected Supports includes both individual supports and existing clustered supports, Apply first tries to merge selected individual supports into the selected existing cluster or clusters. If an individual support can fit more than one selected cluster, it joins the nearest feasible selected cluster with stable identity ordering used only as a tie-break. Selected individual supports that cannot join a selected cluster remain eligible to form new clusters with the other remaining selected individual supports.
+When the captured target set includes both individual supports and existing clustered supports, Apply first tries to merge selected individual supports into the selected existing cluster or clusters. If an individual support can fit more than one selected cluster, it joins the nearest feasible selected cluster with stable identity ordering used only as a tie-break. Selected individual supports that cannot join a selected cluster remain eligible to form new clusters with the other remaining selected individual supports.
 
-Apply should remain disabled when fewer than two eligible supports are selected. If the selected supports form several separated groups, one selection-scoped modifier may create several clusters; the preview and status text should make that result clear.
+A user should be able to choose an individual cluster in the viewer and click **Uncluster Selected**. This removes the clustering from all supports in that cluster, returning them to individual supports.
 
-When an existing selection-scoped modifier is edited, the options panel should restore its saved parameters and identify its stored cumulative target set. The targets should be highlighted even if the user entered the tool from the modifier row rather than from an active viewport selection.
-
-### Workflow
-The user selects a support layer, opens the **Edit Supports** mode, and chooses **Cluster Supports**. If more than one layer is selected when the choose **Cluster Supports**, then a warning dialog is shown that instructs the user to select only one support layer and try again, with an OK button that exits out of the tool.
-
-All other support layers are now made invisible until the user exits the tool when they are made visible again.
-
-The user selects **Selected Supports** from the Tool Options Panel.
-
-1. The user must select (or have already selected) at least two eligible supports.
-2. Capture the stable identities of the eligible selected supports and the support layer's current generator revision.
-3. Run the same deterministic grouping and geometry validation used for whole-layer clustering, but only against the captured target set.
-4. Preserve selected supports that cannot form a valid cluster as unchanged individual supports.
-5. Preview the proposed shared stems and branches without mutating the document.
-6. On Apply, create or update one revision-bound Cluster modifier containing ordered Apply batches, source revision, parameters, and resulting modifier order. Normal tool-session Apply clicks append the newly selected support identities as a separate batch inside the existing Cluster modifier for that support layer instead of appending another Cluster modifier row.
-7. Rebuild the support layer from its generator output and complete modifier stack.
-8. Add or update one child row such as **Cluster - Selection (12)** beneath the support layer.
-
-A user should be able to choose an individual cluster in the viewer, and click the "Uncluster Selected" button. This would remove the clustering from all supports in that cluster, returning them to individual supports.
-
-The selection-scoped modifier must survive save and load while its generator revision remains valid. It should remain editable and resettable until regeneration changes the source support population.
-
-If generator settings are changed, selection-scoped Cluster modifiers tied to the previous revision are discarded with a user notice. The generator update, modifier removal, and regenerated support output must be one undoable command so Undo restores the original supports and Cluster modifier together.
+A Cluster modifier survives save and load while its generator revision and target identities remain valid. If generator settings are changed, Cluster modifiers tied to the previous revision are discarded with a user notice. The generator update, modifier removal, and regenerated support output must be one undoable command so Undo restores the original supports and Cluster modifier together.
 
 Reset removes the selected Cluster modifier and rebuilds the layer from the original generator output plus the remaining modifiers. The affected supports return to the individual state produced by preceding modifiers. If this was the final modifier, its child row disappears and the support layer has no modifier stack children.
-
-A user should be able to choose an individual cluster in the viewer, and click the "Uncluster Selected" button. This would remove the clustering from all supports in that cluster, returning them to individual supports. 
 
 # Notes
 
 - Refer to **Documentation\Support Editing Tools\Support Editing Mode Behaviours.md** for wider context as to how this tool fits into the overall support editing workflow.
-- Whole-layer and selection-scoped clustering must share one domain clustering implementation so their geometry rules cannot drift apart.
 - Tool controls, viewport selection, and preview meshes are transient UI or rendering state. Saved modifier definitions and clustering geometry rules remain renderer-independent.
-- If you edit how this modifier works in code, also update this document to reflect the new behaviour. If you edit this document, also update the code to reflect the new behaviour. This document is part of the contract for how the modifier works and should not be allowed to diverge from the implementation.
+- If you edit how this modifier works in code, also update this document to reflect the new behaviour. If you edit this document, also update the code to reflect the new behaviour.
 
 # Clustering Logic
 
@@ -155,7 +119,7 @@ Eligible members must:
 - exist at the current point in the ordered modifier pipeline
 - have an individual stem/head definition that can be redirected
 - have finite, valid geometry
-- satisfy the current scope
+- be included in the captured target set
 - not be consumed by an incompatible earlier modifier
 
 A practical deterministic first implementation is:
@@ -174,20 +138,20 @@ This favors predictable and bounded behavior over globally optimal packing. More
 
 Cluster modifiers run in creation order with the rest of the support layer's modifier stack. Changing a Cluster modifier rebuilds the layer from generator output and reapplies all modifiers in order.
 
-The initial version keeps manual selection clustering for a support layer in one cumulative Cluster modifier. Repeated Apply clicks append separate target batches to that modifier, so the Layer Panel shows one Cluster child row while Undo and Redo still step through each Apply command. Each batch is evaluated in Apply order; neighboring supports selected in different Apply clicks should not be regrouped together unless a later batch explicitly selects an existing clustered member and another support to merge them.
+The initial version keeps manual clustering for a support layer in one cumulative Cluster modifier. Repeated Apply clicks append separate target batches to that modifier, so the Layer Panel shows one Cluster child row while Undo and Redo still step through each Apply command. Each batch is evaluated in Apply order; neighboring supports selected in different Apply clicks should not be regrouped together unless a later batch explicitly selects an existing clustered member and another support to merge them.
 
-Editing or removing a Cluster modifier may invalidate later selection-scoped modifiers that target its derived output. Invalid downstream modifiers should be discarded with a notice as part of the same undoable command. Whole-layer downstream modifiers should be reevaluated.
+Editing or removing a Cluster modifier may invalidate later modifiers that target its derived output. Invalid downstream modifiers should be discarded with a notice as part of the same undoable command.
 
 ## Data And Rendering Boundaries
 
 A Cluster modifier should store user intent rather than cached meshes:
 
 - modifier identity
-- scope
 - enabled state
 - ordered position
 - clustering parameters
-- ordered target support identity batches and generator revision for selection scope
+- ordered target support identity batches
+- source generator revision
 
 The evaluated result should use renderer-independent cluster assembly data describing the shared base, stem, junction, branches, and preserved heads. The current single-head **SupportEntity** shape should not be stretched to become the authoritative definition of a multi-head cluster.
 

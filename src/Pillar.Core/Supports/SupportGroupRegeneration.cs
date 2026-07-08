@@ -202,21 +202,12 @@ public sealed class SupportGroupRegeneration
     public AreaSupportSettings? NewAreaSupportSettings { get; }
 
     /// <summary>
-    /// Keeps replayable whole-layer modifiers and discards revision-bound selection modifiers after regeneration.
+    /// Discards revision-bound modifiers after source support identities regenerate.
     /// </summary>
     private static IReadOnlyList<SupportModifierDefinition> CreateModifiersForRegeneratedOutput(IReadOnlyList<SupportModifierDefinition> oldModifiers)
     {
-        List<SupportModifierDefinition> retainedModifiers = new List<SupportModifierDefinition>();
-
-        for (int i = 0; i < oldModifiers.Count; i++)
-        {
-            if (oldModifiers[i].Scope == SupportModifierScope.WholeLayer)
-            {
-                retainedModifiers.Add(oldModifiers[i]);
-            }
-        }
-
-        return retainedModifiers;
+        _ = oldModifiers;
+        return Array.Empty<SupportModifierDefinition>();
     }
 
     /// <summary>
