@@ -794,6 +794,7 @@ public sealed class GphDocumentSerializer
             result.Add(new GphSupportModifierDto
             {
                 Id = modifier.Id,
+                ToolSessionId = modifier.ToolSessionId,
                 Kind = CreateSupportModifierKindDto(modifier.Kind),
                 IsEnabled = modifier.IsEnabled,
                 Order = modifier.Order,
@@ -801,6 +802,7 @@ public sealed class GphDocumentSerializer
                 TargetSupportIds = new List<Guid>(modifier.TargetSupportIds),
                 TargetSupportIdBatches = CreateTargetSupportIdBatchDtos(modifier.TargetSupportIdBatches),
                 ExcludedBracePairs = CreateBracePairDtos(modifier.ExcludedBracePairs),
+                ExcludedBraceTargetBatches = CreateTargetSupportIdBatchDtos(modifier.ExcludedBraceTargetBatches),
                 ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings),
                 BraceSettings = CreateBraceModifierSettingsDto(modifier.BraceSettings),
                 ButtressSettings = CreateButtressModifierSettingsDto(modifier.ButtressSettings)
@@ -1279,7 +1281,9 @@ public sealed class GphDocumentSerializer
                 modifierDto.TargetSupportIds ?? new List<Guid>(),
                 CreateTargetSupportIdBatchesOrDefault(modifierDto),
                 modifierDto.SourceGeneratorRevision,
-                CreateExcludedBracePairsOrDefault(modifierDto)));
+                CreateExcludedBracePairsOrDefault(modifierDto),
+                CreateExcludedBraceTargetBatchesOrDefault(modifierDto),
+                modifierDto.ToolSessionId));
         }
 
         modifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
@@ -1330,6 +1334,34 @@ public sealed class GphDocumentSerializer
             GphBracePairDto pair = modifierDto.ExcludedBracePairs[i]
                 ?? throw new InvalidDataException("A Brace modifier contains a null excluded pair.");
             result.Add(new SupportBracePair(pair.FirstSupportId, pair.SecondSupportId));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Restores compact Brace exclusion batches from persisted modifier data.
+    /// </summary>
+    private static IReadOnlyList<SupportModifierTargetBatch>? CreateExcludedBraceTargetBatchesOrDefault(
+        GphSupportModifierDto modifierDto)
+    {
+        if (modifierDto.ExcludedBraceTargetBatches == null || modifierDto.ExcludedBraceTargetBatches.Count == 0)
+        {
+            return null;
+        }
+
+        List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>(modifierDto.ExcludedBraceTargetBatches.Count);
+
+        for (int i = 0; i < modifierDto.ExcludedBraceTargetBatches.Count; i++)
+        {
+            List<Guid>? targetSupportIds = modifierDto.ExcludedBraceTargetBatches[i];
+
+            if (targetSupportIds == null)
+            {
+                throw new InvalidDataException($"A Brace modifier has a null exclusion batch at index {i}.");
+            }
+
+            result.Add(new SupportModifierTargetBatch(targetSupportIds));
         }
 
         return result;
@@ -1627,6 +1659,7 @@ public sealed class GphDocumentSerializer
     private sealed class GphSupportModifierDto
     {
         public Guid Id { get; set; }
+        public Guid? ToolSessionId { get; set; }
         public string Kind { get; set; } = string.Empty;
         public bool IsEnabled { get; set; } = true;
         public int Order { get; set; }
@@ -1634,6 +1667,7 @@ public sealed class GphDocumentSerializer
         public List<Guid>? TargetSupportIds { get; set; }
         public List<List<Guid>>? TargetSupportIdBatches { get; set; }
         public List<GphBracePairDto>? ExcludedBracePairs { get; set; }
+        public List<List<Guid>>? ExcludedBraceTargetBatches { get; set; }
         public GphClusterModifierSettingsDto? ClusterSettings { get; set; }
         public GphBraceModifierSettingsDto? BraceSettings { get; set; }
         public GphButtressModifierSettingsDto? ButtressSettings { get; set; }

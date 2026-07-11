@@ -41,6 +41,7 @@ public class SceneManager
     private readonly Dictionary<CadEntity, GroupModel3D> _entityToVisual = new Dictionary<CadEntity, GroupModel3D>();
     private readonly Dictionary<Element3D, GroupModel3D> _elementToVisual = new Dictionary<Element3D, GroupModel3D>();
     private readonly Dictionary<Guid, float> _supportLayerGroupOpacityOverrides = new Dictionary<Guid, float>();
+    private readonly Dictionary<Guid, PhongMaterial> _supportLayerGroupMaterials = new Dictionary<Guid, PhongMaterial>();
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
@@ -248,6 +249,7 @@ public class SceneManager
             {
                 supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
                 _supportLayerGroupOpacityOverrides.Remove(supportLayerGroup.Id);
+                _supportLayerGroupMaterials.Remove(supportLayerGroup.Id);
                 _supportLayerGroupVisibilityById.Remove(supportLayerGroup.Id);
             }
         }
@@ -1023,7 +1025,7 @@ public class SceneManager
 
         if (entity is SupportEntity support)
         {
-            return SupportRenderer.Create(support, GetSupportLayerGroupColor(support.SupportLayerGroupId), _supportSides);
+            return SupportRenderer.Create(support, GetSupportLayerGroupMaterial(support.SupportLayerGroupId), _supportSides);
         }
 
         return null;
@@ -1112,9 +1114,7 @@ public class SceneManager
 
         if (entity is SupportEntity supportEntity)
         {
-            PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(
-                GetSupportLayerGroupColor(supportEntity.SupportLayerGroupId),
-                GetSupportLayerGroupOpacity(supportEntity.SupportLayerGroupId));
+            PhongMaterial supportMaterial = GetSupportLayerGroupMaterial(supportEntity.SupportLayerGroupId);
             MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
             {
                 meshModel.PostEffects = string.Empty;
@@ -1180,6 +1180,7 @@ public class SceneManager
         _supportGroupQueryBuffer.Clear();
         _document.FillSupportEntitiesForGroup(supportLayerGroup.Id, _supportGroupQueryBuffer);
         PhongMaterial supportMaterial = SupportRenderer.CreateMaterial(supportLayerGroup.Color, opacity);
+        _supportLayerGroupMaterials[supportLayerGroup.Id] = supportMaterial;
 
         try
         {
@@ -1304,6 +1305,23 @@ public class SceneManager
 
         return _modelClipLowerZ > ModelClipRangeTolerance
             || _modelClipUpperZ < _printableVolumeDefinition.ZDistance - ModelClipRangeTolerance;
+    }
+
+    /// <summary>
+    /// Gets or creates the shared material for one support layer's current color and opacity.
+    /// </summary>
+    private PhongMaterial GetSupportLayerGroupMaterial(Guid supportLayerGroupId)
+    {
+        if (_supportLayerGroupMaterials.TryGetValue(supportLayerGroupId, out PhongMaterial? material))
+        {
+            return material;
+        }
+
+        material = SupportRenderer.CreateMaterial(
+            GetSupportLayerGroupColor(supportLayerGroupId),
+            GetSupportLayerGroupOpacity(supportLayerGroupId));
+        _supportLayerGroupMaterials.Add(supportLayerGroupId, material);
+        return material;
     }
 
     /// <summary>

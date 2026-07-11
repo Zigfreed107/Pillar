@@ -90,16 +90,27 @@ public sealed class ReplaceSupportLayerOutputAndModifiersCommand : ICadCommand
         IReadOnlyList<SupportEntity> supportsToAdd,
         IReadOnlyList<SupportModifierDefinition> modifiers)
     {
+        HashSet<SupportEntity> retainedSupports = new HashSet<SupportEntity>(supportsToAdd, ReferenceEqualityComparer.Instance);
+
         for (int i = supportsToRemove.Count - 1; i >= 0; i--)
         {
-            _document.RemoveEntity(supportsToRemove[i]);
+            if (!retainedSupports.Contains(supportsToRemove[i]))
+            {
+                _document.RemoveEntity(supportsToRemove[i]);
+            }
         }
 
         _supportLayerGroup.SetSupportModifiers(modifiers);
 
+        retainedSupports.Clear();
+        retainedSupports.UnionWith(supportsToRemove);
+
         for (int i = 0; i < supportsToAdd.Count; i++)
         {
-            _document.AddEntity(supportsToAdd[i]);
+            if (!retainedSupports.Contains(supportsToAdd[i]))
+            {
+                _document.AddEntity(supportsToAdd[i]);
+            }
         }
     }
 

@@ -38,17 +38,19 @@ public static class SupportBracingPlanner
             throw new ArgumentException("A Brace modifier with settings is required.", nameof(modifier));
         }
 
-        List<SupportEntity> result = new List<SupportEntity>(sourceSupports);
         List<SupportEntity> targets = CreateEligibleTargetSupports(sourceSupports, modifier.TargetSupportIds, null);
         List<BraceCandidate> candidates = CreateBraceCandidates(targets, modifier.BraceSettings);
         int feasibleCandidateCount = candidates.Count;
         List<BraceCandidate> nearestCandidates = CreateRelativeNeighborhoodCandidates(candidates);
-        HashSet<SupportBracePair> excludedPairs = new HashSet<SupportBracePair>(modifier.ExcludedBracePairs);
-        Dictionary<Guid, int> connectionCounts = new Dictionary<Guid, int>();
+        BraceExclusionLookup exclusions = new BraceExclusionLookup(modifier);
+        int maximumAddedMemberCount = nearestCandidates.Count * 2;
+        List<SupportEntity> result = new List<SupportEntity>(sourceSupports.Count + maximumAddedMemberCount);
+        Dictionary<Guid, int> connectionCounts = new Dictionary<Guid, int>(targets.Count);
         int addedMemberCount = 0;
         int rejectedCandidateCount = feasibleCandidateCount - nearestCandidates.Count;
 
         nearestCandidates.Sort(CompareBraceCandidates);
+        result.AddRange(sourceSupports);
 
         for (int i = 0; i < nearestCandidates.Count; i++)
         {
@@ -65,7 +67,7 @@ public static class SupportBracingPlanner
             connectionCounts[candidate.StartSupportId] = startCount + 1;
             connectionCounts[candidate.EndSupportId] = endCount + 1;
 
-            if (excludedPairs.Contains(new SupportBracePair(candidate.StartSupportId, candidate.EndSupportId)))
+            if (exclusions.Contains(candidate.StartSupportId, candidate.EndSupportId))
             {
                 rejectedCandidateCount++;
                 continue;
@@ -100,11 +102,12 @@ public static class SupportBracingPlanner
         }
 
         SupportButtressModifierSettings settings = modifier.ButtressSettings;
-        List<SupportEntity> result = new List<SupportEntity>(sourceSupports);
         List<SupportEntity> targets = CreateEligibleTargetSupports(
             sourceSupports,
             modifier.TargetSupportIds,
             settings.MinimumButtressHeight);
+        List<SupportEntity> result = new List<SupportEntity>(sourceSupports.Count + (targets.Count * 8));
+        result.AddRange(sourceSupports);
         int addedMemberCount = 0;
         int rejectedCandidateCount = 0;
 
@@ -158,30 +161,25 @@ public static class SupportBracingPlanner
     /// </summary>
     private static List<BraceCandidate> CreateBraceCandidates(IReadOnlyList<SupportEntity> targets, SupportBraceModifierSettings settings)
     {
-        List<BraceCandidate> candidates = new List<BraceCandidate>();
+        List<BraceCandidate> candidates = new List<BraceCandidate>(targets.Count * 4);
 
         if (settings.MaximumBraceLength <= 0.0f)
         {
             return candidates;
         }
 
-        BraceTargetSpatialGrid grid = new BraceTargetSpatialGrid(targets, settings.MaximumBraceLength);
+        List<BraceTarget> braceTargets = CreateBraceTargets(targets);
+        BraceTargetSpatialGrid grid = new BraceTargetSpatialGrid(braceTargets, settings.MaximumBraceLength);
+        List<BraceTarget> neighborBuffer = new List<BraceTarget>();
 
-        for (int i = 0; i < targets.Count; i++)
+        for (int i = 0; i < braceTargets.Count; i++)
         {
-            SupportEntity target = targets[i];
-            List<SupportEntity> neighbors = grid.FindNeighbors(target.BasePosition, settings.MaximumBraceLength);
+            BraceTarget target = braceTargets[i];
+            grid.FillHigherIndexNeighbors(target, settings.MaximumBraceLength, neighborBuffer);
 
-            for (int j = 0; j < neighbors.Count; j++)
+            for (int j = 0; j < neighborBuffer.Count; j++)
             {
-                SupportEntity neighbor = neighbors[j];
-
-                if (target.Id.CompareTo(neighbor.Id) >= 0)
-                {
-                    continue;
-                }
-
-                if (TryCreateBraceCandidate(target, neighbor, settings, out BraceCandidate candidate))
+                if (TryCreateBraceCandidate(target, neighborBuffer[j], settings, out BraceCandidate candidate))
                 {
                     candidates.Add(candidate);
                 }
@@ -189,6 +187,21 @@ public static class SupportBracingPlanner
         }
 
         return candidates;
+    }
+
+    /// <summary>
+    /// Precomputes stable brace endpoints once per target instead of once per candidate pair.
+    /// </summary>
+    private static List<BraceTarget> CreateBraceTargets(IReadOnlyList<SupportEntity> targets)
+    {
+        List<BraceTarget> result = new List<BraceTarget>(targets.Count);
+
+        for (int i = 0; i < targets.Count; i++)
+        {
+            result.Add(new BraceTarget(i, targets[i]));
+        }
+
+        return result;
     }
 
 
@@ -288,8 +301,8 @@ public static class SupportBracingPlanner
     /// Creates the shortest deterministic directional brace candidate for an unordered target pair.
     /// </summary>
     private static bool TryCreateBraceCandidate(
-        SupportEntity firstSupport,
-        SupportEntity secondSupport,
+        BraceTarget firstSupport,
+        BraceTarget secondSupport,
         SupportBraceModifierSettings settings,
         out BraceCandidate candidate)
     {
@@ -321,8 +334,24 @@ public static class SupportBracingPlanner
         SupportBraceModifierSettings settings,
         out BraceCandidate candidate)
     {
-        Vector3 startPosition = CalculateBaseTopPosition(startSupport);
-        Vector3 maximumEndPosition = CalculateStemTopPosition(endSupport);
+        return TryCreateDirectionalBraceCandidate(
+            new BraceTarget(0, startSupport),
+            new BraceTarget(1, endSupport),
+            settings,
+            out candidate);
+    }
+
+    /// <summary>
+    /// Creates one directional candidate from precomputed target geometry.
+    /// </summary>
+    private static bool TryCreateDirectionalBraceCandidate(
+        BraceTarget startSupport,
+        BraceTarget endSupport,
+        SupportBraceModifierSettings settings,
+        out BraceCandidate candidate)
+    {
+        Vector3 startPosition = startSupport.BaseTopPosition;
+        Vector3 maximumEndPosition = endSupport.StemTopPosition;
         Vector2 startXy = new Vector2(startPosition.X, startPosition.Y);
         Vector2 endXy = new Vector2(maximumEndPosition.X, maximumEndPosition.Y);
         float horizontalDistanceSquared = Vector2.DistanceSquared(startXy, endXy);
@@ -341,7 +370,7 @@ public static class SupportBracingPlanner
         }
 
         Vector3 returnStartPosition = endPosition;
-        Vector3 maximumReturnEndPosition = CalculateStemTopPosition(startSupport);
+        Vector3 maximumReturnEndPosition = startSupport.StemTopPosition;
         bool hasReturnMember = TryCreateBraceSegment(
             returnStartPosition,
             maximumReturnEndPosition,
@@ -351,9 +380,9 @@ public static class SupportBracingPlanner
             out float _);
 
         candidate = new BraceCandidate(
-            startSupport.Id,
-            endSupport.Id,
-            startSupport.SupportLayerGroupId,
+            startSupport.SupportId,
+            endSupport.SupportId,
+            startSupport.LayerGroupId,
             startPosition,
             endPosition,
             length,
@@ -726,6 +755,37 @@ public static class SupportBracingPlanner
     }
 
     /// <summary>
+    /// Stores brace-target geometry that is stable for the duration of one planner evaluation.
+    /// </summary>
+    private readonly struct BraceTarget
+    {
+        /// <summary>
+        /// Captures precomputed endpoints and stable target identity.
+        /// </summary>
+        public BraceTarget(int index, SupportEntity support)
+        {
+            Index = index;
+            SupportId = support.Id;
+            LayerGroupId = support.SupportLayerGroupId;
+            BasePosition = support.BasePosition;
+            BaseTopPosition = CalculateBaseTopPosition(support);
+            StemTopPosition = CalculateStemTopPosition(support);
+        }
+
+        public int Index { get; }
+
+        public Guid SupportId { get; }
+
+        public Guid LayerGroupId { get; }
+
+        public Vector3 BasePosition { get; }
+
+        public Vector3 BaseTopPosition { get; }
+
+        public Vector3 StemTopPosition { get; }
+    }
+
+    /// <summary>
     /// Stores one candidate generated brace member.
     /// </summary>
     private readonly struct BraceCandidate
@@ -842,28 +902,115 @@ public static class SupportBracingPlanner
     }
 
     /// <summary>
+    /// Resolves legacy pair exclusions and compact selected-target exclusion batches without pair expansion.
+    /// </summary>
+    private sealed class BraceExclusionLookup
+    {
+        private readonly HashSet<BracePairKey> _explicitPairs = new HashSet<BracePairKey>();
+        private readonly Dictionary<Guid, List<int>> _batchMemberships = new Dictionary<Guid, List<int>>();
+
+        /// <summary>
+        /// Builds lookup data once for a Brace modifier evaluation.
+        /// </summary>
+        public BraceExclusionLookup(SupportModifierDefinition modifier)
+        {
+            for (int i = 0; i < modifier.ExcludedBracePairs.Count; i++)
+            {
+                SupportBracePair pair = modifier.ExcludedBracePairs[i];
+                _explicitPairs.Add(new BracePairKey(pair.FirstSupportId, pair.SecondSupportId));
+            }
+
+            for (int batchIndex = 0; batchIndex < modifier.ExcludedBraceTargetBatches.Count; batchIndex++)
+            {
+                IReadOnlyList<Guid> targetIds = modifier.ExcludedBraceTargetBatches[batchIndex].TargetSupportIds;
+
+                for (int targetIndex = 0; targetIndex < targetIds.Count; targetIndex++)
+                {
+                    AddBatchMembership(targetIds[targetIndex], batchIndex);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets whether a candidate pair is explicitly excluded or shares a compact exclusion batch.
+        /// </summary>
+        public bool Contains(Guid firstSupportId, Guid secondSupportId)
+        {
+            if (_explicitPairs.Contains(new BracePairKey(firstSupportId, secondSupportId)))
+            {
+                return true;
+            }
+
+            if (!_batchMemberships.TryGetValue(firstSupportId, out List<int>? firstMemberships)
+                || !_batchMemberships.TryGetValue(secondSupportId, out List<int>? secondMemberships))
+            {
+                return false;
+            }
+
+            int firstIndex = 0;
+            int secondIndex = 0;
+
+            while (firstIndex < firstMemberships.Count && secondIndex < secondMemberships.Count)
+            {
+                int firstBatchIndex = firstMemberships[firstIndex];
+                int secondBatchIndex = secondMemberships[secondIndex];
+
+                if (firstBatchIndex == secondBatchIndex)
+                {
+                    return true;
+                }
+
+                if (firstBatchIndex < secondBatchIndex)
+                {
+                    firstIndex++;
+                }
+                else
+                {
+                    secondIndex++;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Adds one monotonically ordered exclusion-batch membership for a support id.
+        /// </summary>
+        private void AddBatchMembership(Guid supportId, int batchIndex)
+        {
+            if (!_batchMemberships.TryGetValue(supportId, out List<int>? memberships))
+            {
+                memberships = new List<int>();
+                _batchMemberships.Add(supportId, memberships);
+            }
+
+            memberships.Add(batchIndex);
+        }
+    }
+
+    /// <summary>
     /// Provides bounded XY lookup for brace targets without introducing rendering dependencies.
     /// </summary>
     private sealed class BraceTargetSpatialGrid
     {
-        private readonly Dictionary<BraceGridKey, List<SupportEntity>> _cells = new Dictionary<BraceGridKey, List<SupportEntity>>();
+        private readonly Dictionary<BraceGridKey, List<BraceTarget>> _cells = new Dictionary<BraceGridKey, List<BraceTarget>>();
         private readonly float _cellSize;
 
         /// <summary>
         /// Indexes target support bases using the maximum brace length as the cell size.
         /// </summary>
-        public BraceTargetSpatialGrid(IReadOnlyList<SupportEntity> targets, float maximumBraceLength)
+        public BraceTargetSpatialGrid(IReadOnlyList<BraceTarget> targets, float maximumBraceLength)
         {
             _cellSize = MathF.Max(maximumBraceLength, GeometryTolerance);
 
             for (int i = 0; i < targets.Count; i++)
             {
-                SupportEntity target = targets[i];
+                BraceTarget target = targets[i];
                 BraceGridKey key = ToKey(target.BasePosition);
 
-                if (!_cells.TryGetValue(key, out List<SupportEntity>? cell))
+                if (!_cells.TryGetValue(key, out List<BraceTarget>? cell))
                 {
-                    cell = new List<SupportEntity>();
+                    cell = new List<BraceTarget>();
                     _cells.Add(key, cell);
                 }
 
@@ -872,11 +1019,12 @@ public static class SupportBracingPlanner
         }
 
         /// <summary>
-        /// Returns supports from cells intersecting an XY radius around one support base.
+        /// Fills a reusable buffer with higher-index targets inside one XY search radius.
         /// </summary>
-        public List<SupportEntity> FindNeighbors(Vector3 origin, float radius)
+        public void FillHigherIndexNeighbors(BraceTarget target, float radius, List<BraceTarget> result)
         {
-            List<SupportEntity> result = new List<SupportEntity>();
+            result.Clear();
+            Vector3 origin = target.BasePosition;
             int minimumX = ToCellCoordinate(origin.X - radius);
             int maximumX = ToCellCoordinate(origin.X + radius);
             int minimumY = ToCellCoordinate(origin.Y - radius);
@@ -887,14 +1035,20 @@ public static class SupportBracingPlanner
             {
                 for (int y = minimumY; y <= maximumY; y++)
                 {
-                    if (!_cells.TryGetValue(new BraceGridKey(x, y), out List<SupportEntity>? cell))
+                    if (!_cells.TryGetValue(new BraceGridKey(x, y), out List<BraceTarget>? cell))
                     {
                         continue;
                     }
 
                     for (int i = 0; i < cell.Count; i++)
                     {
-                        SupportEntity candidate = cell[i];
+                        BraceTarget candidate = cell[i];
+
+                        if (candidate.Index <= target.Index)
+                        {
+                            continue;
+                        }
+
                         float deltaX = candidate.BasePosition.X - origin.X;
                         float deltaY = candidate.BasePosition.Y - origin.Y;
 
@@ -905,8 +1059,6 @@ public static class SupportBracingPlanner
                     }
                 }
             }
-
-            return result;
         }
 
         /// <summary>

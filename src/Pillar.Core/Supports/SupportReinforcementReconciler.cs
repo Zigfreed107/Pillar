@@ -12,6 +12,95 @@ namespace Pillar.Core.Supports;
 public static class SupportReinforcementReconciler
 {
     /// <summary>
+    /// Removes selected targets from existing Buttress modifiers and appends their replacement with current settings.
+    /// </summary>
+    public static IReadOnlyList<SupportModifierDefinition> ReapplyButtressTargets(
+        IReadOnlyList<SupportModifierDefinition> modifiers,
+        IReadOnlyCollection<Guid> selectedTargetIds,
+        SupportButtressModifierSettings settings,
+        int sourceGeneratorRevision,
+        Guid toolSessionId)
+    {
+        if (modifiers == null)
+        {
+            throw new ArgumentNullException(nameof(modifiers));
+        }
+
+        if (selectedTargetIds == null)
+        {
+            throw new ArgumentNullException(nameof(selectedTargetIds));
+        }
+
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        if (toolSessionId == Guid.Empty)
+        {
+            throw new ArgumentException("A tool session id is required to reapply buttressing.", nameof(toolSessionId));
+        }
+
+        if (selectedTargetIds.Count == 0)
+        {
+            throw new ArgumentException("At least one selected support is required to reapply buttressing.", nameof(selectedTargetIds));
+        }
+
+        HashSet<Guid> selectedIdSet = new HashSet<Guid>(selectedTargetIds);
+        List<SupportModifierDefinition> reconciledModifiers = new List<SupportModifierDefinition>(modifiers.Count + 1);
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            SupportModifierDefinition modifier = modifiers[i];
+
+            if (modifier.Kind != SupportModifierKind.Buttress)
+            {
+                reconciledModifiers.Add(modifier.CloneWithOrder(reconciledModifiers.Count));
+                continue;
+            }
+
+            List<Guid> remainingTargetIds = CreateRemainingTargetIds(modifier.TargetSupportIds, selectedIdSet);
+
+            if (remainingTargetIds.Count == 0)
+            {
+                continue;
+            }
+
+            reconciledModifiers.Add(new SupportModifierDefinition(
+                modifier.Id,
+                modifier.Kind,
+                modifier.IsEnabled,
+                reconciledModifiers.Count,
+                null,
+                null,
+                modifier.ButtressSettings,
+                remainingTargetIds,
+                null,
+                sourceGeneratorRevision,
+                null,
+                null,
+                modifier.ToolSessionId));
+        }
+
+        List<Guid> replacementTargetIds = new List<Guid>(selectedIdSet);
+        replacementTargetIds.Sort();
+        reconciledModifiers.Add(new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Buttress,
+            true,
+            reconciledModifiers.Count,
+            null,
+            null,
+            settings,
+            replacementTargetIds,
+            null,
+            sourceGeneratorRevision,
+            null,
+            null,
+            toolSessionId));
+        return reconciledModifiers;
+    }
+    /// <summary>
     /// Removes clustered support identities from reinforcement modifiers and drops entries that no longer have enough targets.
     /// </summary>
     public static SupportReinforcementReconciliationResult RemoveClusteredTargets(
@@ -74,7 +163,9 @@ public static class SupportReinforcementReconciler
                 remainingTargetIds,
                 null,
                 modifier.SourceGeneratorRevision,
-                CreateRemainingBracePairExclusions(modifier.ExcludedBracePairs, remainingTargetIds)));
+                CreateRemainingBracePairExclusions(modifier.ExcludedBracePairs, remainingTargetIds),
+                CreateRemainingBraceExclusionBatches(modifier.ExcludedBraceTargetBatches, remainingTargetIds),
+                modifier.ToolSessionId));
         }
 
         return new SupportReinforcementReconciliationResult(
@@ -123,6 +214,38 @@ public static class SupportReinforcementReconciler
             if (remainingIds.Contains(pair.FirstSupportId) && remainingIds.Contains(pair.SecondSupportId))
             {
                 result.Add(pair.Clone());
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Removes target ids from compact exclusion batches and drops batches with fewer than two survivors.
+    /// </summary>
+    private static List<SupportModifierTargetBatch> CreateRemainingBraceExclusionBatches(
+        IReadOnlyList<SupportModifierTargetBatch> exclusionBatches,
+        IReadOnlyList<Guid> remainingTargetIds)
+    {
+        HashSet<Guid> remainingIds = new HashSet<Guid>(remainingTargetIds);
+        List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>();
+
+        for (int batchIndex = 0; batchIndex < exclusionBatches.Count; batchIndex++)
+        {
+            IReadOnlyList<Guid> excludedIds = exclusionBatches[batchIndex].TargetSupportIds;
+            List<Guid> survivingExcludedIds = new List<Guid>(excludedIds.Count);
+
+            for (int targetIndex = 0; targetIndex < excludedIds.Count; targetIndex++)
+            {
+                if (remainingIds.Contains(excludedIds[targetIndex]))
+                {
+                    survivingExcludedIds.Add(excludedIds[targetIndex]);
+                }
+            }
+
+            if (survivingExcludedIds.Count >= 2)
+            {
+                result.Add(new SupportModifierTargetBatch(survivingExcludedIds));
             }
         }
 

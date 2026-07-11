@@ -28,6 +28,14 @@ public static class SupportRenderer
     /// </summary>
     public static GroupModel3D Create(SupportEntity support, SupportLayerColor color, int supportSides)
     {
+        return Create(support, CreateMaterial(color), supportSides);
+    }
+
+    /// <summary>
+    /// Creates one renderable support visual using a caller-owned shared material.
+    /// </summary>
+    public static GroupModel3D Create(SupportEntity support, PhongMaterial material, int supportSides)
+    {
         SupportMeshData meshData = SupportMeshBuilder.Build(support, supportSides);
         MeshGeometry3D geometry = new MeshGeometry3D
         {
@@ -36,7 +44,7 @@ public static class SupportRenderer
             Normals = new Vector3Collection(meshData.Normals)
         };
 
-        return MeshRenderer.CreateSelectableMeshGroup(geometry, CreateMaterial(color));
+        return MeshRenderer.CreateSelectableMeshGroup(geometry, material);
     }
 
     /// <summary>

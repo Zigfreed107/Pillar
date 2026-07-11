@@ -234,14 +234,22 @@ public partial class LayerPanelViewModel : ObservableObject
 
                 IReadOnlyList<SupportModifierDefinition> supportModifiers = supportLayerGroup.SupportModifiers;
 
+                HashSet<Guid> displayedToolSessionIds = new HashSet<Guid>();
+
                 for (int i = 0; i < supportModifiers.Count; i++)
                 {
                     SupportModifierDefinition modifier = supportModifiers[i];
+
+                    if (!displayedToolSessionIds.Add(modifier.ToolSessionId))
+                    {
+                        continue;
+                    }
+
                     supportGroupRow.Children.Add(new LayerTreeItemViewModel(
-                        modifier.Id,
+                        modifier.ToolSessionId,
                         supportLayerGroup.ModelEntityId,
                         LayerTreeItemKind.SupportModifier,
-                        modifier.DisplayName,
+                        CreateToolSessionDisplayName(supportModifiers, modifier.ToolSessionId),
                         supportLayerGroup.Color,
                         supportLayerGroup.Id));
                 }
@@ -588,6 +596,46 @@ public partial class LayerPanelViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Builds one Layer Panel label for all internal actions captured by a tool-launch session.
+    /// </summary>
+    private static string CreateToolSessionDisplayName(
+        IReadOnlyList<SupportModifierDefinition> modifiers,
+        Guid toolSessionId)
+    {
+        HashSet<Guid> targetIds = new HashSet<Guid>();
+        bool hasCluster = false;
+        bool hasBracing = false;
+        bool hasDelete = false;
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            SupportModifierDefinition modifier = modifiers[i];
+
+            if (modifier.ToolSessionId != toolSessionId)
+            {
+                continue;
+            }
+
+            hasCluster |= modifier.Kind == SupportModifierKind.Cluster;
+            hasBracing |= modifier.Kind == SupportModifierKind.Brace || modifier.Kind == SupportModifierKind.Buttress;
+            hasDelete |= modifier.Kind == SupportModifierKind.Delete;
+
+            for (int targetIndex = 0; targetIndex < modifier.TargetSupportIds.Count; targetIndex++)
+            {
+                targetIds.Add(modifier.TargetSupportIds[targetIndex]);
+            }
+        }
+
+        string name = hasBracing
+            ? "Brace"
+            : hasCluster
+                ? "Cluster"
+                : hasDelete
+                    ? "Delete"
+                    : "Support Edit";
+        return $"{name} ({targetIds.Count})";
+    }
     /// <summary>
     /// Gets the effective support-layer selection count from either the layer tree or viewport support selection.
     /// </summary>

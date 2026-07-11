@@ -13,6 +13,7 @@ public sealed class SupportModifierDefinition
     private readonly List<Guid> _targetSupportIds;
     private readonly List<SupportModifierTargetBatch> _targetSupportIdBatches;
     private readonly List<SupportBracePair> _excludedBracePairs;
+    private readonly List<SupportModifierTargetBatch> _excludedBraceTargetBatches;
 
     /// <summary>
     /// Creates one support modifier definition with a stable document identity.
@@ -59,7 +60,9 @@ public sealed class SupportModifierDefinition
         IReadOnlyList<Guid>? targetSupportIds,
         IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches,
         int? sourceGeneratorRevision,
-        IReadOnlyList<SupportBracePair>? excludedBracePairs = null)
+        IReadOnlyList<SupportBracePair>? excludedBracePairs = null,
+        IReadOnlyList<SupportModifierTargetBatch>? excludedBraceTargetBatches = null,
+        Guid? toolSessionId = null)
     {
         if (id == Guid.Empty)
         {
@@ -72,6 +75,13 @@ public sealed class SupportModifierDefinition
         }
 
         Id = id;
+        ToolSessionId = toolSessionId ?? id;
+
+        if (ToolSessionId == Guid.Empty)
+        {
+            throw new ArgumentException("A support modifier must belong to a stable tool session.", nameof(toolSessionId));
+        }
+
         Kind = kind;
         IsEnabled = isEnabled;
         Order = order;
@@ -82,6 +92,7 @@ public sealed class SupportModifierDefinition
         _targetSupportIdBatches = CreateTargetSupportIdBatchList(targetSupportIds, targetSupportIdBatches);
         _targetSupportIds = CreateFlattenedTargetSupportIdList(targetSupportIds, _targetSupportIdBatches);
         _excludedBracePairs = CreateBracePairList(excludedBracePairs);
+        _excludedBraceTargetBatches = CreateExcludedBraceTargetBatchList(excludedBraceTargetBatches);
 
         ValidateTargets();
         ValidateSettings();
@@ -174,6 +185,11 @@ public sealed class SupportModifierDefinition
     public Guid Id { get; }
 
     /// <summary>
+    /// Gets the tool-launch session represented by this internal modifier action.
+    /// </summary>
+    public Guid ToolSessionId { get; }
+
+    /// <summary>
     /// Gets the editing operation type stored by this modifier.
     /// </summary>
     public SupportModifierKind Kind { get; }
@@ -228,6 +244,14 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
+    /// Gets compact target batches whose internal support pairs are suppressed by later Brace Selected operations.
+    /// </summary>
+    public IReadOnlyList<SupportModifierTargetBatch> ExcludedBraceTargetBatches
+    {
+        get { return _excludedBraceTargetBatches; }
+    }
+
+    /// <summary>
     /// Gets the generator revision captured by this revision-bound modifier.
     /// </summary>
     public int? SourceGeneratorRevision { get; }
@@ -260,7 +284,9 @@ public sealed class SupportModifierDefinition
             _targetSupportIds,
             _targetSupportIdBatches,
             SourceGeneratorRevision,
-            _excludedBracePairs);
+            _excludedBracePairs,
+            _excludedBraceTargetBatches,
+            ToolSessionId);
     }
 
     /// <summary>
@@ -279,7 +305,9 @@ public sealed class SupportModifierDefinition
             _targetSupportIds,
             _targetSupportIdBatches,
             SourceGeneratorRevision,
-            _excludedBracePairs);
+            _excludedBracePairs,
+            _excludedBraceTargetBatches,
+            ToolSessionId);
     }
 
     /// <summary>
@@ -411,6 +439,35 @@ public sealed class SupportModifierDefinition
     }
 
     /// <summary>
+    /// Copies compact Brace exclusion batches into durable modifier ownership.
+    /// </summary>
+    private static List<SupportModifierTargetBatch> CreateExcludedBraceTargetBatchList(
+        IReadOnlyList<SupportModifierTargetBatch>? excludedBraceTargetBatches)
+    {
+        List<SupportModifierTargetBatch> result = new List<SupportModifierTargetBatch>();
+
+        if (excludedBraceTargetBatches == null)
+        {
+            return result;
+        }
+
+        for (int i = 0; i < excludedBraceTargetBatches.Count; i++)
+        {
+            SupportModifierTargetBatch batch = excludedBraceTargetBatches[i]
+                ?? throw new ArgumentException("Brace exclusion batches cannot contain null entries.", nameof(excludedBraceTargetBatches));
+
+            if (batch.TargetSupportIds.Count < 2)
+            {
+                throw new ArgumentException("Brace exclusion batches must contain at least two support ids.", nameof(excludedBraceTargetBatches));
+            }
+
+            result.Add(batch.Clone());
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Verifies revision-bound modifier target metadata.
     /// </summary>
     private void ValidateTargets()
@@ -433,6 +490,19 @@ public sealed class SupportModifierDefinition
             if (!targetIds.Contains(pair.FirstSupportId) || !targetIds.Contains(pair.SecondSupportId))
             {
                 throw new ArgumentException("Brace pair exclusions must reference supports targeted by the same modifier.");
+            }
+        }
+
+        for (int batchIndex = 0; batchIndex < _excludedBraceTargetBatches.Count; batchIndex++)
+        {
+            IReadOnlyList<Guid> excludedTargetIds = _excludedBraceTargetBatches[batchIndex].TargetSupportIds;
+
+            for (int targetIndex = 0; targetIndex < excludedTargetIds.Count; targetIndex++)
+            {
+                if (!targetIds.Contains(excludedTargetIds[targetIndex]))
+                {
+                    throw new ArgumentException("Brace exclusion batches must reference supports targeted by the same modifier.");
+                }
             }
         }
     }
@@ -475,9 +545,9 @@ public sealed class SupportModifierDefinition
         {
             throw new ArgumentException("Only Buttress modifiers can store buttress settings.");
         }
-        if (Kind != SupportModifierKind.Brace && _excludedBracePairs.Count > 0)
+        if (Kind != SupportModifierKind.Brace && (_excludedBracePairs.Count > 0 || _excludedBraceTargetBatches.Count > 0))
         {
-            throw new ArgumentException("Only Brace modifiers can store excluded support pairs.");
+            throw new ArgumentException("Only Brace modifiers can store excluded support pairs or target batches.");
         }
     }
 }

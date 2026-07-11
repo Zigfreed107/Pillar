@@ -9,6 +9,7 @@ using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
+using Pillar.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -75,7 +76,12 @@ public static class Program
         RunTest(failures, "Brace modifier preserves equal-distance neighbors", ValidateBraceModifierPreservesEqualDistanceNeighbors);
         RunTest(failures, "Brace modifier limits physical connections", ValidateBraceModifierLimitsConnections);
         RunTest(failures, "Brace pair exclusions preserve mixed-selection bracing", ValidateBracePairExclusionsPreserveMixedSelectionBracing);
+        RunTest(failures, "Brace exclusion batches preserve mixed-selection bracing", ValidateBraceExclusionBatchesPreserveMixedSelectionBracing);
+        RunTest(failures, "Modifier pipeline captures bracing diagnostics in one pass", ValidateModifierPipelineCapturesBracingDiagnostics);
+        RunTest(failures, "Support output replacement retains unchanged entities", ValidateSupportOutputReplacementRetainsUnchangedEntities);
         RunTest(failures, "Reinforcement excludes clustered supports", ValidateReinforcementExcludesClusteredSupports);
+        RunTest(failures, "Buttress reapply preserves unselected targets", ValidateButtressReapplyPreservesUnselectedTargets);
+        RunTest(failures, "Modifier session removal removes every internal action", ValidateModifierSessionRemovalRemovesEveryAction);
         RunTest(failures, "Cluster before Brace excludes clustered outputs", ValidateClusterBeforeBraceExcludesClusteredOutputs);
         RunTest(failures, "Cluster reconciliation removes reinforcement targets", ValidateClusterReconciliationRemovesReinforcementTargets);
         RunTest(failures, "Cluster reinforcement cleanup undo restores prior state", ValidateClusterReinforcementCleanupUndo);
@@ -148,6 +154,7 @@ public static class Program
             return 1;
         }
 
+        BracingPerformanceBenchmarks.RunIfRequested();
         Console.WriteLine("Support mesh smoke tests passed.");
         return 0;
     }
@@ -1799,6 +1806,335 @@ public static class Program
             || newMixedPairMemberCount != 0)
         {
             throw new InvalidOperationException("Expected only the selected-selected pair to use the replacement Brace settings.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that compact exclusion batches suppress only pairs internal to the later selection.
+    /// </summary>
+    private static void ValidateBraceExclusionBatchesPreserveMixedSelectionBracing()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(6.0f, 0.0f),
+                new Vector2(12.0f, 0.0f)
+            },
+            30.0f,
+            SupportDefaults.CreateProfile());
+        SupportBraceModifierSettings oldSettings = new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.4f);
+        SupportBraceModifierSettings newSettings = new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.9f);
+        List<Guid> selectedIds = new List<Guid> { supports[0].Id, supports[2].Id };
+        SupportModifierDefinition oldModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            true,
+            0,
+            null,
+            oldSettings,
+            null,
+            CreateSupportIds(supports),
+            null,
+            0,
+            null,
+            new List<SupportModifierTargetBatch> { new SupportModifierTargetBatch(selectedIds) });
+        SupportModifierDefinition newModifier = SupportModifierDefinition.CreateNewBrace(1, newSettings, selectedIds, 0);
+        IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(
+            supports,
+            new List<SupportModifierDefinition> { oldModifier, newModifier });
+        int oldMixedPairCount = 0;
+        int oldSelectedPairCount = 0;
+        int newSelectedPairCount = 0;
+
+        for (int i = supports.Count; i < result.Count; i++)
+        {
+            SupportEntity member = result[i];
+
+            if (member.Style is not BraceMemberSupportStyle braceStyle)
+            {
+                continue;
+            }
+
+            int firstSupportIndex = FindSupportIndexByXy(supports, member.BasePosition);
+            int secondSupportIndex = FindSupportIndexByXy(supports, member.TipPosition);
+            int minimumIndex = Math.Min(firstSupportIndex, secondSupportIndex);
+            int maximumIndex = Math.Max(firstSupportIndex, secondSupportIndex);
+            bool usesOldSettings = MathF.Abs(braceStyle.Diameter - 0.4f) <= 0.0001f;
+            bool usesNewSettings = MathF.Abs(braceStyle.Diameter - 0.9f) <= 0.0001f;
+
+            if (minimumIndex == 0 && maximumIndex == 2)
+            {
+                oldSelectedPairCount += usesOldSettings ? 1 : 0;
+                newSelectedPairCount += usesNewSettings ? 1 : 0;
+            }
+            else if (usesOldSettings)
+            {
+                oldMixedPairCount++;
+            }
+        }
+
+        if (oldSelectedPairCount != 0 || newSelectedPairCount == 0 || oldMixedPairCount == 0)
+        {
+            throw new InvalidOperationException("Expected compact exclusion batches to replace only selected-selected bracing.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that final output and requested diagnostics are produced by one pipeline evaluation.
+    /// </summary>
+    private static void ValidateModifierPipelineCapturesBracingDiagnostics()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2> { Vector2.Zero, new Vector2(6.0f, 0.0f) },
+            30.0f,
+            SupportDefaults.CreateProfile());
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.6f),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult directResult = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+        SupportModifierPipelineEvaluation pipelineResult = SupportModifierPipeline.EvaluateModifiers(
+            supports,
+            new List<SupportModifierDefinition> { modifier },
+            modifier.Id);
+        SupportBracingEvaluationResult capturedResult = pipelineResult.CapturedBracingResult
+            ?? throw new InvalidOperationException("Expected requested bracing diagnostics to be captured.");
+
+        if (pipelineResult.SupportEntities.Count != directResult.SupportEntities.Count
+            || capturedResult.AddedMemberCount != directResult.AddedMemberCount
+            || capturedResult.TargetSupportCount != directResult.TargetSupportCount
+            || capturedResult.RejectedCandidateCount != directResult.RejectedCandidateCount)
+        {
+            throw new InvalidOperationException("Expected captured pipeline diagnostics to match direct Brace evaluation.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that reapplying buttressing replaces selected targets without disturbing unselected targets.
+    /// </summary>
+    private static void ValidateButtressReapplyPreservesUnselectedTargets()
+    {
+        Guid firstId = Guid.NewGuid();
+        Guid selectedId = Guid.NewGuid();
+        Guid thirdId = Guid.NewGuid();
+        SupportButtressModifierSettings oldSettings = new SupportButtressModifierSettings(10.0f, 4.0f);
+        SupportButtressModifierSettings newSettings = new SupportButtressModifierSettings(20.0f, 8.0f);
+        SupportModifierDefinition firstModifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            oldSettings,
+            new List<Guid> { firstId, selectedId },
+            0);
+        SupportModifierDefinition secondModifier = SupportModifierDefinition.CreateNewButtress(
+            1,
+            oldSettings,
+            new List<Guid> { selectedId, thirdId },
+            0);
+        Guid toolSessionId = Guid.NewGuid();
+        IReadOnlyList<SupportModifierDefinition> result = SupportReinforcementReconciler.ReapplyButtressTargets(
+            new List<SupportModifierDefinition> { firstModifier, secondModifier },
+            new List<Guid> { selectedId },
+            newSettings,
+            0,
+            toolSessionId);
+
+        if (result.Count != 3
+            || result[0].Id != firstModifier.Id
+            || result[0].TargetSupportIds.Count != 1
+            || result[0].TargetSupportIds[0] != firstId
+            || result[1].Id != secondModifier.Id
+            || result[1].TargetSupportIds.Count != 1
+            || result[1].TargetSupportIds[0] != thirdId
+            || result[2].TargetSupportIds.Count != 1
+            || result[2].TargetSupportIds[0] != selectedId
+            || result[2].ToolSessionId != toolSessionId
+            || result[2].ButtressSettings == null
+            || MathF.Abs(result[2].ButtressSettings.ButtressSpacing - newSettings.ButtressSpacing) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected selected buttressing to be replaced while unselected targets retain their existing modifiers.");
+        }
+    }
+    /// <summary>
+    /// Validates that removing one visible tool session removes and restores all of its internal actions together.
+    /// </summary>
+    private static void ValidateModifierSessionRemovalRemovesEveryAction()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            Vector3.Zero,
+            new Vector3(20.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 20.0f, 0.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Session Removal Supports");
+        document.AddSupportLayerGroup(supportLayerGroup);
+        List<SupportEntity> sourceSupports = CreateSupportsForGroup(
+            supportLayerGroup.Id,
+            new List<Vector2> { Vector2.Zero, new Vector2(6.0f, 0.0f) },
+            60.0f,
+            SupportDefaults.CreateProfile());
+        Guid toolSessionId = Guid.NewGuid();
+        SupportModifierDefinition braceAction = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            true,
+            0,
+            null,
+            SupportBraceModifierSettings.CreateDefault(),
+            null,
+            CreateSupportIds(sourceSupports),
+            null,
+            supportLayerGroup.SourceGeneratorRevision,
+            null,
+            null,
+            toolSessionId);
+        SupportModifierDefinition buttressAction = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Buttress,
+            true,
+            1,
+            null,
+            null,
+            SupportButtressModifierSettings.CreateDefault(),
+            new List<Guid> { sourceSupports[0].Id },
+            null,
+            supportLayerGroup.SourceGeneratorRevision,
+            null,
+            null,
+            toolSessionId);
+        Guid laterToolSessionId = Guid.NewGuid();
+        SupportModifierDefinition laterBraceAction = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            false,
+            2,
+            null,
+            SupportBraceModifierSettings.CreateDefault(),
+            null,
+            CreateSupportIds(sourceSupports),
+            null,
+            supportLayerGroup.SourceGeneratorRevision,
+            null,
+            null,
+            laterToolSessionId);
+        List<SupportModifierDefinition> actions = new List<SupportModifierDefinition> { braceAction, buttressAction, laterBraceAction };
+        supportLayerGroup.SetSupportModifiers(actions);
+        IReadOnlyList<SupportEntity> evaluatedSupports = SupportModifierPipeline.ApplyModifiers(sourceSupports, actions);
+
+        for (int i = 0; i < evaluatedSupports.Count; i++)
+        {
+            document.AddEntity(evaluatedSupports[i]);
+        }
+
+        LayerPanelViewModel layerPanelViewModel = new LayerPanelViewModel(document);
+        LayerTreeItemViewModel supportGroupRow = layerPanelViewModel.ModelLayers[0].Children[0];
+
+        if (supportGroupRow.Children.Count != 2
+            || supportGroupRow.Children[0].Id != toolSessionId
+            || supportGroupRow.Children[1].Id != laterToolSessionId)
+        {
+            throw new InvalidOperationException("Expected one Layer Panel row per tool launch, with mixed actions grouped into their owning session.");
+        }
+
+        RemoveSupportModifierCommand command = new RemoveSupportModifierCommand(document, supportLayerGroup, toolSessionId);
+        command.Execute();
+
+        if (supportLayerGroup.SupportModifiers.Count != 1
+            || supportLayerGroup.SupportModifiers[0].ToolSessionId != laterToolSessionId)
+        {
+            throw new InvalidOperationException("Expected session removal to remove every owned action without disturbing a later tool launch.");
+        }
+
+        command.Undo();
+
+        if (supportLayerGroup.SupportModifiers.Count != 3
+            || supportLayerGroup.SupportModifiers[0].ToolSessionId != toolSessionId
+            || supportLayerGroup.SupportModifiers[1].ToolSessionId != toolSessionId
+            || supportLayerGroup.SupportModifiers[2].ToolSessionId != laterToolSessionId)
+        {
+            throw new InvalidOperationException("Expected undo to restore the complete mixed bracing tool session.");
+        }
+    }
+    /// <summary>
+    /// Validates that output replacement adds and removes only generated members while retaining source instances.
+    /// </summary>
+    private static void ValidateSupportOutputReplacementRetainsUnchangedEntities()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            Vector3.Zero,
+            new Vector3(20.0f, 0.0f, 0.0f),
+            new Vector3(0.0f, 20.0f, 0.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Retained Sources");
+        document.AddSupportLayerGroup(supportLayerGroup);
+        List<SupportEntity> sourceSupports = CreateSupportsForGroup(
+            supportLayerGroup.Id,
+            new List<Vector2> { Vector2.Zero, new Vector2(6.0f, 0.0f) },
+            30.0f,
+            SupportDefaults.CreateProfile());
+
+        for (int i = 0; i < sourceSupports.Count; i++)
+        {
+            document.AddEntity(sourceSupports[i]);
+        }
+
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.6f),
+            CreateSupportIds(sourceSupports),
+            supportLayerGroup.SourceGeneratorRevision);
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition> { modifier };
+        IReadOnlyList<SupportEntity> newOutput = SupportModifierPipeline.ApplyModifiers(sourceSupports, newModifiers);
+        ReplaceSupportLayerOutputAndModifiersCommand command = new ReplaceSupportLayerOutputAndModifiersCommand(
+            document,
+            supportLayerGroup,
+            sourceSupports,
+            newOutput,
+            Array.Empty<SupportModifierDefinition>(),
+            newModifiers,
+            "Retain Source Supports");
+        int addedCount = 0;
+        int removedCount = 0;
+        document.EntitiesChanged += (sender, eventArgs) =>
+        {
+            _ = sender;
+            addedCount += eventArgs.NewItems?.Count ?? 0;
+            removedCount += eventArgs.OldItems?.Count ?? 0;
+        };
+
+        command.Execute();
+        int generatedCount = newOutput.Count - sourceSupports.Count;
+
+        if (removedCount != 0 || addedCount != generatedCount)
+        {
+            throw new InvalidOperationException("Expected execute to add only generated brace members.");
+        }
+
+        IReadOnlyList<SupportEntity> executedOutput = document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        HashSet<SupportEntity> executedSupportSet = new HashSet<SupportEntity>(executedOutput);
+
+        for (int i = 0; i < sourceSupports.Count; i++)
+        {
+            if (!executedSupportSet.Contains(sourceSupports[i]))
+            {
+                throw new InvalidOperationException("Expected execute to retain every source support instance.");
+            }
+        }
+
+        addedCount = 0;
+        removedCount = 0;
+        command.Undo();
+
+        if (addedCount != 0 || removedCount != generatedCount)
+        {
+            throw new InvalidOperationException("Expected undo to remove only generated brace members.");
         }
     }
 
@@ -3558,6 +3894,8 @@ public static class Program
             20.0f,
             SupportDefaults.CreateProfile());
         SupportBracePair excludedPair = new SupportBracePair(supports[0].Id, supports[1].Id);
+        Guid toolSessionId = Guid.NewGuid();
+        SupportModifierTargetBatch excludedBatch = new SupportModifierTargetBatch(new List<Guid> { supports[1].Id, supports[2].Id });
         SupportModifierDefinition modifier = new SupportModifierDefinition(
             Guid.NewGuid(),
             SupportModifierKind.Brace,
@@ -3569,7 +3907,9 @@ public static class Program
             CreateSupportIds(supports),
             null,
             supportLayerGroup.SourceGeneratorRevision,
-            new List<SupportBracePair> { excludedPair });
+            new List<SupportBracePair> { excludedPair },
+            new List<SupportModifierTargetBatch> { excludedBatch },
+            toolSessionId);
         supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition> { modifier });
         document.AddSupportLayerGroup(supportLayerGroup);
 
@@ -3591,6 +3931,16 @@ public static class Program
                 || !loadedModifier.ExcludedBracePairs[0].Equals(excludedPair))
             {
                 throw new InvalidOperationException("Expected the excluded Brace pair to survive save and load.");
+            }
+
+            if (loadedModifier.ExcludedBraceTargetBatches.Count != 1
+                || loadedModifier.ExcludedBraceTargetBatches[0].TargetSupportIds.Count != 2)
+            {
+                throw new InvalidOperationException("Expected the compact Brace exclusion batch to survive save and load.");
+            }
+            if (loadedModifier.ToolSessionId != toolSessionId)
+            {
+                throw new InvalidOperationException("Expected the tool-launch session identity to survive save and load.");
             }
         }
         finally

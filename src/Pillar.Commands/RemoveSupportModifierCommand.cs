@@ -44,9 +44,9 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
 
         for (int i = 0; i < oldModifiers.Count; i++)
         {
-            if (oldModifiers[i].Id == supportModifierId)
+            if (oldModifiers[i].ToolSessionId == supportModifierId)
             {
-                removedModifier = oldModifiers[i];
+                removedModifier ??= oldModifiers[i];
                 continue;
             }
 

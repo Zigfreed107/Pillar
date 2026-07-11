@@ -96,6 +96,19 @@ public partial class SupportBracingToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Enables modifier-only actions for every operation kind stored in the active tool session.
+    /// </summary>
+    public void SetEditingModifierKinds(bool hasBraceActions, bool hasButtressActions)
+    {
+        EditingModifierKind = hasButtressActions
+            ? SupportModifierKind.Buttress
+            : hasBraceActions
+                ? SupportModifierKind.Brace
+                : null;
+        RemoveBracingFromSelectedButton.IsEnabled = hasBraceActions;
+        RemoveButtressingFromSelectedButton.IsEnabled = hasButtressActions;
+    }
+    /// <summary>
     /// Enables or disables selection-based bracing actions.
     /// </summary>
     public void SetBraceSelectedEnabled(bool isEnabled)

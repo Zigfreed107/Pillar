@@ -17,8 +17,8 @@ The source generator and modifier stack are the authoritative definition of the 
 
 Every modifier is revision-bound and targets explicit support identities. A modifier stores:
 
-- stable modifier identity
-- modifier or tool type
+- stable tool-launch session identity
+- one or more ordered internal actions created by that tool session
 - enabled state
 - tool parameters
 - ordering
@@ -30,6 +30,8 @@ Modifier definitions are document operations owned by their support layer. They 
 ## Modifier Lifetimes
 
 Modifiers are saved, editable, undoable, and retained across project save and load only while their captured source generator revision and target support identities remain valid.
+
+A modifier lifetime begins when its Support Editing tool is launched from the Mode Panel and ends when that tool is closed. Repeated actions during that lifetime update the same modifier session. Opening an existing modifier from the Layer Panel resumes that modifier's saved session.
 
 Examples include:
 
@@ -81,7 +83,7 @@ Area Supports
 
 A modifier stack entry in the layer panel should have an edit button to the right of the label.
 
-Each independent modifier receives its own row so different parameter sets remain independently editable. Cumulative workflows such as manual support clustering should keep one row and append ordered target batches inside that modifier as the user applies separate target sets. Removing the final modifier should leave the support layer with no modifier children.
+Each launch of a Support Editing tool creates one modifier row. Every Apply, Selected, All, remove, or related action performed before that tool is closed belongs to the same row, including mixed Brace and Buttress actions. Closing the tool and launching it again from the Mode Panel starts a new modifier row. Editing a row from the Layer Panel reopens that saved tool session instead of creating a new one. Internal action records may retain different parameter snapshots while remaining owned, edited, persisted, and removed as one modifier session.
 
 Selecting the edit action for a modifier should:
 
