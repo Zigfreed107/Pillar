@@ -105,6 +105,11 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
         {
             SupportEntity support = supportEntities[i];
 
+            if (support.Style.Kind == SupportStyleKind.BraceMember || support.Style.Kind == SupportStyleKind.Buttress)
+            {
+                continue;
+            }
+
             if (support.Style.Kind != SupportStyleKind.Clustered)
             {
                 restoredSupports.Add(support);
@@ -141,6 +146,9 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
 
             case SupportModifierKind.Brace:
                 return "Brace";
+
+            case SupportModifierKind.Buttress:
+                return "Buttress";
 
             case SupportModifierKind.Delete:
                 return "Delete";

@@ -131,11 +131,16 @@ public sealed class SupportEntity : CadEntity
                 dimensions.StemBottomDiameter,
                 MathF.Max(dimensions.StemTopDiameter, MathF.Max(dimensions.HeadBottomDiameter, dimensions.HeadTopDiameter))) * 0.5f);
         Vector3 radiusPadding = new Vector3(maximumRadius, maximumRadius, maximumRadius);
-        Vector3 headBottom = TipPosition - (HeadDirection * Profile.HeadHeight);
+        bool isButtress = Style.Kind == SupportStyleKind.Buttress;
+        Vector3 headBottom = isButtress
+            ? TipPosition
+            : TipPosition - (HeadDirection * Profile.HeadHeight);
         Vector3 stemTop = BranchLength > 0.0f
             ? headBottom - (BranchDirection * BranchLength)
             : headBottom;
-        Vector3 penetrationTip = TipPosition + (HeadDirection * Profile.HeadPenetrationDepth);
+        Vector3 penetrationTip = isButtress
+            ? TipPosition
+            : TipPosition + (HeadDirection * Profile.HeadPenetrationDepth);
         Vector3 min = Vector3.Min(Vector3.Min(Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition), headBottom), stemTop) - radiusPadding;
         Vector3 max = Vector3.Max(Vector3.Max(TipPosition, BasePosition), stemTop) + radiusPadding;
         max = Vector3.Max(max, penetrationTip + radiusPadding);

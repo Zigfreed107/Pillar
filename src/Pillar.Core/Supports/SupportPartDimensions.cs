@@ -77,12 +77,22 @@ public static class SupportDimensionResolver
             stemBottomDiameter = clusteredStyle.CentralStemBottomDiameter ?? stemBottomDiameter;
             stemTopDiameter = clusteredStyle.CentralStemTopDiameter ?? stemTopDiameter;
         }
+        else if (resolvedStyle is ButtressSupportStyle buttressStyle)
+        {
+            branchDiameter = buttressStyle.BranchDiameter;
+        }
+        else if (resolvedStyle is BraceMemberSupportStyle braceMemberStyle)
+        {
+            stemBottomDiameter = braceMemberStyle.Diameter;
+            stemTopDiameter = braceMemberStyle.Diameter;
+            branchDiameter = braceMemberStyle.Diameter;
+        }
 
         return new SupportPartDimensions(
             stemBottomDiameter,
             stemTopDiameter,
             branchDiameter,
             branchDiameter,
-            profile.HeadTopDiameter);
+            resolvedStyle is BraceMemberSupportStyle ? branchDiameter : profile.HeadTopDiameter);
     }
 }

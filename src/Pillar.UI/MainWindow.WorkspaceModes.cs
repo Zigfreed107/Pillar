@@ -570,6 +570,12 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, "Brace Supports", StringComparison.Ordinal))
+        {
+            ShowSupportBracingTool(null);
+            return;
+        }
+
         HideToolOptionsOverlay();
     }
 
@@ -596,6 +602,82 @@ public partial class MainWindow
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
         HideToolOptionsOverlay();
         SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
+    }
+
+    /// <summary>
+    /// Cancels mutation sessions unless history navigation is preserving the active bracing helper.
+    /// </summary>
+    private void PrepareForDocumentHistoryChange(bool preserveSupportBracingTool)
+    {
+        if (!preserveSupportBracingTool)
+        {
+            CancelActiveDocumentMutationSessions();
+            return;
+        }
+
+        _selectTool.ResetSelectionFilter();
+        _scene.SelectionManager.ClearSelection();
+    }
+
+    /// <summary>
+    /// Gets whether undo and redo should retain the active Brace and Buttress options session.
+    /// </summary>
+    private bool IsSupportBracingToolActiveForHistory()
+    {
+        return ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl;
+    }
+
+    /// <summary>
+    /// Reconciles the active bracing editor with the modifier stack after undo or redo.
+    /// </summary>
+    private void RestoreSupportBracingToolAfterHistoryChange(Guid? supportLayerGroupId)
+    {
+        if (supportLayerGroupId.HasValue)
+        {
+            _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroupId.Value);
+        }
+
+        SupportLayerGroup? supportLayerGroup = supportLayerGroupId.HasValue
+            ? _document.FindSupportLayerGroupById(supportLayerGroupId.Value)
+            : null;
+        SupportModifierDefinition? modifier = supportLayerGroup != null && _activeEditingBracingModifierId.HasValue
+            ? FindModifierById(supportLayerGroup.SupportModifiers, _activeEditingBracingModifierId.Value)
+            : null;
+
+        bool wasEditingExistingModifier = _supportBracingToolOptionsControl.EditingModifierKind.HasValue;
+
+        if (modifier?.Kind == SupportModifierKind.Brace || modifier?.Kind == SupportModifierKind.Buttress)
+        {
+            _activeEditingBracingModifierKind = modifier.Kind;
+
+            if (!wasEditingExistingModifier)
+            {
+                SupportBraceModifierSettings braceSettings = modifier.Kind == SupportModifierKind.Buttress
+                    ? modifier.ButtressSettings?.BraceSettings ?? SupportBraceModifierSettings.CreateDefault()
+                    : modifier.BraceSettings ?? SupportBraceModifierSettings.CreateDefault();
+                _supportBracingToolOptionsControl.SetBraceSettings(braceSettings, modifier.Kind == SupportModifierKind.Brace);
+                _supportBracingToolOptionsControl.SetButtressSettings(
+                    modifier.ButtressSettings ?? SupportButtressModifierSettings.CreateDefault(),
+                    modifier.Kind == SupportModifierKind.Buttress);
+            }
+            else
+            {
+                _supportBracingToolOptionsControl.SetEditingModifierKind(modifier.Kind);
+            }
+        }
+        else
+        {
+            _supportBracingToolOptionsControl.SetEditingModifierKind(null);
+        }
+
+        if (supportLayerGroup != null)
+        {
+            FocusSupportLayerForClusterTool(supportLayerGroup.Id);
+            ActivateNormalSelectionForSupportClusterTool(supportLayerGroup.Id);
+        }
+
+        ShowToolOptionsControl(_supportBracingToolOptionsControl, ToolSessionPanelSet.None);
+        RefreshSupportBracingToolStatus();
     }
 
     /// <summary>
@@ -716,11 +798,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Gets whether the Cluster Supports panel owns Tool Options until Close is clicked.
+    /// Gets whether a support editing helper panel owns Tool Options until Close is clicked.
     /// </summary>
     private bool IsSupportClusterToolActive()
     {
-        return ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl;
+        return ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl
+            || ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl;
     }
 
     /// <summary>
@@ -893,6 +976,20 @@ public partial class MainWindow
                     return;
                 }
 
+                if (modifiers[i].Kind == SupportModifierKind.Brace || modifiers[i].Kind == SupportModifierKind.Buttress)
+                {
+                    if (!ConfirmEditSupportModifierWillRemoveDownstreamModifiers(modifiers, i))
+                    {
+                        _viewModel.SetStatusText("Support modifier edit cancelled.");
+                        return;
+                    }
+
+                    SetActiveMode(WorkspaceModeId.ManualSupport);
+                    _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroup.Id);
+                    ShowSupportBracingTool(modifiers[i]);
+                    return;
+                }
+
                 _viewModel.SetStatusText($"{modifiers[i].DisplayName} editing will be available when its tool is implemented.");
                 return;
             }
@@ -935,6 +1032,30 @@ public partial class MainWindow
             this,
             "Editing this modifier will delete all modifiers underneath it.\n\nContinue?",
             "Edit Support Modifier",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        return result == MessageBoxResult.OK;
+    }
+
+    /// <summary>
+    /// Confirms cluster operations that will durably remove Brace or Buttress targets.
+    /// </summary>
+    private bool ConfirmClusterWillRemoveReinforcement(SupportReinforcementReconciliationResult reconciliation)
+    {
+        if (!reconciliation.HasChanges)
+        {
+            return true;
+        }
+
+        string removedModifierText = reconciliation.RemovedModifierCount > 0
+            ? $" {reconciliation.RemovedModifierCount} complete modifier(s) will also be removed because too few targets remain."
+            : string.Empty;
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            $"Clustering these supports will remove {reconciliation.RemovedTargetCount} reinforcement target(s)."
+                + removedModifierText
+                + "\n\nContinue?",
+            "Cluster Supports",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning);
         return result == MessageBoxResult.OK;
@@ -990,9 +1111,7 @@ public partial class MainWindow
         IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
         SupportModifierDefinition? replacementClusterModifier = FindClusterModifierForApply(oldModifiers);
         bool isReplacingExistingClusterModifier = replacementClusterModifier != null;
-        IReadOnlyList<SupportEntity> sourceSupportEntities = isReplacingExistingClusterModifier
-            ? RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities)
-            : oldSupportEntities;
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
         IReadOnlyList<Guid> targetSupportIds = targetAllSupports
             ? CreateAllClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id)
             : CreateSelectedClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id);
@@ -1008,13 +1127,29 @@ public partial class MainWindow
         IReadOnlyList<SupportModifierTargetBatch> effectiveTargetSupportIdBatches = CreateEffectiveClusterTargetSupportIdBatches(
             oldModifiers,
             targetSupportIds);
-        List<SupportModifierDefinition> newModifiers = CreateClusterModifierReplacementList(
+        List<SupportModifierDefinition> provisionalModifiers = CreateClusterModifierReplacementList(
             oldModifiers,
             replacementClusterModifier,
             settings,
             effectiveTargetSupportIdBatches,
             supportLayerGroup.SourceGeneratorRevision);
-        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
+        IReadOnlyList<SupportEntity> provisionalSupportEntities = SupportModifierPipeline.ApplyModifiers(
+            sourceSupportEntities,
+            provisionalModifiers);
+        HashSet<Guid> clusteredSupportIds = CreateClusteredSupportIds(provisionalSupportEntities);
+        SupportReinforcementReconciliationResult reconciliation = SupportReinforcementReconciler.RemoveClusteredTargets(
+            provisionalModifiers,
+            clusteredSupportIds);
+
+        if (!ConfirmClusterWillRemoveReinforcement(reconciliation))
+        {
+            return;
+        }
+
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>(reconciliation.Modifiers);
+        IReadOnlyList<SupportEntity> newSupportEntities = reconciliation.HasChanges
+            ? SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers)
+            : provisionalSupportEntities;
         SupportModifierDefinition appliedClusterModifier = FindAppliedClusterModifier(newModifiers, replacementClusterModifier?.Id);
         SupportClusterEvaluationResult previewResult = SupportClusterPlanner.Evaluate(
             sourceSupportEntities,
@@ -1034,8 +1169,9 @@ public partial class MainWindow
         bool isEditingAfterApply = _activeEditingClusterModifierId.HasValue;
         _supportClusterToolOptionsControl.SetClusterSettings(settings, isEditingAfterApply);
         ShowToolOptionsControl(_supportClusterToolOptionsControl, ToolSessionPanelSet.None);
-        _supportClusterToolOptionsControl.SetStatusText(CreateClusterStatusText(previewResult));
-        _viewModel.SetStatusText(CreateClusterStatusText(previewResult));
+        string statusText = CreateClusterStatusText(previewResult) + CreateReinforcementCleanupStatusText(reconciliation);
+        _supportClusterToolOptionsControl.SetStatusText(statusText);
+        _viewModel.SetStatusText(statusText);
         UpdateGeneratedSupportDeleteButtonState();
     }
 
@@ -1070,7 +1206,7 @@ public partial class MainWindow
                 return;
             }
 
-            IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
+            IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
             IReadOnlyList<SupportModifierTargetBatch> remainingClusterTargetBatches = CreateRemainingClusterTargetBatches(
                 clusterModifier,
                 oldSupportEntities,
@@ -1113,7 +1249,7 @@ public partial class MainWindow
             }
 
             IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-            IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreIndividualSupportsForClusteredOutputs(oldSupportEntities);
+            IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
             IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
             List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
 
@@ -1230,7 +1366,7 @@ public partial class MainWindow
 
         IReadOnlyList<SupportEntity> currentSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
         IReadOnlyList<SupportEntity> previewSourceEntities = _activeEditingClusterModifierId.HasValue
-            ? RestoreIndividualSupportsForClusteredOutputs(currentSupportEntities)
+            ? RestoreSourceSupportsForModifierReplay(currentSupportEntities)
             : currentSupportEntities;
         IReadOnlyList<Guid> selectedTargetSupportIds = CreateSelectedClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id);
         bool isPreviewingSelection = selectedTargetSupportIds.Count > 0;
@@ -1312,7 +1448,9 @@ public partial class MainWindow
         {
             SupportEntity support = supportEntities[i];
 
-            if (support.SupportLayerGroupId != supportLayerGroupId || !selectedEntityIds.Contains(support.Id))
+            if (support.SupportLayerGroupId != supportLayerGroupId
+                || (support.Style.Kind == SupportStyleKind.BraceMember || support.Style.Kind == SupportStyleKind.Buttress)
+                || !selectedEntityIds.Contains(support.Id))
             {
                 continue;
             }
@@ -1361,7 +1499,9 @@ public partial class MainWindow
         {
             SupportEntity support = supportEntities[i];
 
-            if (support.SupportLayerGroupId == supportLayerGroupId)
+            if (support.SupportLayerGroupId == supportLayerGroupId
+                && support.Style.Kind != SupportStyleKind.BraceMember
+                && support.Style.Kind != SupportStyleKind.Buttress)
             {
                 targetSupportIds.Add(support.Id);
             }
@@ -1369,6 +1509,26 @@ public partial class MainWindow
 
         targetSupportIds.Sort();
         return targetSupportIds;
+    }
+
+    /// <summary>
+    /// Captures identities that successfully became clustered in provisional pipeline output.
+    /// </summary>
+    private static HashSet<Guid> CreateClusteredSupportIds(IReadOnlyList<SupportEntity> supportEntities)
+    {
+        HashSet<Guid> clusteredSupportIds = new HashSet<Guid>();
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            SupportEntity support = supportEntities[i];
+
+            if (support.Style.Kind == SupportStyleKind.Clustered)
+            {
+                clusteredSupportIds.Add(support.Id);
+            }
+        }
+
+        return clusteredSupportIds;
     }
 
     /// <summary>
@@ -1499,7 +1659,7 @@ public partial class MainWindow
     /// <summary>
     /// Converts branched clustered output back to individual supports for modifier editing and removal.
     /// </summary>
-    private static IReadOnlyList<SupportEntity> RestoreIndividualSupportsForClusteredOutputs(IReadOnlyList<SupportEntity> supportEntities)
+    private static IReadOnlyList<SupportEntity> RestoreSourceSupportsForModifierReplay(IReadOnlyList<SupportEntity> supportEntities)
     {
         List<SupportEntity> restoredSupports = new List<SupportEntity>(supportEntities.Count);
 
@@ -1507,6 +1667,10 @@ public partial class MainWindow
         {
             SupportEntity support = supportEntities[i];
 
+            if (support.Style.Kind == SupportStyleKind.BraceMember || support.Style.Kind == SupportStyleKind.Buttress)
+            {
+                continue;
+            }
             if (support.Style.Kind != SupportStyleKind.Clustered)
             {
                 restoredSupports.Add(support);
@@ -1783,6 +1947,19 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Reports durable reinforcement cleanup performed by a cluster operation.
+    /// </summary>
+    private static string CreateReinforcementCleanupStatusText(SupportReinforcementReconciliationResult reconciliation)
+    {
+        if (!reconciliation.HasChanges)
+        {
+            return string.Empty;
+        }
+
+        return $" Removed {reconciliation.RemovedTargetCount} reinforcement target(s) and {reconciliation.RemovedModifierCount} complete modifier(s).";
+    }
+
+    /// <summary>
     /// Converts the current preview target source into concise preview text.
     /// </summary>
     private static string GetClusterPreviewTargetLabel(bool isPreviewingSelection)
@@ -1790,6 +1967,658 @@ public partial class MainWindow
         return isPreviewingSelection
             ? "Selected"
             : "All supports";
+    }
+
+    /// <summary>
+    /// Refreshes the bracing panel after option edits.
+    /// </summary>
+    private void SupportBracingToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RefreshSupportBracingToolStatus();
+        UpdateGeneratedSupportDeleteButtonState();
+    }
+
+    private void SupportBracingToolOptionsControl_BraceSelectedRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => ApplySupportBracingModifier(SupportModifierKind.Brace, false));
+    }
+
+    private void SupportBracingToolOptionsControl_BraceAllRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => ApplySupportBracingModifier(SupportModifierKind.Brace, true));
+    }
+
+    private void SupportBracingToolOptionsControl_RemoveBracingFromSelectedRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => RemoveSelectedTargetsFromBracingModifier(SupportModifierKind.Brace));
+    }
+
+    private void SupportBracingToolOptionsControl_ButtressSelectedRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => ApplySupportBracingModifier(SupportModifierKind.Buttress, false));
+    }
+
+    private void SupportBracingToolOptionsControl_ButtressAllRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => ApplySupportBracingModifier(SupportModifierKind.Buttress, true));
+    }
+
+    private void SupportBracingToolOptionsControl_RemoveButtressingFromSelectedRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => RemoveSelectedTargetsFromBracingModifier(SupportModifierKind.Buttress));
+    }
+
+    private void SupportBracingToolOptionsControl_RemoveAllBracingRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => RemoveAllBracingModifiers(SupportModifierKind.Brace));
+    }
+
+    private void SupportBracingToolOptionsControl_RemoveAllButtressesRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RunWithWaitCursor(() => RemoveAllBracingModifiers(SupportModifierKind.Buttress));
+    }
+
+    private void SupportBracingToolOptionsControl_CloseRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _activeEditingBracingModifierId = null;
+        _activeEditingBracingModifierKind = null;
+        RestoreSupportLayerVisibilityAfterClusterTool();
+        _selectTool.ResetSelectionFilter();
+        HideToolOptionsOverlay();
+        RestoreViewportToolForActiveMode();
+    }
+
+    /// <summary>
+    /// Opens the Brace and Buttress tool with defaults or an existing modifier.
+    /// </summary>
+    private void ShowSupportBracingTool(SupportModifierDefinition? modifier)
+    {
+        if (!TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            return;
+        }
+
+        _activeEditingBracingModifierId = modifier?.Id;
+        _activeEditingBracingModifierKind = modifier?.Kind;
+        SupportBraceModifierSettings visibleBraceSettings = modifier?.Kind == SupportModifierKind.Buttress
+            ? modifier.ButtressSettings?.BraceSettings ?? SupportBraceModifierSettings.CreateDefault()
+            : modifier?.BraceSettings ?? SupportBraceModifierSettings.CreateDefault();
+        _supportBracingToolOptionsControl.SetBraceSettings(visibleBraceSettings, modifier?.Kind == SupportModifierKind.Brace);
+        _supportBracingToolOptionsControl.SetButtressSettings(modifier?.ButtressSettings ?? SupportButtressModifierSettings.CreateDefault(), modifier?.Kind == SupportModifierKind.Buttress);
+        FocusSupportLayerForClusterTool(supportLayerGroup.Id);
+        ActivateNormalSelectionForSupportClusterTool(supportLayerGroup.Id);
+        ShowToolOptionsControl(_supportBracingToolOptionsControl, ToolSessionPanelSet.None);
+        RefreshSupportBracingToolStatus();
+        _viewModel.SetStatusText("Support Bracing tool active.");
+    }
+
+    /// <summary>
+    /// Applies or updates a Brace or Buttress modifier.
+    /// </summary>
+    private void ApplySupportBracingModifier(SupportModifierKind modifierKind, bool targetAllSupports)
+    {
+        if (!TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            return;
+        }
+
+        SupportBraceModifierSettings? braceSettings = null;
+        SupportButtressModifierSettings? buttressSettings = null;
+        float? minimumHeight = null;
+
+        if (!_supportBracingToolOptionsControl.TryGetBraceSettings(out SupportBraceModifierSettings visibleBraceSettings, out string braceErrorMessage))
+        {
+            MessageBox.Show(this, braceErrorMessage, "Invalid Brace Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (modifierKind == SupportModifierKind.Brace)
+        {
+            braceSettings = visibleBraceSettings;
+        }
+        else
+        {
+            if (!_supportBracingToolOptionsControl.TryGetButtressSettings(out SupportButtressModifierSettings settings, out string errorMessage))
+            {
+                MessageBox.Show(this, errorMessage, "Invalid Buttress Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            buttressSettings = new SupportButtressModifierSettings(
+                settings.MinimumButtressHeight,
+                settings.ButtressSpacing,
+                visibleBraceSettings);
+            minimumHeight = settings.MinimumButtressHeight;
+        }
+        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        IReadOnlyList<Guid> targetIds = targetAllSupports
+            ? CreateAllBracingTargetSupportIds(oldSupportEntities, supportLayerGroup.Id, minimumHeight)
+            : CreateSelectedBracingTargetSupportIds(oldSupportEntities, supportLayerGroup.Id, minimumHeight);
+        int minimumTargets = modifierKind == SupportModifierKind.Brace ? 2 : 1;
+
+        if (targetIds.Count < minimumTargets)
+        {
+            _viewModel.SetStatusText(targetAllSupports ? "The selected support layer does not have enough eligible supports." : "Select enough eligible supports before applying.");
+            return;
+        }
+
+        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+        bool replacesSelectedBracePairs = modifierKind == SupportModifierKind.Brace && !targetAllSupports;
+        SupportModifierDefinition? replacement = replacesSelectedBracePairs
+            ? null
+            : FindActiveBracingModifier(oldModifiers, modifierKind);
+        List<SupportModifierDefinition> newModifiers = replacesSelectedBracePairs
+            ? CreateBraceSelectedModifierList(oldModifiers, visibleBraceSettings, targetIds, supportLayerGroup.SourceGeneratorRevision)
+            : CreateBracingModifierReplacementList(oldModifiers, replacement, modifierKind, braceSettings, buttressSettings, targetIds, supportLayerGroup.SourceGeneratorRevision);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
+        SupportModifierDefinition appliedModifier = replacement == null ? newModifiers[newModifiers.Count - 1] : FindModifierById(newModifiers, replacement.Id)!;
+        SupportBracingEvaluationResult result = EvaluateSingleBracingModifier(sourceSupportEntities, newModifiers, appliedModifier);
+        string commandName = modifierKind == SupportModifierKind.Buttress ? "Buttress Supports" : "Brace Supports";
+
+        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(_document, supportLayerGroup, oldSupportEntities, newSupportEntities, oldModifiers, newModifiers, replacement == null ? commandName : $"Update {commandName}"));
+        _activeEditingBracingModifierId = appliedModifier.Id;
+        _activeEditingBracingModifierKind = appliedModifier.Kind;
+        _supportBracingToolOptionsControl.SetBraceSettings(
+            buttressSettings?.BraceSettings ?? braceSettings ?? SupportBraceModifierSettings.CreateDefault(),
+            appliedModifier.Kind == SupportModifierKind.Brace);
+        _supportBracingToolOptionsControl.SetButtressSettings(buttressSettings ?? SupportButtressModifierSettings.CreateDefault(), appliedModifier.Kind == SupportModifierKind.Buttress);
+        string statusText = CreateBracingStatusText(appliedModifier.Kind, result);
+        _supportBracingToolOptionsControl.SetStatusText(statusText);
+        _viewModel.SetStatusText(statusText);
+        UpdateGeneratedSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Removes selected captured targets from the active bracing modifier.
+    /// </summary>
+    private void RemoveSelectedTargetsFromBracingModifier(SupportModifierKind modifierKind)
+    {
+        if (!_activeEditingBracingModifierId.HasValue || _activeEditingBracingModifierKind != modifierKind || !TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            _viewModel.SetStatusText("Open an existing modifier before removing selected targets.");
+            return;
+        }
+
+        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        IReadOnlyList<Guid> selectedTargetIds = CreateSelectedBracingTargetSupportIds(oldSupportEntities, supportLayerGroup.Id, null);
+
+        if (selectedTargetIds.Count == 0)
+        {
+            _viewModel.SetStatusText("Select captured supports before removing them.");
+            return;
+        }
+
+        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+        List<SupportModifierDefinition> newModifiers = CreateModifiersAfterRemovingBracingTargets(oldModifiers, _activeEditingBracingModifierId.Value, modifierKind, selectedTargetIds, supportLayerGroup.SourceGeneratorRevision);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
+        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(_document, supportLayerGroup, oldSupportEntities, newSupportEntities, oldModifiers, newModifiers, "Remove Selected Bracing Targets"));
+
+        if (FindModifierById(newModifiers, _activeEditingBracingModifierId.Value) == null)
+        {
+            _supportBracingToolOptionsControl.SetEditingModifierKind(null);
+        }
+
+        RefreshSupportBracingToolStatus();
+        UpdateGeneratedSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Removes every Brace or Buttress modifier of one kind and rebuilds through the surviving stack.
+    /// </summary>
+    private void RemoveAllBracingModifiers(SupportModifierKind modifierKind)
+    {
+        if ((modifierKind != SupportModifierKind.Brace && modifierKind != SupportModifierKind.Buttress)
+            || !TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            return;
+        }
+
+        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>(oldModifiers.Count);
+        int removedModifierCount = 0;
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            SupportModifierDefinition modifier = oldModifiers[i];
+
+            if (modifier.Kind == modifierKind)
+            {
+                removedModifierCount++;
+                continue;
+            }
+
+            newModifiers.Add(modifier);
+        }
+
+        if (removedModifierCount == 0)
+        {
+            UpdateGeneratedSupportDeleteButtonState();
+            return;
+        }
+
+        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
+        string label = modifierKind == SupportModifierKind.Brace ? "Bracing" : "Buttresses";
+        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
+            _document,
+            supportLayerGroup,
+            oldSupportEntities,
+            newSupportEntities,
+            oldModifiers,
+            newModifiers,
+            $"Remove All {label}"));
+
+        if (_activeEditingBracingModifierKind == modifierKind)
+        {
+            _supportBracingToolOptionsControl.SetEditingModifierKind(null);
+        }
+
+        _layerPanelViewModel.RefreshFromDocument();
+        _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroup.Id);
+        string statusText = $"Removed {removedModifierCount} {label.ToLowerInvariant()} modifier(s).";
+        _supportBracingToolOptionsControl.SetStatusText(statusText);
+        _viewModel.SetStatusText(statusText);
+        UpdateGeneratedSupportDeleteButtonState();
+    }
+
+    /// <summary>
+    /// Updates bracing status text from current selection.
+    /// </summary>
+    private void RefreshSupportBracingToolStatus()
+    {
+        if (!TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            _supportBracingToolOptionsControl.SetStatusText("Select one support layer to use bracing.");
+            return;
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        int selectedCount = CreateSelectedBracingTargetSupportIds(supportEntities, supportLayerGroup.Id, null).Count;
+        int allCount = CreateAllBracingTargetSupportIds(supportEntities, supportLayerGroup.Id, null).Count;
+        _supportBracingToolOptionsControl.SetStatusText($"{selectedCount} selected eligible support(s), {allCount} eligible support(s) in layer.");
+    }
+
+    private void RefreshSupportBracingToolStatusForSelectionChange()
+    {
+        if (ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl)
+        {
+            RefreshSupportBracingToolStatus();
+        }
+    }
+
+    private bool TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup supportLayerGroup)
+    {
+        supportLayerGroup = null!;
+        Guid? selectedSupportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+
+        if (!selectedSupportLayerGroupId.HasValue)
+        {
+            _viewModel.SetStatusText("Select one support layer before bracing supports.");
+            return false;
+        }
+
+        SupportLayerGroup? foundSupportLayerGroup = _document.FindSupportLayerGroupById(selectedSupportLayerGroupId.Value);
+
+        if (foundSupportLayerGroup == null)
+        {
+            _viewModel.SetStatusText("The selected support layer could not be found.");
+            return false;
+        }
+
+        supportLayerGroup = foundSupportLayerGroup;
+        return true;
+    }
+
+    private IReadOnlyList<Guid> CreateSelectedBracingTargetSupportIds(IReadOnlyList<SupportEntity> supportEntities, Guid supportLayerGroupId, float? minimumHeight)
+    {
+        HashSet<Guid> selectedEntityIds = new HashSet<Guid>(_scene.SelectionManager.SelectedEntityIds);
+        List<Guid> targetIds = new List<Guid>();
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            SupportEntity support = supportEntities[i];
+
+            if (support.SupportLayerGroupId == supportLayerGroupId && selectedEntityIds.Contains(support.Id) && IsEligibleBracingTarget(support, minimumHeight))
+            {
+                targetIds.Add(support.Id);
+            }
+        }
+
+        targetIds.Sort();
+        return targetIds;
+    }
+
+    private static IReadOnlyList<Guid> CreateAllBracingTargetSupportIds(IReadOnlyList<SupportEntity> supportEntities, Guid supportLayerGroupId, float? minimumHeight)
+    {
+        List<Guid> targetIds = new List<Guid>();
+
+        for (int i = 0; i < supportEntities.Count; i++)
+        {
+            SupportEntity support = supportEntities[i];
+
+            if (support.SupportLayerGroupId == supportLayerGroupId && IsEligibleBracingTarget(support, minimumHeight))
+            {
+                targetIds.Add(support.Id);
+            }
+        }
+
+        targetIds.Sort();
+        return targetIds;
+    }
+
+    private static bool IsEligibleBracingTarget(SupportEntity support, float? minimumHeight)
+    {
+        if (support.Style.Kind != SupportStyleKind.Individual)
+        {
+            return false;
+        }
+
+        return !minimumHeight.HasValue || CalculateSupportStemHeight(support) > minimumHeight.Value;
+    }
+
+    private static List<SupportModifierDefinition> CreateBracingModifierReplacementList(IReadOnlyList<SupportModifierDefinition> oldModifiers, SupportModifierDefinition? replacement, SupportModifierKind kind, SupportBraceModifierSettings? braceSettings, SupportButtressModifierSettings? buttressSettings, IReadOnlyList<Guid> targetIds, int sourceRevision)
+    {
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
+        bool replaced = false;
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            SupportModifierDefinition oldModifier = oldModifiers[i];
+
+            if (replacement != null && oldModifier.Id == replacement.Id)
+            {
+                newModifiers.Add(new SupportModifierDefinition(oldModifier.Id, kind, oldModifier.IsEnabled, newModifiers.Count, null, braceSettings, buttressSettings, targetIds, null, sourceRevision));
+                replaced = true;
+                break;
+            }
+
+            newModifiers.Add(oldModifier);
+        }
+
+        if (!replaced)
+        {
+            newModifiers.Add(new SupportModifierDefinition(Guid.NewGuid(), kind, true, newModifiers.Count, null, braceSettings, buttressSettings, targetIds, null, sourceRevision));
+        }
+
+        return newModifiers;
+    }
+
+    /// <summary>
+    /// Suppresses old selected-selected pairs and appends one selected-only Brace modifier.
+    /// </summary>
+    private static List<SupportModifierDefinition> CreateBraceSelectedModifierList(
+        IReadOnlyList<SupportModifierDefinition> oldModifiers,
+        SupportBraceModifierSettings settings,
+        IReadOnlyList<Guid> selectedTargetIds,
+        int sourceRevision)
+    {
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>(oldModifiers.Count + 1);
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            SupportModifierDefinition oldModifier = oldModifiers[i];
+
+            if (oldModifier.Kind != SupportModifierKind.Brace)
+            {
+                newModifiers.Add(oldModifier.CloneWithOrder(newModifiers.Count));
+                continue;
+            }
+
+            HashSet<Guid> oldTargetIds = new HashSet<Guid>(oldModifier.TargetSupportIds);
+            HashSet<SupportBracePair> exclusions = new HashSet<SupportBracePair>(oldModifier.ExcludedBracePairs);
+
+            for (int firstIndex = 0; firstIndex < selectedTargetIds.Count; firstIndex++)
+            {
+                Guid firstSupportId = selectedTargetIds[firstIndex];
+
+                if (!oldTargetIds.Contains(firstSupportId))
+                {
+                    continue;
+                }
+
+                for (int secondIndex = firstIndex + 1; secondIndex < selectedTargetIds.Count; secondIndex++)
+                {
+                    Guid secondSupportId = selectedTargetIds[secondIndex];
+
+                    if (oldTargetIds.Contains(secondSupportId))
+                    {
+                        exclusions.Add(new SupportBracePair(firstSupportId, secondSupportId));
+                    }
+                }
+            }
+
+            newModifiers.Add(new SupportModifierDefinition(
+                oldModifier.Id,
+                oldModifier.Kind,
+                oldModifier.IsEnabled,
+                newModifiers.Count,
+                null,
+                oldModifier.BraceSettings,
+                null,
+                oldModifier.TargetSupportIds,
+                oldModifier.TargetSupportIdBatches,
+                sourceRevision,
+                new List<SupportBracePair>(exclusions)));
+        }
+
+        newModifiers.Add(SupportModifierDefinition.CreateNewBrace(
+            newModifiers.Count,
+            settings,
+            selectedTargetIds,
+            sourceRevision));
+        return newModifiers;
+    }
+
+    private static List<SupportModifierDefinition> CreateModifiersAfterRemovingBracingTargets(IReadOnlyList<SupportModifierDefinition> oldModifiers, Guid modifierId, SupportModifierKind kind, IReadOnlyList<Guid> selectedTargetIds, int sourceRevision)
+    {
+        HashSet<Guid> selected = new HashSet<Guid>(selectedTargetIds);
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
+        int minimumTargets = kind == SupportModifierKind.Brace ? 2 : 1;
+
+        for (int i = 0; i < oldModifiers.Count; i++)
+        {
+            SupportModifierDefinition oldModifier = oldModifiers[i];
+
+            if (oldModifier.Id != modifierId)
+            {
+                newModifiers.Add(oldModifier);
+                continue;
+            }
+
+            List<Guid> remaining = new List<Guid>();
+
+            for (int targetIndex = 0; targetIndex < oldModifier.TargetSupportIds.Count; targetIndex++)
+            {
+                if (!selected.Contains(oldModifier.TargetSupportIds[targetIndex]))
+                {
+                    remaining.Add(oldModifier.TargetSupportIds[targetIndex]);
+                }
+            }
+
+            if (remaining.Count >= minimumTargets)
+            {
+                newModifiers.Add(new SupportModifierDefinition(oldModifier.Id, oldModifier.Kind, oldModifier.IsEnabled, newModifiers.Count, null, oldModifier.BraceSettings, oldModifier.ButtressSettings, remaining, null, sourceRevision, CreateBracePairExclusionsForTargets(oldModifier.ExcludedBracePairs, remaining)));
+            }
+        }
+
+        return newModifiers;
+    }
+
+    /// <summary>
+    /// Retains only exclusions whose endpoints remain targeted by a reduced Brace modifier.
+    /// </summary>
+    private static IReadOnlyList<SupportBracePair> CreateBracePairExclusionsForTargets(
+        IReadOnlyList<SupportBracePair> exclusions,
+        IReadOnlyList<Guid> targetSupportIds)
+    {
+        HashSet<Guid> targets = new HashSet<Guid>(targetSupportIds);
+        List<SupportBracePair> result = new List<SupportBracePair>();
+
+        for (int i = 0; i < exclusions.Count; i++)
+        {
+            SupportBracePair pair = exclusions[i];
+
+            if (targets.Contains(pair.FirstSupportId) && targets.Contains(pair.SecondSupportId))
+            {
+                result.Add(pair.Clone());
+            }
+        }
+
+        return result;
+    }
+
+    private static SupportBracingEvaluationResult EvaluateSingleBracingModifier(IReadOnlyList<SupportEntity> sourceSupportEntities, IReadOnlyList<SupportModifierDefinition> modifiers, SupportModifierDefinition appliedModifier)
+    {
+        List<SupportModifierDefinition> preceding = new List<SupportModifierDefinition>();
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            if (modifiers[i].Id == appliedModifier.Id)
+            {
+                break;
+            }
+
+            preceding.Add(modifiers[i]);
+        }
+
+        IReadOnlyList<SupportEntity> precedingOutput = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, preceding);
+        return appliedModifier.Kind == SupportModifierKind.Buttress
+            ? SupportBracingPlanner.EvaluateButtress(precedingOutput, appliedModifier)
+            : SupportBracingPlanner.EvaluateBrace(precedingOutput, appliedModifier);
+    }
+
+    private SupportModifierDefinition? FindActiveBracingModifier(IReadOnlyList<SupportModifierDefinition> modifiers, SupportModifierKind kind)
+    {
+        if (!_activeEditingBracingModifierId.HasValue || _activeEditingBracingModifierKind != kind)
+        {
+            return null;
+        }
+
+        return FindModifierById(modifiers, _activeEditingBracingModifierId.Value);
+    }
+
+    private static SupportModifierDefinition? FindModifierById(IReadOnlyList<SupportModifierDefinition> modifiers, Guid modifierId)
+    {
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            if (modifiers[i].Id == modifierId)
+            {
+                return modifiers[i];
+            }
+        }
+
+        return null;
+    }
+
+    private static float CalculateSupportStemHeight(SupportEntity support)
+    {
+        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
+        Vector3 headJointPosition = support.TipPosition - (headDirection * support.Profile.HeadHeight);
+        Vector3 stemTop = support.BranchLength > 0.0001f
+            ? headJointPosition - (Vector3.Normalize(support.BranchDirection) * support.BranchLength)
+            : headJointPosition;
+        return stemTop.Z - support.BasePosition.Z;
+    }
+
+    private static string CreateBracingStatusText(SupportModifierKind kind, SupportBracingEvaluationResult result)
+    {
+        string label = kind == SupportModifierKind.Buttress ? "Buttress" : "Brace";
+        return $"{label}: {result.AddedMemberCount} member(s), {result.TargetSupportCount} target support(s), {result.RejectedCandidateCount} rejected candidate(s).";
+    }
+
+    /// <summary>
+    /// Gets whether the selected support layer contains a modifier of one reinforcement kind.
+    /// </summary>
+    private bool HasBracingModifierOfKind(SupportModifierKind modifierKind)
+    {
+        Guid? supportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+        SupportLayerGroup? supportLayerGroup = supportLayerGroupId.HasValue
+            ? _document.FindSupportLayerGroupById(supportLayerGroupId.Value)
+            : null;
+
+        if (supportLayerGroup == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < supportLayerGroup.SupportModifiers.Count; i++)
+        {
+            if (supportLayerGroup.SupportModifiers[i].Kind == modifierKind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets whether the current selected supports can receive a bracing modifier.
+    /// </summary>
+    private bool HasEnoughBracingSupportsForSelectedApply(SupportModifierKind modifierKind)
+    {
+        if (!TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            return false;
+        }
+
+        float? minimumHeight = null;
+
+        if (modifierKind == SupportModifierKind.Buttress
+            && _supportBracingToolOptionsControl.TryGetButtressSettings(out SupportButtressModifierSettings settings, out _))
+        {
+            minimumHeight = settings.MinimumButtressHeight;
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        int count = CreateSelectedBracingTargetSupportIds(supportEntities, supportLayerGroup.Id, minimumHeight).Count;
+        return count >= (modifierKind == SupportModifierKind.Brace ? 2 : 1);
+    }
+
+    /// <summary>
+    /// Gets whether every eligible support in the current layer can receive a bracing modifier.
+    /// </summary>
+    private bool HasEnoughBracingSupportsForApplyAll(SupportModifierKind modifierKind)
+    {
+        if (!TryGetSelectedSupportLayerGroupForBracing(out SupportLayerGroup? supportLayerGroup))
+        {
+            return false;
+        }
+
+        float? minimumHeight = null;
+
+        if (modifierKind == SupportModifierKind.Buttress
+            && _supportBracingToolOptionsControl.TryGetButtressSettings(out SupportButtressModifierSettings settings, out _))
+        {
+            minimumHeight = settings.MinimumButtressHeight;
+        }
+
+        IReadOnlyList<SupportEntity> supportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        int count = CreateAllBracingTargetSupportIds(supportEntities, supportLayerGroup.Id, minimumHeight).Count;
+        return count >= (modifierKind == SupportModifierKind.Brace ? 2 : 1);
     }
 
     /// <summary>
@@ -1959,6 +2788,18 @@ public partial class MainWindow
             ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasEnoughSupportsForApplyAll());
         _supportClusterToolOptionsControl.SetUnclusterSelectedEnabled(
             ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl && HasSelectedClusteredSupportsInSelectedSupportLayer());
+        _supportBracingToolOptionsControl.SetBraceSelectedEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasEnoughBracingSupportsForSelectedApply(SupportModifierKind.Brace));
+        _supportBracingToolOptionsControl.SetBraceAllEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasEnoughBracingSupportsForApplyAll(SupportModifierKind.Brace));
+        _supportBracingToolOptionsControl.SetButtressSelectedEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasEnoughBracingSupportsForSelectedApply(SupportModifierKind.Buttress));
+        _supportBracingToolOptionsControl.SetButtressAllEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasEnoughBracingSupportsForApplyAll(SupportModifierKind.Buttress));
+        _supportBracingToolOptionsControl.SetRemoveAllBracingEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasBracingModifierOfKind(SupportModifierKind.Brace));
+        _supportBracingToolOptionsControl.SetRemoveAllButtressesEnabled(
+            ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl && HasBracingModifierOfKind(SupportModifierKind.Buttress));
     }
 
     /// <summary>

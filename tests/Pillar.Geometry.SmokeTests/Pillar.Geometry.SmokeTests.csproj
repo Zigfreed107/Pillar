@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pillar.Core\Pillar.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pillar.Commands\Pillar.Commands.csproj" />
     <ProjectReference Include="..\..\src\Pillar.Geometry\Pillar.Geometry.csproj" />
   </ItemGroup>
 </Project>

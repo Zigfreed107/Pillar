@@ -1,5 +1,6 @@
 // Program.cs
 // Runs dependency-free geometry smoke tests for procedural support meshes so export regressions are caught early.
+using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
@@ -63,6 +64,24 @@ public static class Program
         RunTest(failures, "Selected individual joins nearest feasible selected cluster", ValidateSelectedIndividualJoinsNearestFeasibleCluster);
         RunTest(failures, "Remaining selected individuals cluster after merge attempts", ValidateRemainingSelectedIndividualsClusterAfterMergeAttempts);
         RunTest(failures, "Unselected clustered supports remain unchanged", ValidateUnselectedClusteredSupportsRemainUnchanged);
+        RunTest(failures, "Brace modifier adds printable brace members", ValidateBraceModifierAddsPrintableBraceMembers);
+        RunTest(failures, "Brace modifier evaluates both endpoint directions", ValidateBraceModifierEvaluatesBothDirections);
+        RunTest(failures, "Brace modifier starts at the top of the base", ValidateBraceModifierStartsAtBaseTop);
+        RunTest(failures, "Brace modifier adds one rising return member", ValidateBraceModifierAddsRisingReturnMember);
+        RunTest(failures, "Brace modifier defaults maximum angle to 70", ValidateBraceModifierDefaultsMaximumAngleTo70);
+        RunTest(failures, "Brace modifier keeps only adjacent ring neighbors", ValidateBraceModifierKeepsAdjacentRingNeighbors);
+        RunTest(failures, "Brace modifier does not skip collinear supports", ValidateBraceModifierDoesNotSkipCollinearSupports);
+        RunTest(failures, "Brace modifier uses relative neighbors on irregular layouts", ValidateBraceModifierUsesRelativeNeighborhoodOnIrregularLayout);
+        RunTest(failures, "Brace modifier preserves equal-distance neighbors", ValidateBraceModifierPreservesEqualDistanceNeighbors);
+        RunTest(failures, "Brace modifier limits physical connections", ValidateBraceModifierLimitsConnections);
+        RunTest(failures, "Brace pair exclusions preserve mixed-selection bracing", ValidateBracePairExclusionsPreserveMixedSelectionBracing);
+        RunTest(failures, "Reinforcement excludes clustered supports", ValidateReinforcementExcludesClusteredSupports);
+        RunTest(failures, "Cluster before Brace excludes clustered outputs", ValidateClusterBeforeBraceExcludesClusteredOutputs);
+        RunTest(failures, "Cluster reconciliation removes reinforcement targets", ValidateClusterReconciliationRemovesReinforcementTargets);
+        RunTest(failures, "Cluster reinforcement cleanup undo restores prior state", ValidateClusterReinforcementCleanupUndo);
+        RunTest(failures, "Buttress modifier targets tall supports only", ValidateButtressModifierTargetsTallSupportsOnly);
+        RunTest(failures, "Buttress modifier creates paired equilateral supports", ValidateButtressModifierCreatesPairedEquilateralSupports);
+        RunTest(failures, "Buttress bracing keeps valid primary when return does not fit", ValidateButtressBracingKeepsPrimaryWhenReturnDoesNotFit);
         RunTest(failures, "Support placement rejects crossing angled head", ValidateSupportPlacementRejectsCrossingAngledHead);
         RunTest(failures, "Vertical projection returns triangle normal", ValidateVerticalProjectionReturnsTriangleNormal);
         RunTest(failures, "Vertical projection handles vertical side faces", ValidateVerticalProjectionHandlesVerticalSideFaces);
@@ -106,7 +125,9 @@ public static class Program
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Support style and cluster branch diameter survive save and load", ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad);
+        RunTest(failures, "Buttress style and bracing settings survive save and load", ValidateButtressStyleAndBracingSettingsSurviveSaveAndLoad);
         RunTest(failures, "Cluster modifier target batches survive save and load", ValidateClusterModifierTargetBatchesSurviveSaveAndLoad);
+        RunTest(failures, "Brace pair exclusions survive save and load", ValidateBracePairExclusionsSurviveSaveAndLoad);
         RunTest(failures, "Invalid cluster modifier revision is discarded on load", ValidateInvalidClusterModifierRevisionIsDiscardedOnLoad);
         RunTest(failures, "Invalid cluster modifier target is discarded on load", ValidateInvalidClusterModifierTargetIsDiscardedOnLoad);
         RunTest(failures, "Gph serializer rejects invalid format", ValidateGphSerializerRejectsInvalidFormat);
@@ -1053,6 +1074,970 @@ public static class Program
             SupportDefaults.DefaultStemTopDiameter,
             0.42f);
     }
+
+    /// <summary>
+    /// Validates that Brace modifiers append simple printable brace member output.
+    /// </summary>
+    private static void ValidateBraceModifierAddsPrintableBraceMembers()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(3.0f, 0.0f, 0.0f), new Vector3(3.0f, 0.0f, 12.0f), profile),
+            CreateSupport(new Vector3(0.0f, 3.0f, 0.0f), new Vector3(0.0f, 3.0f, 12.0f), profile)
+        };
+        SupportBraceModifierSettings settings = new SupportBraceModifierSettings(10.0f, 80.0f, 20.0f, 0.5f);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(0, settings, new List<Guid> { supports[0].Id, supports[1].Id, supports[2].Id }, 0);
+        IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(supports, new List<SupportModifierDefinition> { modifier });
+
+        if (result.Count <= supports.Count)
+        {
+            throw new InvalidOperationException("Expected Brace modifier to append generated brace members.");
+        }
+
+        bool foundBraceMember = false;
+
+        for (int i = supports.Count; i < result.Count; i++)
+        {
+            if (result[i].Style.Kind == SupportStyleKind.BraceMember)
+            {
+                foundBraceMember = true;
+                SupportMeshData meshData = SupportMeshBuilder.Build(result[i]);
+                ValidateClosedMesh(meshData);
+            }
+        }
+
+        if (!foundBraceMember)
+        {
+            throw new InvalidOperationException("Expected generated brace output to use BraceMember style.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that Buttress modifiers create paired supports only for targets above the height threshold.
+    /// </summary>
+    private static void ValidateButtressModifierTargetsTallSupportsOnly()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            CreateSupport(new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.0f, 0.0f, 60.0f), profile),
+            CreateSupport(new Vector3(6.0f, 0.0f, 0.0f), new Vector3(6.0f, 0.0f, 20.0f), profile)
+        };
+        SupportButtressModifierSettings settings = new SupportButtressModifierSettings(40.0f, 8.0f);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            settings,
+            new List<Guid> { supports[0].Id, supports[1].Id },
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateButtress(supports, modifier);
+
+        if (evaluation.TargetSupportCount != 1
+            || CountSupportsWithStyle(evaluation.SupportEntities, SupportStyleKind.Buttress) != 2)
+        {
+            throw new InvalidOperationException("Expected exactly two buttress supports for the one tall target.");
+        }
+    }
+
+    /// <summary>
+    /// Validates paired buttress placement, copied dimensions, branch geometry, meshes, and captured bracing parameters.
+    /// </summary>
+    private static void ValidateButtressModifierCreatesPairedEquilateralSupports()
+    {
+        const float Spacing = 10.0f;
+        const float MinimumAngleDegrees = 30.0f;
+        const float BraceDiameter = 0.77f;
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        Vector3 basePosition = Vector3.Zero;
+        Vector3 tipPosition = new Vector3(0.0f, profile.HeadHeight, 60.0f);
+        SupportEntity sourceSupport = new SupportEntity(
+            supportLayerGroupId,
+            tipPosition,
+            basePosition,
+            Vector3.UnitY,
+            profile);
+        SupportBraceModifierSettings braceSettings = new SupportBraceModifierSettings(
+            MinimumAngleDegrees,
+            70.0f,
+            100.0f,
+            BraceDiameter);
+        SupportButtressModifierSettings buttressSettings = new SupportButtressModifierSettings(
+            40.0f,
+            Spacing,
+            braceSettings);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            buttressSettings,
+            new List<Guid> { sourceSupport.Id },
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateButtress(
+            new List<SupportEntity> { sourceSupport },
+            modifier);
+        List<SupportEntity> buttresses = new List<SupportEntity>();
+        List<SupportEntity> braceMembers = new List<SupportEntity>();
+
+        for (int i = 1; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity generated = evaluation.SupportEntities[i];
+
+            if (generated.Style.Kind == SupportStyleKind.Buttress)
+            {
+                buttresses.Add(generated);
+                ValidateClosedMesh(SupportMeshBuilder.Build(generated));
+            }
+            else if (generated.Style is BraceMemberSupportStyle braceMemberStyle)
+            {
+                braceMembers.Add(generated);
+
+                if (MathF.Abs(braceMemberStyle.Diameter - BraceDiameter) > 0.0001f)
+                {
+                    throw new InvalidOperationException("Expected buttress reinforcement members to use the captured Brace diameter.");
+                }
+            }
+        }
+
+        if (buttresses.Count != 2 || braceMembers.Count != 6)
+        {
+            throw new InvalidOperationException("Expected two buttress supports and three complete two-member brace pairs.");
+        }
+
+        Vector2 originalBase = new Vector2(sourceSupport.BasePosition.X, sourceSupport.BasePosition.Y);
+        Vector2 firstBase = new Vector2(buttresses[0].BasePosition.X, buttresses[0].BasePosition.Y);
+        Vector2 secondBase = new Vector2(buttresses[1].BasePosition.X, buttresses[1].BasePosition.Y);
+        ValidateDistanceNear(Spacing, Vector2.Distance(originalBase, firstBase), "Expected the first buttress to be one spacing from the original.");
+        ValidateDistanceNear(Spacing, Vector2.Distance(originalBase, secondBase), "Expected the second buttress to be one spacing from the original.");
+        ValidateDistanceNear(Spacing, Vector2.Distance(firstBase, secondBase), "Expected both buttresses to be one spacing apart.");
+
+        if (firstBase.Y >= originalBase.Y || secondBase.Y >= originalBase.Y)
+        {
+            throw new InvalidOperationException("Expected both buttress bases behind the source support's head direction.");
+        }
+
+        Vector3 originalStemTop = sourceSupport.TipPosition - (sourceSupport.HeadDirection * sourceSupport.Profile.HeadHeight);
+        float sourceBranchDiameter = SupportDimensionResolver.Resolve(sourceSupport.Profile, sourceSupport.Style).BranchDiameter;
+
+        for (int i = 0; i < buttresses.Count; i++)
+        {
+            SupportEntity buttress = buttresses[i];
+            Vector3 stemJoint = buttress.TipPosition - (buttress.BranchDirection * buttress.BranchLength);
+            Vector3 branchVector = buttress.TipPosition - stemJoint;
+            float horizontalDistance = new Vector2(branchVector.X, branchVector.Y).Length();
+            float branchAngleDegrees = MathF.Atan2(branchVector.Z, horizontalDistance) * (180.0f / MathF.PI);
+
+            ValidateVectorNear(originalStemTop, buttress.TipPosition, 0.0001f, "Expected the buttress branch to end at the original stem top.");
+
+            if (MathF.Abs(branchAngleDegrees - MinimumAngleDegrees) > 0.0001f
+                || buttress.Style is not ButtressSupportStyle buttressStyle
+                || MathF.Abs(buttressStyle.BranchDiameter - sourceBranchDiameter) > 0.0001f
+                || MathF.Abs(buttress.Profile.BaseBottomRadius - sourceSupport.Profile.BaseBottomRadius) > 0.0001f
+                || MathF.Abs(buttress.Profile.BaseHeight - sourceSupport.Profile.BaseHeight) > 0.0001f
+                || MathF.Abs(buttress.Profile.StemBottomDiameter - sourceSupport.Profile.StemBottomDiameter) > 0.0001f
+                || MathF.Abs(buttress.Profile.StemTopDiameter - sourceSupport.Profile.StemTopDiameter) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected buttress branch angle and all base, stem, and branch dimensions to match the source settings.");
+            }
+        }
+
+        ValidateDirectionalButtressBracePair(braceMembers, 0, buttresses[0], sourceSupport, MinimumAngleDegrees, 70.0f);
+        ValidateDirectionalButtressBracePair(braceMembers, 2, buttresses[1], sourceSupport, MinimumAngleDegrees, 70.0f);
+        ValidateDirectionalButtressBracePair(braceMembers, 4, buttresses[0], buttresses[1], MinimumAngleDegrees, 70.0f);
+    }
+
+    /// <summary>
+    /// Validates that each directional pair keeps its feasible lower member when the return angle is invalid.
+    /// </summary>
+    private static void ValidateButtressBracingKeepsPrimaryWhenReturnDoesNotFit()
+    {
+        const float FixedAngleDegrees = 70.0f;
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity sourceSupport = new SupportEntity(
+            supportLayerGroupId,
+            new Vector3(0.0f, profile.HeadHeight, 60.0f),
+            Vector3.Zero,
+            Vector3.UnitY,
+            profile);
+        SupportBraceModifierSettings braceSettings = new SupportBraceModifierSettings(
+            FixedAngleDegrees,
+            FixedAngleDegrees,
+            100.0f,
+            0.5f);
+        SupportButtressModifierSettings buttressSettings = new SupportButtressModifierSettings(40.0f, 10.0f, braceSettings);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            buttressSettings,
+            new List<Guid> { sourceSupport.Id },
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateButtress(
+            new List<SupportEntity> { sourceSupport },
+            modifier);
+        List<SupportEntity> buttresses = new List<SupportEntity>();
+        List<SupportEntity> braceMembers = new List<SupportEntity>();
+
+        for (int i = 1; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity generated = evaluation.SupportEntities[i];
+
+            if (generated.Style.Kind == SupportStyleKind.Buttress)
+            {
+                buttresses.Add(generated);
+            }
+            else if (generated.Style.Kind == SupportStyleKind.BraceMember)
+            {
+                braceMembers.Add(generated);
+            }
+        }
+
+        if (buttresses.Count != 2 || braceMembers.Count != 3 || evaluation.AddedMemberCount != 5)
+        {
+            throw new InvalidOperationException("Expected two buttresses and only the three feasible lower brace members.");
+        }
+
+        for (int i = 0; i < braceMembers.Count; i++)
+        {
+            SupportEntity braceMember = braceMembers[i];
+            bool startsOnButtress = IsSameXy(braceMember.BasePosition, buttresses[0].BasePosition)
+                || IsSameXy(braceMember.BasePosition, buttresses[1].BasePosition);
+
+            if (!startsOnButtress)
+            {
+                throw new InvalidOperationException("Expected every lower buttress brace to start on a buttress base top.");
+            }
+
+            ValidateBraceAngleRange(braceMember, FixedAngleDegrees, FixedAngleDegrees);
+        }
+    }
+
+    /// <summary>
+    /// Validates one primary-and-return zig-zag pair and its configured angle limits.
+    /// </summary>
+    private static void ValidateDirectionalButtressBracePair(
+        IReadOnlyList<SupportEntity> braceMembers,
+        int memberIndex,
+        SupportEntity startSupport,
+        SupportEntity endSupport,
+        float minimumAngleDegrees,
+        float maximumAngleDegrees)
+    {
+        SupportEntity primaryMember = braceMembers[memberIndex];
+        SupportEntity returnMember = braceMembers[memberIndex + 1];
+        Vector3 expectedBaseTop = startSupport.BasePosition + (Vector3.UnitZ * startSupport.Profile.BaseHeight);
+        Vector3 expectedEndStemTop = CalculateTestStemTop(endSupport);
+        Vector3 expectedReturnStemTop = CalculateTestStemTop(startSupport);
+
+        ValidateVectorNear(expectedBaseTop, primaryMember.BasePosition, 0.0001f, "Expected the lower brace to start at the buttress base top.");
+
+        if (!IsSameXy(primaryMember.TipPosition, expectedEndStemTop))
+        {
+            throw new InvalidOperationException("Expected the lower brace to rise toward the opposite support stem.");
+        }
+
+        ValidateVectorNear(primaryMember.TipPosition, returnMember.BasePosition, 0.0001f, "Expected the return brace to begin at the lower brace endpoint.");
+        ValidateVectorNear(expectedReturnStemTop, returnMember.TipPosition, 0.0001f, "Expected the return brace to end at the originating buttress stem top.");
+        ValidateBraceAngleRange(primaryMember, minimumAngleDegrees, maximumAngleDegrees);
+        ValidateBraceAngleRange(returnMember, minimumAngleDegrees, maximumAngleDegrees);
+    }
+
+    /// <summary>
+    /// Gets the stem top used by buttress brace tests.
+    /// </summary>
+    private static Vector3 CalculateTestStemTop(SupportEntity support)
+    {
+        if (support.Style.Kind == SupportStyleKind.Buttress)
+        {
+            return support.TipPosition - (Vector3.Normalize(support.BranchDirection) * support.BranchLength);
+        }
+
+        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
+        return support.TipPosition - (headDirection * support.Profile.HeadHeight);
+    }
+
+    /// <summary>
+    /// Validates the angle of one generated brace member against inclusive limits.
+    /// </summary>
+    private static void ValidateBraceAngleRange(SupportEntity braceMember, float minimumAngleDegrees, float maximumAngleDegrees)
+    {
+        Vector3 braceVector = braceMember.TipPosition - braceMember.BasePosition;
+        float horizontalDistance = new Vector2(braceVector.X, braceVector.Y).Length();
+        float angleDegrees = MathF.Atan2(braceVector.Z, horizontalDistance) * (180.0f / MathF.PI);
+
+        if (angleDegrees < minimumAngleDegrees - 0.0001f || angleDegrees > maximumAngleDegrees + 0.0001f)
+        {
+            throw new InvalidOperationException($"Expected brace angle in [{minimumAngleDegrees}, {maximumAngleDegrees}], actual {angleDegrees}.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that support identity ordering cannot hide the only feasible brace direction.
+    /// </summary>
+    private static void ValidateBraceModifierEvaluatesBothDirections()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        SupportEntity tallSupport = CreateSupportForGroupWithId(
+            Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            supportLayerGroupId,
+            new Vector2(5.0f, 0.0f),
+            20.0f,
+            profile);
+        SupportEntity shortSupport = CreateSupportForGroupWithId(
+            Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+            supportLayerGroupId,
+            Vector2.Zero,
+            7.0f,
+            profile);
+        List<SupportEntity> supports = new List<SupportEntity> { tallSupport, shortSupport };
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount != 1
+            || !IsSameXy(evaluation.SupportEntities[supports.Count].BasePosition, shortSupport.BasePosition)
+            || !IsSameXy(evaluation.SupportEntities[supports.Count].TipPosition, tallSupport.BasePosition))
+        {
+            throw new InvalidOperationException("Expected the planner to choose the feasible short-base-top to tall-stem-top direction.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that brace cylinders begin at the center of the printable base's top surface.
+    /// </summary>
+    private static void ValidateBraceModifierStartsAtBaseTop()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(3.0f, 0.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount == 0)
+        {
+            throw new InvalidOperationException("Expected at least one brace for the base-top endpoint test.");
+        }
+
+        SupportEntity member = evaluation.SupportEntities[supports.Count];
+        int startSupportIndex = FindSupportIndexByXy(supports, member.BasePosition);
+        float expectedStartZ = supports[startSupportIndex].BasePosition.Z + profile.BaseHeight;
+
+        if (MathF.Abs(member.BasePosition.Z - expectedStartZ) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the brace to start at the top of the support base.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that sufficient remaining stem height creates one rising zig-zag return member.
+    /// </summary>
+    private static void ValidateBraceModifierAddsRisingReturnMember()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(3.0f, 0.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            SupportBraceModifierSettings.CreateDefault(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount != 2)
+        {
+            throw new InvalidOperationException($"Expected a primary and return brace member but generated {evaluation.AddedMemberCount}.");
+        }
+
+        SupportEntity primaryMember = evaluation.SupportEntities[supports.Count];
+        SupportEntity returnMember = evaluation.SupportEntities[supports.Count + 1];
+
+        if (Vector3.DistanceSquared(primaryMember.TipPosition, returnMember.BasePosition) > 0.00000001f
+            || returnMember.TipPosition.Z <= returnMember.BasePosition.Z
+            || IsSameXy(returnMember.TipPosition, primaryMember.TipPosition))
+        {
+            throw new InvalidOperationException("Expected the return member to rise from the first brace endpoint back toward the opposite stem.");
+        }
+    }
+
+    /// <summary>
+    /// Validates the new-session maximum brace angle default.
+    /// </summary>
+    private static void ValidateBraceModifierDefaultsMaximumAngleTo70()
+    {
+        SupportBraceModifierSettings settings = SupportBraceModifierSettings.CreateDefault();
+
+        if (MathF.Abs(settings.MaximumBraceAngleDegrees - 70.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the default maximum brace angle to be 70 degrees.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a regular ring receives only cyclically adjacent brace members.
+    /// </summary>
+    private static void ValidateBraceModifierKeepsAdjacentRingNeighbors()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<Vector2> positions = new List<Vector2>();
+        const int SupportCount = 8;
+
+        for (int i = 0; i < SupportCount; i++)
+        {
+            float angle = (MathF.PI * 2.0f * i) / SupportCount;
+            positions.Add(new Vector2(MathF.Cos(angle) * 10.0f, MathF.Sin(angle) * 10.0f));
+        }
+
+        List<SupportEntity> supports = CreateSupportsForGroup(supportLayerGroupId, positions, 20.0f, profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount != SupportCount * 2)
+        {
+            throw new InvalidOperationException($"Expected {SupportCount * 2} adjacent ring brace members but generated {evaluation.AddedMemberCount}.");
+        }
+
+        for (int i = supports.Count; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity member = evaluation.SupportEntities[i];
+            int startIndex = FindSupportIndexByXy(supports, member.BasePosition);
+            int endIndex = FindSupportIndexByXy(supports, member.TipPosition);
+            int indexDifference = Math.Abs(startIndex - endIndex);
+
+            if (indexDifference != 1 && indexDifference != SupportCount - 1)
+            {
+                throw new InvalidOperationException("Expected every ring brace to connect cyclically adjacent supports.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that a collinear brace graph cannot jump over an intermediate feasible support.
+    /// </summary>
+    private static void ValidateBraceModifierDoesNotSkipCollinearSupports()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(3.0f, 0.0f),
+                new Vector2(6.0f, 0.0f),
+                new Vector2(9.0f, 0.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount != (supports.Count - 1) * 2)
+        {
+            throw new InvalidOperationException("Expected two brace members between each adjacent pair of collinear supports.");
+        }
+
+        for (int i = supports.Count; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity member = evaluation.SupportEntities[i];
+            float horizontalSpan = MathF.Abs(member.BasePosition.X - member.TipPosition.X);
+
+            if (MathF.Abs(horizontalSpan - 3.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("A collinear brace skipped a nearer intermediate support.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates the relative-neighborhood invariant on an irregular generator-independent layout.
+    /// </summary>
+    private static void ValidateBraceModifierUsesRelativeNeighborhoodOnIrregularLayout()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(2.0f, 0.5f),
+                new Vector2(4.0f, 0.0f),
+                new Vector2(1.0f, 4.0f),
+                new Vector2(5.0f, 3.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        for (int i = supports.Count; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity member = evaluation.SupportEntities[i];
+            int startIndex = FindSupportIndexByXy(supports, member.BasePosition);
+            int endIndex = FindSupportIndexByXy(supports, member.TipPosition);
+            Vector2 start = new Vector2(supports[startIndex].BasePosition.X, supports[startIndex].BasePosition.Y);
+            Vector2 end = new Vector2(supports[endIndex].BasePosition.X, supports[endIndex].BasePosition.Y);
+            float pairDistanceSquared = Vector2.DistanceSquared(start, end);
+
+            for (int supportIndex = 0; supportIndex < supports.Count; supportIndex++)
+            {
+                if (supportIndex == startIndex || supportIndex == endIndex)
+                {
+                    continue;
+                }
+
+                Vector2 other = new Vector2(supports[supportIndex].BasePosition.X, supports[supportIndex].BasePosition.Y);
+                bool closerToStart = Vector2.DistanceSquared(start, other) + 0.0001f < pairDistanceSquared;
+                bool closerToEnd = Vector2.DistanceSquared(end, other) + 0.0001f < pairDistanceSquared;
+
+                if (closerToStart && closerToEnd)
+                {
+                    throw new InvalidOperationException("An irregular-layout brace crossed a closer feasible relative neighbor.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that equally near supports do not block each other through floating-point tie noise.
+    /// </summary>
+    private static void ValidateBraceModifierPreservesEqualDistanceNeighbors()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        float triangleHeight = MathF.Sqrt(27.0f);
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(6.0f, 0.0f),
+                new Vector2(3.0f, triangleHeight)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+
+        if (evaluation.AddedMemberCount != 6)
+        {
+            throw new InvalidOperationException("Expected both brace members for all three equal-distance triangle neighbors.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that relative-neighborhood filtering still enforces the physical three-connection limit.
+    /// </summary>
+    private static void ValidateBraceModifierLimitsConnections()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                Vector2.Zero,
+                new Vector2(6.0f, 0.0f),
+                new Vector2(-6.0f, 0.0f),
+                new Vector2(0.0f, 6.0f),
+                new Vector2(0.0f, -6.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateBrace(supports, modifier);
+        HashSet<int> centralNeighborIndices = new HashSet<int>();
+
+        for (int i = supports.Count; i < evaluation.SupportEntities.Count; i++)
+        {
+            SupportEntity member = evaluation.SupportEntities[i];
+            int startIndex = FindSupportIndexByXy(supports, member.BasePosition);
+            int endIndex = FindSupportIndexByXy(supports, member.TipPosition);
+
+            if (startIndex == 0)
+            {
+                centralNeighborIndices.Add(endIndex);
+            }
+            else if (endIndex == 0)
+            {
+                centralNeighborIndices.Add(startIndex);
+            }
+        }
+
+        if (centralNeighborIndices.Count != 3)
+        {
+            throw new InvalidOperationException($"Expected the central support to be limited to three neighbors but found {centralNeighborIndices.Count}.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that replacing one selected pair preserves old selected-to-unselected and unselected pairs.
+    /// </summary>
+    private static void ValidateBracePairExclusionsPreserveMixedSelectionBracing()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(6.0f, 0.0f),
+                new Vector2(12.0f, 0.0f)
+            },
+            30.0f,
+            profile);
+        IReadOnlyList<Guid> allTargetIds = CreateSupportIds(supports);
+        SupportBraceModifierSettings oldSettings = new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.4f);
+        SupportBraceModifierSettings newSettings = new SupportBraceModifierSettings(10.0f, 70.0f, 50.0f, 0.9f);
+        SupportModifierDefinition oldModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            true,
+            0,
+            null,
+            oldSettings,
+            null,
+            allTargetIds,
+            null,
+            0,
+            new List<SupportBracePair> { new SupportBracePair(supports[0].Id, supports[2].Id) });
+        SupportModifierDefinition newModifier = SupportModifierDefinition.CreateNewBrace(
+            1,
+            newSettings,
+            new List<Guid> { supports[0].Id, supports[2].Id },
+            0);
+        IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(
+            supports,
+            new List<SupportModifierDefinition> { oldModifier, newModifier });
+        int oldSelectedPairMemberCount = 0;
+        int oldFirstMixedPairMemberCount = 0;
+        int oldSecondMixedPairMemberCount = 0;
+        int newSelectedPairMemberCount = 0;
+        int newMixedPairMemberCount = 0;
+
+        for (int i = supports.Count; i < result.Count; i++)
+        {
+            SupportEntity member = result[i];
+
+            if (member.Style is not BraceMemberSupportStyle braceStyle)
+            {
+                continue;
+            }
+
+            int firstSupportIndex = FindSupportIndexByXy(supports, member.BasePosition);
+            int secondSupportIndex = FindSupportIndexByXy(supports, member.TipPosition);
+            int minimumIndex = Math.Min(firstSupportIndex, secondSupportIndex);
+            int maximumIndex = Math.Max(firstSupportIndex, secondSupportIndex);
+            bool usesOldSettings = MathF.Abs(braceStyle.Diameter - 0.4f) <= 0.0001f;
+            bool usesNewSettings = MathF.Abs(braceStyle.Diameter - 0.9f) <= 0.0001f;
+
+            if (minimumIndex == 0 && maximumIndex == 2)
+            {
+                oldSelectedPairMemberCount += usesOldSettings ? 1 : 0;
+                newSelectedPairMemberCount += usesNewSettings ? 1 : 0;
+            }
+            else if (minimumIndex == 0 && maximumIndex == 1)
+            {
+                oldFirstMixedPairMemberCount += usesOldSettings ? 1 : 0;
+                newMixedPairMemberCount += usesNewSettings ? 1 : 0;
+            }
+            else if (minimumIndex == 1 && maximumIndex == 2)
+            {
+                oldSecondMixedPairMemberCount += usesOldSettings ? 1 : 0;
+                newMixedPairMemberCount += usesNewSettings ? 1 : 0;
+            }
+        }
+
+        if (oldSelectedPairMemberCount != 0
+            || newSelectedPairMemberCount == 0
+            || oldFirstMixedPairMemberCount == 0
+            || oldSecondMixedPairMemberCount == 0
+            || newMixedPairMemberCount != 0)
+        {
+            throw new InvalidOperationException("Expected only the selected-selected pair to use the replacement Brace settings.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that clustered supports are excluded from both Brace and Buttress target populations.
+    /// </summary>
+    private static void ValidateReinforcementExcludesClusteredSupports()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> individualSupports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(3.0f, 0.0f),
+                new Vector2(6.0f, 0.0f)
+            },
+            50.0f,
+            profile);
+        SupportEntity clusteredSupport = CreateSupportWithStyle(
+            individualSupports[1],
+            new ClusteredSupportStyle(
+                SupportDefaults.DefaultStemBottomDiameter,
+                SupportDefaults.DefaultStemTopDiameter,
+                SupportDefaults.DefaultStemTopDiameter));
+        List<SupportEntity> supports = new List<SupportEntity>
+        {
+            individualSupports[0],
+            clusteredSupport,
+            individualSupports[2]
+        };
+        IReadOnlyList<Guid> targetIds = CreateSupportIds(supports);
+        SupportModifierDefinition braceModifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            targetIds,
+            0);
+        SupportBracingEvaluationResult braceEvaluation = SupportBracingPlanner.EvaluateBrace(supports, braceModifier);
+
+        if (braceEvaluation.TargetSupportCount != 2 || braceEvaluation.AddedMemberCount != 2)
+        {
+            throw new InvalidOperationException("Expected Brace evaluation to ignore the captured clustered support.");
+        }
+
+        SupportModifierDefinition buttressModifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            new SupportButtressModifierSettings(0.0f, 8.0f),
+            targetIds,
+            0);
+        SupportBracingEvaluationResult buttressEvaluation = SupportBracingPlanner.EvaluateButtress(supports, buttressModifier);
+
+        if (buttressEvaluation.TargetSupportCount != 2
+            || CountSupportsWithStyle(buttressEvaluation.SupportEntities, SupportStyleKind.Buttress) != 4)
+        {
+            throw new InvalidOperationException("Expected Buttress evaluation to ignore the captured clustered support and create two buttresses per individual target.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a Brace modifier replayed after clustering cannot reinforce clustered outputs.
+    /// </summary>
+    private static void ValidateClusterBeforeBraceExcludesClusteredOutputs()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(2.0f, 0.0f),
+                new Vector2(10.0f, 0.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition clusterModifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            0,
+            CreateSmokeClusterSettings(3.0f, 2),
+            new List<Guid> { supports[0].Id, supports[1].Id },
+            0);
+        SupportModifierDefinition braceModifier = SupportModifierDefinition.CreateNewBrace(
+            1,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(supports),
+            0);
+        IReadOnlyList<SupportEntity> result = SupportModifierPipeline.ApplyModifiers(
+            supports,
+            new List<SupportModifierDefinition> { clusterModifier, braceModifier });
+
+        if (CountSupportsWithStyle(result, SupportStyleKind.Clustered) != 2
+            || CountSupportsWithStyle(result, SupportStyleKind.BraceMember) != 0)
+        {
+            throw new InvalidOperationException("Expected clustered outputs to remain unbraced during modifier replay.");
+        }
+    }
+
+    /// <summary>
+    /// Validates durable target pruning and minimum-target modifier removal after clustering.
+    /// </summary>
+    private static void ValidateClusterReconciliationRemovesReinforcementTargets()
+    {
+        Guid firstId = Guid.NewGuid();
+        Guid secondId = Guid.NewGuid();
+        Guid thirdId = Guid.NewGuid();
+        SupportModifierDefinition braceModifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            new List<Guid> { firstId, secondId, thirdId },
+            0);
+        SupportModifierDefinition buttressModifier = SupportModifierDefinition.CreateNewButtress(
+            1,
+            new SupportButtressModifierSettings(0.0f, 8.0f),
+            new List<Guid> { firstId },
+            0);
+        SupportModifierDefinition clusterModifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            2,
+            CreateSmokeClusterSettings(3.0f, 2),
+            new List<Guid> { firstId, secondId },
+            0);
+        SupportReinforcementReconciliationResult reconciliation = SupportReinforcementReconciler.RemoveClusteredTargets(
+            new List<SupportModifierDefinition> { braceModifier, buttressModifier, clusterModifier },
+            new List<Guid> { firstId });
+
+        if (reconciliation.RemovedTargetCount != 2
+            || reconciliation.RemovedModifierCount != 1
+            || reconciliation.AffectedModifierCount != 2
+            || reconciliation.Modifiers.Count != 2)
+        {
+            throw new InvalidOperationException("Expected reconciliation to prune two targets and remove the empty Buttress modifier.");
+        }
+
+        SupportModifierDefinition remainingBrace = reconciliation.Modifiers[0];
+
+        if (remainingBrace.Id != braceModifier.Id
+            || remainingBrace.TargetSupportIds.Count != 2
+            || ContainsSupportId(remainingBrace.TargetSupportIds, firstId)
+            || reconciliation.Modifiers[1].Id != clusterModifier.Id
+            || reconciliation.Modifiers[1].Order != 1)
+        {
+            throw new InvalidOperationException("Expected reconciliation to preserve surviving modifier identity, settings, and relative order.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that the atomic replacement command restores reinforcement geometry and modifiers on Undo.
+    /// </summary>
+    private static void ValidateClusterReinforcementCleanupUndo()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 10.0f),
+            new Vector3(10.0f, 0.0f, 10.0f),
+            new Vector3(0.0f, 10.0f, 10.0f),
+            Transform3DData.Identity);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Undoable Reinforcement Cleanup");
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        List<SupportEntity> sourceSupports = CreateSupportsForGroup(
+            supportLayerGroup.Id,
+            new List<Vector2>
+            {
+                new Vector2(0.0f, 0.0f),
+                new Vector2(2.0f, 0.0f),
+                new Vector2(10.0f, 0.0f)
+            },
+            20.0f,
+            profile);
+        SupportModifierDefinition braceModifier = SupportModifierDefinition.CreateNewBrace(
+            0,
+            CreateNearestNeighborBraceSettings(),
+            CreateSupportIds(sourceSupports),
+            supportLayerGroup.SourceGeneratorRevision);
+        List<SupportModifierDefinition> oldModifiers = new List<SupportModifierDefinition> { braceModifier };
+        IReadOnlyList<SupportEntity> oldOutput = SupportModifierPipeline.ApplyModifiers(sourceSupports, oldModifiers);
+        SupportModifierDefinition clusterModifier = SupportModifierDefinition.CreateNew(
+            SupportModifierKind.Cluster,
+            1,
+            CreateSmokeClusterSettings(3.0f, 2),
+            new List<Guid> { sourceSupports[0].Id, sourceSupports[1].Id },
+            supportLayerGroup.SourceGeneratorRevision);
+        List<SupportModifierDefinition> provisionalModifiers = new List<SupportModifierDefinition>
+        {
+            braceModifier,
+            clusterModifier
+        };
+        IReadOnlyList<SupportEntity> provisionalOutput = SupportModifierPipeline.ApplyModifiers(sourceSupports, provisionalModifiers);
+        HashSet<Guid> clusteredIds = new HashSet<Guid>();
+
+        for (int i = 0; i < provisionalOutput.Count; i++)
+        {
+            if (provisionalOutput[i].Style.Kind == SupportStyleKind.Clustered)
+            {
+                clusteredIds.Add(provisionalOutput[i].Id);
+            }
+        }
+
+        SupportReinforcementReconciliationResult reconciliation = SupportReinforcementReconciler.RemoveClusteredTargets(
+            provisionalModifiers,
+            clusteredIds);
+        IReadOnlyList<SupportEntity> newOutput = SupportModifierPipeline.ApplyModifiers(sourceSupports, reconciliation.Modifiers);
+
+        document.AddEntity(mesh);
+        document.AddSupportLayerGroup(supportLayerGroup);
+        supportLayerGroup.SetSupportModifiers(oldModifiers);
+
+        for (int i = 0; i < oldOutput.Count; i++)
+        {
+            document.AddEntity(oldOutput[i]);
+        }
+
+        ReplaceSupportLayerOutputAndModifiersCommand command = new ReplaceSupportLayerOutputAndModifiersCommand(
+            document,
+            supportLayerGroup,
+            oldOutput,
+            newOutput,
+            oldModifiers,
+            reconciliation.Modifiers,
+            "Test Cluster Reinforcement Cleanup");
+        command.Execute();
+
+        if (supportLayerGroup.SupportModifiers.Count != 1
+            || supportLayerGroup.SupportModifiers[0].Kind != SupportModifierKind.Cluster
+            || CountSupportsWithStyle(document.GetSupportEntitiesForGroup(supportLayerGroup.Id), SupportStyleKind.BraceMember) != 0)
+        {
+            throw new InvalidOperationException("Expected cluster execution to replace the old reinforcement modifier and geometry.");
+        }
+
+        command.Undo();
+
+        if (supportLayerGroup.SupportModifiers.Count != 1
+            || supportLayerGroup.SupportModifiers[0].Kind != SupportModifierKind.Brace
+            || CountSupportsWithStyle(document.GetSupportEntitiesForGroup(supportLayerGroup.Id), SupportStyleKind.BraceMember) == 0)
+        {
+            throw new InvalidOperationException("Expected Undo to restore the original reinforcement modifier and geometry.");
+        }
+    }
+
     private static void ValidateSupportPlacementRejectsCrossingAngledHead()
     {
         SupportProfile profile = CreateAngledProfile(45.0f);
@@ -2548,6 +3533,75 @@ public static class Program
             }
         }
     }
+
+    /// <summary>
+    /// Validates that selected-pair replacement exclusions survive project persistence.
+    /// </summary>
+    private static void ValidateBracePairExclusionsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Pair Exclusion Supports");
+        List<SupportEntity> supports = CreateSupportsForGroup(
+            supportLayerGroup.Id,
+            new List<Vector2>
+            {
+                Vector2.Zero,
+                new Vector2(5.0f, 0.0f),
+                new Vector2(2.5f, 4.0f)
+            },
+            20.0f,
+            SupportDefaults.CreateProfile());
+        SupportBracePair excludedPair = new SupportBracePair(supports[0].Id, supports[1].Id);
+        SupportModifierDefinition modifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            true,
+            0,
+            null,
+            SupportBraceModifierSettings.CreateDefault(),
+            null,
+            CreateSupportIds(supports),
+            null,
+            supportLayerGroup.SourceGeneratorRevision,
+            new List<SupportBracePair> { excludedPair });
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition> { modifier });
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        for (int i = 0; i < supports.Count; i++)
+        {
+            document.AddEntity(supports[i]);
+        }
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "BracePairExclusionSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+            SupportModifierDefinition loadedModifier = loadedDocument.SupportLayerGroups[0].SupportModifiers[0];
+
+            if (loadedModifier.ExcludedBracePairs.Count != 1
+                || !loadedModifier.ExcludedBracePairs[0].Equals(excludedPair))
+            {
+                throw new InvalidOperationException("Expected the excluded Brace pair to survive save and load.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
     /// <summary>
     /// Validates that support styles and cluster branch diameter settings are saved and loaded with the project.
     /// </summary>
@@ -2639,6 +3693,92 @@ public static class Program
             }
         }
     }
+
+    /// <summary>
+    /// Validates that generated buttress styles and captured bracing parameters survive project persistence.
+    /// </summary>
+    private static void ValidateButtressStyleAndBracingSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Buttressed Supports");
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        SupportEntity sourceSupport = new SupportEntity(
+            supportLayerGroup.Id,
+            new Vector3(0.0f, 0.0f, 60.0f),
+            Vector3.Zero,
+            profile);
+        SupportBraceModifierSettings braceSettings = new SupportBraceModifierSettings(25.0f, 68.0f, 33.0f, 0.66f);
+        SupportButtressModifierSettings buttressSettings = new SupportButtressModifierSettings(35.0f, 7.0f, braceSettings);
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            buttressSettings,
+            new List<Guid> { sourceSupport.Id },
+            supportLayerGroup.SourceGeneratorRevision);
+        SupportBracingEvaluationResult evaluation = SupportBracingPlanner.EvaluateButtress(
+            new List<SupportEntity> { sourceSupport },
+            modifier);
+        supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition> { modifier });
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        for (int i = 0; i < evaluation.SupportEntities.Count; i++)
+        {
+            document.AddEntity(evaluation.SupportEntities[i]);
+        }
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "ButtressStyleSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+            int loadedButtressCount = 0;
+
+            for (int i = 0; i < loadedDocument.Entities.Count; i++)
+            {
+                if (loadedDocument.Entities[i] is SupportEntity support
+                    && support.Style is ButtressSupportStyle)
+                {
+                    loadedButtressCount++;
+                }
+            }
+
+            if (loadedButtressCount != 2
+                || loadedDocument.SupportLayerGroups.Count != 1
+                || loadedDocument.SupportLayerGroups[0].SupportModifiers.Count != 1)
+            {
+                throw new InvalidOperationException("Expected two persisted buttress supports and one Buttress modifier.");
+            }
+
+            SupportButtressModifierSettings? loadedSettings =
+                loadedDocument.SupportLayerGroups[0].SupportModifiers[0].ButtressSettings;
+
+            if (loadedSettings == null
+                || MathF.Abs(loadedSettings.MinimumButtressHeight - 35.0f) > 0.0001f
+                || MathF.Abs(loadedSettings.ButtressSpacing - 7.0f) > 0.0001f
+                || MathF.Abs(loadedSettings.BraceSettings.MinimumBraceAngleDegrees - 25.0f) > 0.0001f
+                || MathF.Abs(loadedSettings.BraceSettings.MaximumBraceAngleDegrees - 68.0f) > 0.0001f
+                || MathF.Abs(loadedSettings.BraceSettings.MaximumBraceLength - 33.0f) > 0.0001f
+                || MathF.Abs(loadedSettings.BraceSettings.BraceDiameter - 0.66f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Buttress and captured Brace settings to survive save and load.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
     /// <summary>
     /// Validates that loaded modifiers with mismatched generator revisions are discarded.
     /// </summary>
@@ -2895,6 +4035,165 @@ public static class Program
         {
             throw new InvalidOperationException("Expected the rotated vertical triangle to be excluded.");
         }
+    }
+
+    /// <summary>
+    /// Validates one scalar distance using the standard geometry tolerance.
+    /// </summary>
+    private static void ValidateDistanceNear(float expected, float actual, string message)
+    {
+        if (MathF.Abs(expected - actual) > 0.0001f)
+        {
+            throw new InvalidOperationException($"{message} Expected {expected}, actual {actual}.");
+        }
+    }
+
+    /// <summary>
+    /// Creates settings that keep every test pair feasible before neighborhood filtering.
+    /// </summary>
+    private static SupportBraceModifierSettings CreateNearestNeighborBraceSettings()
+    {
+        return new SupportBraceModifierSettings(10.0f, 50.0f, 50.0f, 0.5f);
+    }
+
+    /// <summary>
+    /// Creates vertical supports at XY positions inside one support layer group.
+    /// </summary>
+    private static List<SupportEntity> CreateSupportsForGroup(
+        Guid supportLayerGroupId,
+        IReadOnlyList<Vector2> positions,
+        float tipHeight,
+        SupportProfile profile)
+    {
+        List<SupportEntity> supports = new List<SupportEntity>(positions.Count);
+
+        for (int i = 0; i < positions.Count; i++)
+        {
+            Vector2 position = positions[i];
+            supports.Add(new SupportEntity(
+                supportLayerGroupId,
+                new Vector3(position.X, position.Y, tipHeight),
+                new Vector3(position.X, position.Y, 0.0f),
+                profile));
+        }
+
+        return supports;
+    }
+
+    /// <summary>
+    /// Creates one vertical support with an explicit identity for deterministic direction tests.
+    /// </summary>
+    private static SupportEntity CreateSupportForGroupWithId(
+        Guid supportId,
+        Guid supportLayerGroupId,
+        Vector2 position,
+        float tipHeight,
+        SupportProfile profile)
+    {
+        return SupportEntity.CreateLoaded(
+            supportId,
+            "Support",
+            supportLayerGroupId,
+            new Vector3(position.X, position.Y, tipHeight),
+            new Vector3(position.X, position.Y, 0.0f),
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            SupportStyle.Individual);
+    }
+
+    /// <summary>
+    /// Captures support identities in their current stable order.
+    /// </summary>
+    private static IReadOnlyList<Guid> CreateSupportIds(IReadOnlyList<SupportEntity> supports)
+    {
+        List<Guid> supportIds = new List<Guid>(supports.Count);
+
+        for (int i = 0; i < supports.Count; i++)
+        {
+            supportIds.Add(supports[i].Id);
+        }
+
+        return supportIds;
+    }
+
+    /// <summary>
+    /// Finds the source support whose base shares a generated member endpoint in XY.
+    /// </summary>
+    private static int FindSupportIndexByXy(IReadOnlyList<SupportEntity> supports, Vector3 position)
+    {
+        for (int i = 0; i < supports.Count; i++)
+        {
+            if (IsSameXy(supports[i].BasePosition, position))
+            {
+                return i;
+            }
+        }
+
+        throw new InvalidOperationException("Generated brace endpoint did not match a source support base.");
+    }
+
+    /// <summary>
+    /// Compares two positions in XY using the smoke-test geometry tolerance.
+    /// </summary>
+    private static bool IsSameXy(Vector3 left, Vector3 right)
+    {
+        float deltaX = left.X - right.X;
+        float deltaY = left.Y - right.Y;
+        return (deltaX * deltaX) + (deltaY * deltaY) <= 0.00000001f;
+    }
+
+    /// <summary>
+    /// Recreates one support identity and geometry with a supplied durable support style.
+    /// </summary>
+    private static SupportEntity CreateSupportWithStyle(SupportEntity source, SupportStyle style)
+    {
+        return SupportEntity.CreateLoaded(
+            source.Id,
+            source.Name,
+            source.SupportLayerGroupId,
+            source.TipPosition,
+            source.BasePosition,
+            source.HeadDirection,
+            source.BranchLength,
+            source.BranchDirection,
+            source.Profile,
+            style);
+    }
+
+    /// <summary>
+    /// Counts supports using one durable support style kind.
+    /// </summary>
+    private static int CountSupportsWithStyle(IReadOnlyList<SupportEntity> supports, SupportStyleKind styleKind)
+    {
+        int count = 0;
+
+        for (int i = 0; i < supports.Count; i++)
+        {
+            if (supports[i].Style.Kind == styleKind)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Checks an identity list without introducing LINQ into the smoke-test hot path.
+    /// </summary>
+    private static bool ContainsSupportId(IReadOnlyList<Guid> supportIds, Guid supportId)
+    {
+        for (int i = 0; i < supportIds.Count; i++)
+        {
+            if (supportIds[i] == supportId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

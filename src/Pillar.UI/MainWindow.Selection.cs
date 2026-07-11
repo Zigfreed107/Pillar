@@ -1,4 +1,4 @@
-// MainWindow.Selection.cs
+﻿// MainWindow.Selection.cs
 // Keeps shell-level selection feedback and layer-panel synchronization separate from viewport routing, mode switching, and file workflows.
 using Pillar.Core.Entities;
 using Pillar.ViewModels;
@@ -23,6 +23,7 @@ public partial class MainWindow
         UpdateSelectedModelBoundsClipIndicator();
         UpdateGeneratedSupportDeleteButtonState();
         RefreshSupportClusterPreviewStatusForSelectionChange();
+        RefreshSupportBracingToolStatusForSelectionChange();
 
         if (_scene.SelectionManager.SelectedCount == 1)
         {

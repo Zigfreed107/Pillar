@@ -2,6 +2,7 @@
 // Handles shell-level keyboard shortcuts and command-history UI so document commands remain centralized without crowding setup and interaction code.
 using Pillar.Commands;
 using Pillar.UI.Modes;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -169,9 +170,13 @@ public partial class MainWindow
         }
 
         ICadCommand? command = null;
+        bool preserveSupportBracingTool = IsSupportBracingToolActiveForHistory();
+        Guid? supportBracingLayerGroupId = preserveSupportBracingTool
+            ? _layerPanelViewModel.GetSelectedSupportLayerGroupId()
+            : null;
         RunWithWaitCursor(() =>
         {
-            CancelActiveDocumentMutationSessions();
+            PrepareForDocumentHistoryChange(preserveSupportBracingTool);
             command = _commandRunner.Undo();
 
             if (command == null)
@@ -181,6 +186,11 @@ public partial class MainWindow
 
             _layerPanelViewModel.RefreshFromDocument();
             RefreshTransformScaleToolForSelection();
+
+            if (preserveSupportBracingTool)
+            {
+                RestoreSupportBracingToolAfterHistoryChange(supportBracingLayerGroupId);
+            }
         });
 
         if (command == null)
@@ -202,9 +212,13 @@ public partial class MainWindow
         }
 
         ICadCommand? command = null;
+        bool preserveSupportBracingTool = IsSupportBracingToolActiveForHistory();
+        Guid? supportBracingLayerGroupId = preserveSupportBracingTool
+            ? _layerPanelViewModel.GetSelectedSupportLayerGroupId()
+            : null;
         RunWithWaitCursor(() =>
         {
-            CancelActiveDocumentMutationSessions();
+            PrepareForDocumentHistoryChange(preserveSupportBracingTool);
             command = _commandRunner.Redo();
 
             if (command == null)
@@ -214,6 +228,11 @@ public partial class MainWindow
 
             _layerPanelViewModel.RefreshFromDocument();
             RefreshTransformScaleToolForSelection();
+
+            if (preserveSupportBracingTool)
+            {
+                RestoreSupportBracingToolAfterHistoryChange(supportBracingLayerGroupId);
+            }
         });
 
         if (command == null)

@@ -158,3 +158,117 @@ public sealed class ClusteredSupportStyle : SupportStyle
         return value;
     }
 }
+
+/// <summary>
+/// Style for generated buttress supports whose branch joins another support without a model-contact head.
+/// </summary>
+public sealed class ButtressSupportStyle : SupportStyle
+{
+    /// <summary>
+    /// Creates a headless buttress style with an explicit branch diameter.
+    /// </summary>
+    public ButtressSupportStyle(float branchDiameter)
+    {
+        BranchDiameter = ValidateDiameter(branchDiameter, nameof(branchDiameter));
+    }
+
+    /// <summary>
+    /// Gets the branch diameter copied from the support being buttressed.
+    /// </summary>
+    public float BranchDiameter { get; }
+
+    /// <summary>
+    /// Gets the style kind used for persistence and geometry decisions.
+    /// </summary>
+    public override SupportStyleKind Kind
+    {
+        get { return SupportStyleKind.Buttress; }
+    }
+
+    /// <summary>
+    /// Creates a defensive copy for support entity ownership.
+    /// </summary>
+    public override SupportStyle Clone()
+    {
+        return new ButtressSupportStyle(BranchDiameter);
+    }
+
+    /// <summary>
+    /// Buttress branches use the copied source-support branch diameter.
+    /// </summary>
+    internal override float ResolveBranchDiameter(SupportProfile profile)
+    {
+        _ = profile;
+        return BranchDiameter;
+    }
+
+    /// <summary>
+    /// Rejects invalid branch diameters before they reach support geometry.
+    /// </summary>
+    private static float ValidateDiameter(float value, string parameterName)
+    {
+        if (!float.IsFinite(value) || value <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Buttress branch diameters must be finite positive values.");
+        }
+
+        return value;
+    }
+}
+
+/// <summary>
+/// Style for generated brace members that render as simple reinforcement cylinders.
+/// </summary>
+public sealed class BraceMemberSupportStyle : SupportStyle
+{
+    /// <summary>
+    /// Creates a brace-member style with an explicit member diameter.
+    /// </summary>
+    public BraceMemberSupportStyle(float diameter)
+    {
+        Diameter = ValidateDiameter(diameter, nameof(diameter));
+    }
+
+    /// <summary>
+    /// Gets the generated reinforcement member diameter.
+    /// </summary>
+    public float Diameter { get; }
+
+    /// <summary>
+    /// Gets the style kind used for persistence and conversion decisions.
+    /// </summary>
+    public override SupportStyleKind Kind
+    {
+        get { return SupportStyleKind.BraceMember; }
+    }
+
+    /// <summary>
+    /// Creates a defensive copy for support entity ownership.
+    /// </summary>
+    public override SupportStyle Clone()
+    {
+        return new BraceMemberSupportStyle(Diameter);
+    }
+
+    /// <summary>
+    /// Brace members use their explicit member diameter.
+    /// </summary>
+    internal override float ResolveBranchDiameter(SupportProfile profile)
+    {
+        _ = profile;
+        return Diameter;
+    }
+
+    /// <summary>
+    /// Rejects invalid style dimensions before they reach support geometry.
+    /// </summary>
+    private static float ValidateDiameter(float value, string parameterName)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Brace member diameters must be finite positive values.");
+        }
+
+        return value;
+    }
+}

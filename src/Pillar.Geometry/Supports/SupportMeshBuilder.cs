@@ -41,9 +41,28 @@ public static class SupportMeshBuilder
         List<int> triangleIndices = new List<int>();
         List<Vector3> normals = new List<Vector3>();
         SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(support.Profile, support.Style);
+
+        if (support.Style.Kind == SupportStyleKind.BraceMember)
+        {
+            AddClosedBraceMember(
+                positions,
+                triangleIndices,
+                normals,
+                support.BasePosition,
+                support.TipPosition,
+                dimensions.BranchDiameter,
+                validatedRadialSegments);
+            return new SupportMeshData(positions, triangleIndices, normals);
+        }
+
+        bool isButtress = support.Style.Kind == SupportStyleKind.Buttress;
         Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
-        float headLength = CalculateUsableHeadLength(support.TipPosition, support.BasePosition.Z, headDirection, support.Profile.HeadHeight);
-        Vector3 headJointPosition = support.TipPosition - (headDirection * headLength);
+        float headLength = isButtress
+            ? 0.0f
+            : CalculateUsableHeadLength(support.TipPosition, support.BasePosition.Z, headDirection, support.Profile.HeadHeight);
+        Vector3 headJointPosition = isButtress
+            ? support.TipPosition
+            : support.TipPosition - (headDirection * headLength);
         bool hasBranch = support.BranchLength > AxialTolerance;
         Vector3 branchDirection = hasBranch
             ? Vector3.Normalize(support.BranchDirection)
@@ -83,16 +102,19 @@ public static class SupportMeshBuilder
             AddCap(positions, triangleIndices, normals, stemBasePosition + (Vector3.UnitZ * topStation.DistanceFromBase), topStation.Radius, Vector3.UnitZ, verticalFrame.U, verticalFrame.V, validatedRadialSegments);
         }
 
-        AddClosedHead(
-            positions,
-            triangleIndices,
-            normals,
-            headJointPosition,
-            support.TipPosition,
-            headDirection,
-            support.Profile,
-            dimensions,
-            validatedRadialSegments);
+        if (!isButtress)
+        {
+            AddClosedHead(
+                positions,
+                triangleIndices,
+                normals,
+                headJointPosition,
+                support.TipPosition,
+                headDirection,
+                support.Profile,
+                dimensions,
+                validatedRadialSegments);
+        }
 
         if (hasBranch)
         {
@@ -134,6 +156,33 @@ public static class SupportMeshBuilder
         }
 
         return new SupportMeshData(positions, triangleIndices, normals);
+    }
+
+    /// <summary>
+    /// Adds a simple closed cylindrical reinforcement member between two saved endpoints.
+    /// </summary>
+    private static void AddClosedBraceMember(
+        List<Vector3> positions,
+        List<int> triangleIndices,
+        List<Vector3> normals,
+        Vector3 startPosition,
+        Vector3 endPosition,
+        float diameter,
+        int radialSegments)
+    {
+        Vector3 axis = endPosition - startPosition;
+
+        if (axis.LengthSquared() <= AxialTolerance * AxialTolerance)
+        {
+            return;
+        }
+
+        Vector3 axisDirection = Vector3.Normalize(axis);
+        float radius = diameter * 0.5f;
+        (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(axisDirection);
+        AddFrustum(positions, triangleIndices, normals, startPosition, endPosition, radius, radius, frame.U, frame.V, radialSegments);
+        AddCap(positions, triangleIndices, normals, startPosition, radius, -axisDirection, frame.U, frame.V, radialSegments);
+        AddCap(positions, triangleIndices, normals, endPosition, radius, axisDirection, frame.U, frame.V, radialSegments);
     }
 
     /// <summary>

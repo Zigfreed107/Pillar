@@ -8,5 +8,7 @@ namespace Pillar.Core.Supports;
 public enum SupportStyleKind
 {
     Individual,
-    Clustered
+    Clustered,
+    Buttress,
+    BraceMember
 }

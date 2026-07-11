@@ -12,6 +12,7 @@ public sealed class SupportModifierDefinition
 {
     private readonly List<Guid> _targetSupportIds;
     private readonly List<SupportModifierTargetBatch> _targetSupportIdBatches;
+    private readonly List<SupportBracePair> _excludedBracePairs;
 
     /// <summary>
     /// Creates one support modifier definition with a stable document identity.
@@ -24,7 +25,7 @@ public sealed class SupportModifierDefinition
         SupportClusterModifierSettings? clusterSettings,
         IReadOnlyList<Guid>? targetSupportIds,
         int? sourceGeneratorRevision)
-        : this(id, kind, isEnabled, order, clusterSettings, targetSupportIds, null, sourceGeneratorRevision)
+        : this(id, kind, isEnabled, order, clusterSettings, null, null, targetSupportIds, null, sourceGeneratorRevision)
     {
     }
 
@@ -40,6 +41,25 @@ public sealed class SupportModifierDefinition
         IReadOnlyList<Guid>? targetSupportIds,
         IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches,
         int? sourceGeneratorRevision)
+        : this(id, kind, isEnabled, order, clusterSettings, null, null, targetSupportIds, targetSupportIdBatches, sourceGeneratorRevision)
+    {
+    }
+
+    /// <summary>
+    /// Creates one support modifier definition with operation-specific settings and ordered target batches.
+    /// </summary>
+    public SupportModifierDefinition(
+        Guid id,
+        SupportModifierKind kind,
+        bool isEnabled,
+        int order,
+        SupportClusterModifierSettings? clusterSettings,
+        SupportBraceModifierSettings? braceSettings,
+        SupportButtressModifierSettings? buttressSettings,
+        IReadOnlyList<Guid>? targetSupportIds,
+        IReadOnlyList<SupportModifierTargetBatch>? targetSupportIdBatches,
+        int? sourceGeneratorRevision,
+        IReadOnlyList<SupportBracePair>? excludedBracePairs = null)
     {
         if (id == Guid.Empty)
         {
@@ -56,9 +76,12 @@ public sealed class SupportModifierDefinition
         IsEnabled = isEnabled;
         Order = order;
         ClusterSettings = clusterSettings?.Clone();
+        BraceSettings = braceSettings?.Clone();
+        ButtressSettings = buttressSettings?.Clone();
         SourceGeneratorRevision = sourceGeneratorRevision;
         _targetSupportIdBatches = CreateTargetSupportIdBatchList(targetSupportIds, targetSupportIdBatches);
         _targetSupportIds = CreateFlattenedTargetSupportIdList(targetSupportIds, _targetSupportIdBatches);
+        _excludedBracePairs = CreateBracePairList(excludedBracePairs);
 
         ValidateTargets();
         ValidateSettings();
@@ -94,8 +117,54 @@ public sealed class SupportModifierDefinition
             true,
             order,
             clusterSettings,
+            null,
+            null,
             targetSupportIds,
             targetSupportIdBatches,
+            sourceGeneratorRevision);
+    }
+
+    /// <summary>
+    /// Creates a new Brace modifier definition with a generated identity.
+    /// </summary>
+    public static SupportModifierDefinition CreateNewBrace(
+        int order,
+        SupportBraceModifierSettings settings,
+        IReadOnlyList<Guid> targetSupportIds,
+        int sourceGeneratorRevision)
+    {
+        return new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Brace,
+            true,
+            order,
+            null,
+            settings,
+            null,
+            targetSupportIds,
+            null,
+            sourceGeneratorRevision);
+    }
+
+    /// <summary>
+    /// Creates a new Buttress modifier definition with a generated identity.
+    /// </summary>
+    public static SupportModifierDefinition CreateNewButtress(
+        int order,
+        SupportButtressModifierSettings settings,
+        IReadOnlyList<Guid> targetSupportIds,
+        int sourceGeneratorRevision)
+    {
+        return new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.Buttress,
+            true,
+            order,
+            null,
+            null,
+            settings,
+            targetSupportIds,
+            null,
             sourceGeneratorRevision);
     }
 
@@ -125,6 +194,16 @@ public sealed class SupportModifierDefinition
     public SupportClusterModifierSettings? ClusterSettings { get; }
 
     /// <summary>
+    /// Gets bracing settings when this modifier was created by the Brace tool.
+    /// </summary>
+    public SupportBraceModifierSettings? BraceSettings { get; }
+
+    /// <summary>
+    /// Gets buttressing settings when this modifier was created by the Buttress tool.
+    /// </summary>
+    public SupportButtressModifierSettings? ButtressSettings { get; }
+
+    /// <summary>
     /// Gets the support identities targeted by this revision-bound modifier.
     /// </summary>
     public IReadOnlyList<Guid> TargetSupportIds
@@ -138,6 +217,14 @@ public sealed class SupportModifierDefinition
     public IReadOnlyList<SupportModifierTargetBatch> TargetSupportIdBatches
     {
         get { return _targetSupportIdBatches; }
+    }
+
+    /// <summary>
+    /// Gets pairs intentionally suppressed when a later Brace Selected operation replaces their bracing.
+    /// </summary>
+    public IReadOnlyList<SupportBracePair> ExcludedBracePairs
+    {
+        get { return _excludedBracePairs; }
     }
 
     /// <summary>
@@ -168,9 +255,12 @@ public sealed class SupportModifierDefinition
             IsEnabled,
             Order,
             ClusterSettings,
+            BraceSettings,
+            ButtressSettings,
             _targetSupportIds,
             _targetSupportIdBatches,
-            SourceGeneratorRevision);
+            SourceGeneratorRevision,
+            _excludedBracePairs);
     }
 
     /// <summary>
@@ -184,9 +274,12 @@ public sealed class SupportModifierDefinition
             IsEnabled,
             order,
             ClusterSettings,
+            BraceSettings,
+            ButtressSettings,
             _targetSupportIds,
             _targetSupportIdBatches,
-            SourceGeneratorRevision);
+            SourceGeneratorRevision,
+            _excludedBracePairs);
     }
 
     /// <summary>
@@ -201,6 +294,9 @@ public sealed class SupportModifierDefinition
 
             case SupportModifierKind.Brace:
                 return "Brace";
+
+            case SupportModifierKind.Buttress:
+                return "Buttress";
 
             case SupportModifierKind.Delete:
                 return "Delete";
@@ -280,6 +376,39 @@ public sealed class SupportModifierDefinition
             }
         }
     }
+    /// <summary>
+    /// Copies unique unordered Brace exclusions into durable modifier ownership.
+    /// </summary>
+    private static List<SupportBracePair> CreateBracePairList(IReadOnlyList<SupportBracePair>? excludedBracePairs)
+    {
+        List<SupportBracePair> result = new List<SupportBracePair>();
+
+        if (excludedBracePairs == null)
+        {
+            return result;
+        }
+
+        HashSet<SupportBracePair> seenPairs = new HashSet<SupportBracePair>();
+
+        for (int i = 0; i < excludedBracePairs.Count; i++)
+        {
+            SupportBracePair pair = excludedBracePairs[i] ?? throw new ArgumentException("Brace pair exclusions cannot contain null entries.", nameof(excludedBracePairs));
+
+            if (seenPairs.Add(pair))
+            {
+                result.Add(pair.Clone());
+            }
+        }
+
+        result.Sort((left, right) =>
+        {
+            int firstCompare = left.FirstSupportId.CompareTo(right.FirstSupportId);
+            return firstCompare != 0
+                ? firstCompare
+                : left.SecondSupportId.CompareTo(right.SecondSupportId);
+        });
+        return result;
+    }
 
     /// <summary>
     /// Verifies revision-bound modifier target metadata.
@@ -295,6 +424,17 @@ public sealed class SupportModifierDefinition
         {
             throw new ArgumentException("Support modifiers require a non-negative source generator revision.");
         }
+        HashSet<Guid> targetIds = new HashSet<Guid>(_targetSupportIds);
+
+        for (int i = 0; i < _excludedBracePairs.Count; i++)
+        {
+            SupportBracePair pair = _excludedBracePairs[i];
+
+            if (!targetIds.Contains(pair.FirstSupportId) || !targetIds.Contains(pair.SecondSupportId))
+            {
+                throw new ArgumentException("Brace pair exclusions must reference supports targeted by the same modifier.");
+            }
+        }
     }
 
     /// <summary>
@@ -302,14 +442,42 @@ public sealed class SupportModifierDefinition
     /// </summary>
     private void ValidateSettings()
     {
-        if (Kind == SupportModifierKind.Cluster && ClusterSettings == null)
+        bool hasClusterSettings = ClusterSettings != null;
+        bool hasBraceSettings = BraceSettings != null;
+        bool hasButtressSettings = ButtressSettings != null;
+
+        if (Kind == SupportModifierKind.Cluster && !hasClusterSettings)
         {
             throw new ArgumentException("Cluster modifiers require cluster settings.");
         }
 
-        if (Kind != SupportModifierKind.Cluster && ClusterSettings != null)
+        if (Kind == SupportModifierKind.Brace && !hasBraceSettings)
+        {
+            throw new ArgumentException("Brace modifiers require brace settings.");
+        }
+
+        if (Kind == SupportModifierKind.Buttress && !hasButtressSettings)
+        {
+            throw new ArgumentException("Buttress modifiers require buttress settings.");
+        }
+
+        if (Kind != SupportModifierKind.Cluster && hasClusterSettings)
         {
             throw new ArgumentException("Only Cluster modifiers can store cluster settings.");
+        }
+
+        if (Kind != SupportModifierKind.Brace && hasBraceSettings)
+        {
+            throw new ArgumentException("Only Brace modifiers can store brace settings.");
+        }
+
+        if (Kind != SupportModifierKind.Buttress && hasButtressSettings)
+        {
+            throw new ArgumentException("Only Buttress modifiers can store buttress settings.");
+        }
+        if (Kind != SupportModifierKind.Brace && _excludedBracePairs.Count > 0)
+        {
+            throw new ArgumentException("Only Brace modifiers can store excluded support pairs.");
         }
     }
 }

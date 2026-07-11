@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private readonly ContourSupportToolOptionsControl _contourSupportToolOptionsControl;
     private readonly AreaSupportToolOptionsControl _areaSupportToolOptionsControl;
     private readonly SupportClusterToolOptionsControl _supportClusterToolOptionsControl;
+    private readonly SupportBracingToolOptionsControl _supportBracingToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly RotationToolOptionsControl _rotationToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
@@ -64,6 +65,8 @@ public partial class MainWindow : Window
     private bool _hasFramedStartupView;
     private bool _isSynchronizingLayerAndViewportSelection;
     private Guid? _activeEditingClusterModifierId;
+    private Guid? _activeEditingBracingModifierId;
+    private SupportModifierKind? _activeEditingBracingModifierKind;
     private Dictionary<Guid, bool>? _clusterToolSupportLayerVisibilitySnapshot;
     private bool _isPrecisionSelectCursorActive;
     private Cursor? _viewportCursorBeforePrecisionSelect;
@@ -84,6 +87,7 @@ public partial class MainWindow : Window
         _contourSupportToolOptionsControl = new ContourSupportToolOptionsControl();
         _areaSupportToolOptionsControl = new AreaSupportToolOptionsControl();
         _supportClusterToolOptionsControl = new SupportClusterToolOptionsControl();
+        _supportBracingToolOptionsControl = new SupportBracingToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _rotationToolOptionsControl = new RotationToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
@@ -336,6 +340,16 @@ public partial class MainWindow : Window
         _supportClusterToolOptionsControl.RemoveAllRequested += SupportClusterToolOptionsControl_RemoveAllRequested;
         _supportClusterToolOptionsControl.UnclusterSelectedRequested += SupportClusterToolOptionsControl_UnclusterSelectedRequested;
         _supportClusterToolOptionsControl.CloseRequested += SupportClusterToolOptionsControl_CloseRequested;
+        _supportBracingToolOptionsControl.OptionsChanged += SupportBracingToolOptionsControl_OptionsChanged;
+        _supportBracingToolOptionsControl.BraceSelectedRequested += SupportBracingToolOptionsControl_BraceSelectedRequested;
+        _supportBracingToolOptionsControl.BraceAllRequested += SupportBracingToolOptionsControl_BraceAllRequested;
+        _supportBracingToolOptionsControl.RemoveBracingFromSelectedRequested += SupportBracingToolOptionsControl_RemoveBracingFromSelectedRequested;
+        _supportBracingToolOptionsControl.ButtressSelectedRequested += SupportBracingToolOptionsControl_ButtressSelectedRequested;
+        _supportBracingToolOptionsControl.ButtressAllRequested += SupportBracingToolOptionsControl_ButtressAllRequested;
+        _supportBracingToolOptionsControl.RemoveButtressingFromSelectedRequested += SupportBracingToolOptionsControl_RemoveButtressingFromSelectedRequested;
+        _supportBracingToolOptionsControl.RemoveAllBracingRequested += SupportBracingToolOptionsControl_RemoveAllBracingRequested;
+        _supportBracingToolOptionsControl.RemoveAllButtressesRequested += SupportBracingToolOptionsControl_RemoveAllButtressesRequested;
+        _supportBracingToolOptionsControl.CloseRequested += SupportBracingToolOptionsControl_CloseRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;

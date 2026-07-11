@@ -1,4 +1,4 @@
-// SupportModifierKind.cs
+﻿// SupportModifierKind.cs
 // Lists renderer-independent modifier operations that can transform generated support-layer output.
 namespace Pillar.Core.Layers;
 
@@ -9,5 +9,6 @@ public enum SupportModifierKind
 {
     Cluster,
     Brace,
+    Buttress,
     Delete
 }

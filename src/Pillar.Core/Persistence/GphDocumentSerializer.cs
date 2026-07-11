@@ -28,11 +28,14 @@ public sealed class GphDocumentSerializer
     private const string AreaSupportGeneratorName = "areaSupport";
     private const string ClusterModifierName = "cluster";
     private const string BraceModifierName = "brace";
+    private const string ButtressModifierName = "buttress";
     private const string DeleteModifierName = "delete";
     private const string AutomaticClusterStemSizingName = "automatic";
     private const string ManualClusterStemSizingName = "manual";
     private const string IndividualSupportStyleName = "individual";
     private const string ClusteredSupportStyleName = "clustered";
+    private const string BraceMemberSupportStyleName = "braceMember";
+    private const string ButtressSupportStyleName = "buttress";
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
@@ -613,6 +616,23 @@ public sealed class GphDocumentSerializer
             };
         }
 
+        if (style is ButtressSupportStyle buttressStyle)
+        {
+            return new GphSupportStyleDto
+            {
+                Kind = ButtressSupportStyleName,
+                BranchDiameter = buttressStyle.BranchDiameter
+            };
+        }
+        if (style is BraceMemberSupportStyle braceMemberStyle)
+        {
+            return new GphSupportStyleDto
+            {
+                Kind = BraceMemberSupportStyleName,
+                BranchDiameter = braceMemberStyle.Diameter
+            };
+        }
+
         return new GphSupportStyleDto
         {
             Kind = IndividualSupportStyleName
@@ -780,7 +800,10 @@ public sealed class GphDocumentSerializer
                 SourceGeneratorRevision = modifier.SourceGeneratorRevision,
                 TargetSupportIds = new List<Guid>(modifier.TargetSupportIds),
                 TargetSupportIdBatches = CreateTargetSupportIdBatchDtos(modifier.TargetSupportIdBatches),
-                ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings)
+                ExcludedBracePairs = CreateBracePairDtos(modifier.ExcludedBracePairs),
+                ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings),
+                BraceSettings = CreateBraceModifierSettingsDto(modifier.BraceSettings),
+                ButtressSettings = CreateButtressModifierSettingsDto(modifier.ButtressSettings)
             });
         }
 
@@ -803,6 +826,25 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Converts excluded Brace pairs into their persisted representation.
+    /// </summary>
+    private static List<GphBracePairDto> CreateBracePairDtos(IReadOnlyList<SupportBracePair> pairs)
+    {
+        List<GphBracePairDto> result = new List<GphBracePairDto>(pairs.Count);
+
+        for (int i = 0; i < pairs.Count; i++)
+        {
+            result.Add(new GphBracePairDto
+            {
+                FirstSupportId = pairs[i].FirstSupportId,
+                SecondSupportId = pairs[i].SecondSupportId
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Converts one modifier kind into its persisted wire value.
     /// </summary>
     private static string CreateSupportModifierKindDto(SupportModifierKind kind)
@@ -814,6 +856,9 @@ public sealed class GphDocumentSerializer
 
             case SupportModifierKind.Brace:
                 return BraceModifierName;
+
+            case SupportModifierKind.Buttress:
+                return ButtressModifierName;
 
             case SupportModifierKind.Delete:
                 return DeleteModifierName;
@@ -846,6 +891,43 @@ public sealed class GphDocumentSerializer
             ManualCentralStemBottomDiameter = settings.ManualCentralStemBottomDiameter,
             ManualCentralStemTopDiameter = settings.ManualCentralStemTopDiameter,
             ClusterBranchDiameter = settings.ClusterBranchDiameter
+        };
+    }
+
+    /// <summary>
+    /// Converts brace modifier settings into their persisted representation when present.
+    /// </summary>
+    private static GphBraceModifierSettingsDto? CreateBraceModifierSettingsDto(SupportBraceModifierSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphBraceModifierSettingsDto
+        {
+            MinimumBraceAngleDegrees = settings.MinimumBraceAngleDegrees,
+            MaximumBraceAngleDegrees = settings.MaximumBraceAngleDegrees,
+            MaximumBraceLength = settings.MaximumBraceLength,
+            BraceDiameter = settings.BraceDiameter
+        };
+    }
+
+    /// <summary>
+    /// Converts buttress modifier settings into their persisted representation when present.
+    /// </summary>
+    private static GphButtressModifierSettingsDto? CreateButtressModifierSettingsDto(SupportButtressModifierSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphButtressModifierSettingsDto
+        {
+            MinimumButtressHeight = settings.MinimumButtressHeight,
+            ButtressSpacing = settings.ButtressSpacing,
+            BraceSettings = CreateBraceModifierSettingsDto(settings.BraceSettings)
         };
     }
 
@@ -915,6 +997,25 @@ public sealed class GphDocumentSerializer
             }
 
             return new ClusteredSupportStyle(supportStyleDto.CentralStemBottomDiameter, supportStyleDto.CentralStemTopDiameter, supportStyleDto.BranchDiameter.Value);
+        }
+
+        if (string.Equals(supportStyleDto.Kind, ButtressSupportStyleName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!supportStyleDto.BranchDiameter.HasValue)
+            {
+                throw new InvalidDataException("A buttress support style is missing its branch diameter.");
+            }
+
+            return new ButtressSupportStyle(supportStyleDto.BranchDiameter.Value);
+        }
+        if (string.Equals(supportStyleDto.Kind, BraceMemberSupportStyleName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!supportStyleDto.BranchDiameter.HasValue)
+            {
+                throw new InvalidDataException("A brace member support style is missing its diameter.");
+            }
+
+            return new BraceMemberSupportStyle(supportStyleDto.BranchDiameter.Value);
         }
 
         if (string.Equals(supportStyleDto.Kind, IndividualSupportStyleName, StringComparison.OrdinalIgnoreCase))
@@ -1173,9 +1274,12 @@ public sealed class GphDocumentSerializer
                 modifierDto.IsEnabled,
                 Math.Max(0, modifierDto.Order),
                 CreateClusterModifierSettingsOrDefault(modifierDto),
+                CreateBraceModifierSettingsOrDefault(modifierDto),
+                CreateButtressModifierSettingsOrDefault(modifierDto),
                 modifierDto.TargetSupportIds ?? new List<Guid>(),
                 CreateTargetSupportIdBatchesOrDefault(modifierDto),
-                modifierDto.SourceGeneratorRevision));
+                modifierDto.SourceGeneratorRevision,
+                CreateExcludedBracePairsOrDefault(modifierDto)));
         }
 
         modifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
@@ -1210,6 +1314,28 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Restores optional excluded Brace pairs from persisted modifier data.
+    /// </summary>
+    private static IReadOnlyList<SupportBracePair>? CreateExcludedBracePairsOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (modifierDto.ExcludedBracePairs == null || modifierDto.ExcludedBracePairs.Count == 0)
+        {
+            return null;
+        }
+
+        List<SupportBracePair> result = new List<SupportBracePair>(modifierDto.ExcludedBracePairs.Count);
+
+        for (int i = 0; i < modifierDto.ExcludedBracePairs.Count; i++)
+        {
+            GphBracePairDto pair = modifierDto.ExcludedBracePairs[i]
+                ?? throw new InvalidDataException("A Brace modifier contains a null excluded pair.");
+            result.Add(new SupportBracePair(pair.FirstSupportId, pair.SecondSupportId));
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Converts saved modifier kind text into the runtime enum.
     /// </summary>
     private static SupportModifierKind CreateSupportModifierKind(string kind)
@@ -1222,6 +1348,11 @@ public sealed class GphDocumentSerializer
         if (string.Equals(kind, BraceModifierName, StringComparison.OrdinalIgnoreCase))
         {
             return SupportModifierKind.Brace;
+        }
+
+        if (string.Equals(kind, ButtressModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierKind.Buttress;
         }
 
         if (string.Equals(kind, DeleteModifierName, StringComparison.OrdinalIgnoreCase))
@@ -1264,6 +1395,57 @@ public sealed class GphDocumentSerializer
             modifierDto.ClusterSettings.ManualCentralStemBottomDiameter,
             modifierDto.ClusterSettings.ManualCentralStemTopDiameter,
             modifierDto.ClusterSettings.ClusterBranchDiameter ?? SupportDefaults.DefaultStemTopDiameter);
+    }
+
+    /// <summary>
+    /// Converts saved Brace settings into the runtime settings object when present.
+    /// </summary>
+    private static SupportBraceModifierSettings? CreateBraceModifierSettingsOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (!string.Equals(modifierDto.Kind, BraceModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (modifierDto.BraceSettings == null)
+        {
+            throw new InvalidDataException("A Brace support modifier is missing its settings.");
+        }
+
+        return new SupportBraceModifierSettings(
+            modifierDto.BraceSettings.MinimumBraceAngleDegrees,
+            modifierDto.BraceSettings.MaximumBraceAngleDegrees,
+            modifierDto.BraceSettings.MaximumBraceLength,
+            modifierDto.BraceSettings.BraceDiameter);
+    }
+
+    /// <summary>
+    /// Converts saved Buttress settings into the runtime settings object when present.
+    /// </summary>
+    private static SupportButtressModifierSettings? CreateButtressModifierSettingsOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (!string.Equals(modifierDto.Kind, ButtressModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (modifierDto.ButtressSettings == null)
+        {
+            throw new InvalidDataException("A Buttress support modifier is missing its settings.");
+        }
+
+        GphBraceModifierSettingsDto? braceSettingsDto = modifierDto.ButtressSettings.BraceSettings;
+        SupportBraceModifierSettings braceSettings = braceSettingsDto == null
+            ? SupportBraceModifierSettings.CreateDefault()
+            : new SupportBraceModifierSettings(
+                braceSettingsDto.MinimumBraceAngleDegrees,
+                braceSettingsDto.MaximumBraceAngleDegrees,
+                braceSettingsDto.MaximumBraceLength,
+                braceSettingsDto.BraceDiameter);
+        return new SupportButtressModifierSettings(
+            modifierDto.ButtressSettings.MinimumButtressHeight,
+            modifierDto.ButtressSettings.ButtressSpacing,
+            braceSettings);
     }
 
     /// <summary>
@@ -1451,7 +1633,19 @@ public sealed class GphDocumentSerializer
         public int? SourceGeneratorRevision { get; set; }
         public List<Guid>? TargetSupportIds { get; set; }
         public List<List<Guid>>? TargetSupportIdBatches { get; set; }
+        public List<GphBracePairDto>? ExcludedBracePairs { get; set; }
         public GphClusterModifierSettingsDto? ClusterSettings { get; set; }
+        public GphBraceModifierSettingsDto? BraceSettings { get; set; }
+        public GphButtressModifierSettingsDto? ButtressSettings { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for one persisted unordered Brace pair exclusion.
+    /// </summary>
+    private sealed class GphBracePairDto
+    {
+        public Guid FirstSupportId { get; set; }
+        public Guid SecondSupportId { get; set; }
     }
 
     /// <summary>
@@ -1467,6 +1661,27 @@ public sealed class GphDocumentSerializer
         public float ManualCentralStemBottomDiameter { get; set; } = SupportDefaults.DefaultStemBottomDiameter;
         public float ManualCentralStemTopDiameter { get; set; } = SupportDefaults.DefaultStemTopDiameter;
         public float? ClusterBranchDiameter { get; set; } = SupportDefaults.DefaultStemTopDiameter;
+    }
+
+    /// <summary>
+    /// DTO for persisted Brace modifier settings.
+    /// </summary>
+    private sealed class GphBraceModifierSettingsDto
+    {
+        public float MinimumBraceAngleDegrees { get; set; } = SupportBraceModifierSettings.DefaultMinimumBraceAngleDegrees;
+        public float MaximumBraceAngleDegrees { get; set; } = SupportBraceModifierSettings.DefaultMaximumBraceAngleDegrees;
+        public float MaximumBraceLength { get; set; } = SupportBraceModifierSettings.DefaultMaximumBraceLength;
+        public float BraceDiameter { get; set; } = SupportBraceModifierSettings.DefaultBraceDiameter;
+    }
+
+    /// <summary>
+    /// DTO for persisted Buttress modifier settings.
+    /// </summary>
+    private sealed class GphButtressModifierSettingsDto
+    {
+        public float MinimumButtressHeight { get; set; } = SupportButtressModifierSettings.DefaultMinimumButtressHeight;
+        public float ButtressSpacing { get; set; } = SupportButtressModifierSettings.DefaultButtressSpacing;
+        public GphBraceModifierSettingsDto? BraceSettings { get; set; }
     }
 
     /// <summary>

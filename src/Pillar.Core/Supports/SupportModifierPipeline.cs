@@ -1,4 +1,4 @@
-// SupportModifierPipeline.cs
+﻿// SupportModifierPipeline.cs
 // Evaluates support-layer modifier stacks against generated support entities without depending on rendering.
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
@@ -43,6 +43,16 @@ public static class SupportModifierPipeline
             if (modifier.Kind == SupportModifierKind.Cluster)
             {
                 SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(currentSupports, modifier);
+                currentSupports = new List<SupportEntity>(result.SupportEntities);
+            }
+            else if (modifier.Kind == SupportModifierKind.Brace)
+            {
+                SupportBracingEvaluationResult result = SupportBracingPlanner.EvaluateBrace(currentSupports, modifier);
+                currentSupports = new List<SupportEntity>(result.SupportEntities);
+            }
+            else if (modifier.Kind == SupportModifierKind.Buttress)
+            {
+                SupportBracingEvaluationResult result = SupportBracingPlanner.EvaluateButtress(currentSupports, modifier);
                 currentSupports = new List<SupportEntity>(result.SupportEntities);
             }
         }
