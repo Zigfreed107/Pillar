@@ -58,6 +58,9 @@ public static class Program
         RunTest(failures, "Cluster head branch joint uses branch diameter", ValidateClusterHeadBranchJointUsesBranchDiameter);
         RunTest(failures, "Individual branched supports remain cluster eligible", ValidateIndividualBranchedSupportsRemainClusterEligible);
         RunTest(failures, "Cluster modifier redirects nearby supports", ValidateClusterModifierRedirectsNearbySupports);
+        RunTest(failures, "Direct Edit preserves contact and rebuilds the branch", ValidateDirectEditPreservesContactAndRebuildsBranch);
+        RunTest(failures, "Direct Edit source restoration reverses cumulative edits", ValidateDirectEditSourceRestorationReversesCumulativeEdits);
+        RunTest(failures, "Direct Edit multi-selection preserves relative stem positions", ValidateDirectEditMultiSelectionPreservesRelativePositions);
         RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
         RunTest(failures, "Later selection cluster preserves existing clusters", ValidateLaterSelectionClusterPreservesExistingClusters);
         RunTest(failures, "Cumulative cluster modifier keeps Apply batches separate", ValidateCumulativeClusterModifierKeepsApplyBatchesSeparate);
@@ -79,6 +82,7 @@ public static class Program
         RunTest(failures, "Brace exclusion batches preserve mixed-selection bracing", ValidateBraceExclusionBatchesPreserveMixedSelectionBracing);
         RunTest(failures, "Modifier pipeline captures bracing diagnostics in one pass", ValidateModifierPipelineCapturesBracingDiagnostics);
         RunTest(failures, "Support output replacement retains unchanged entities", ValidateSupportOutputReplacementRetainsUnchangedEntities);
+        RunTest(failures, "Equivalent regenerated reinforcement retains existing entities", ValidateEquivalentRegeneratedReinforcementRetainsExistingEntities);
         RunTest(failures, "Reinforcement excludes clustered supports", ValidateReinforcementExcludesClusteredSupports);
         RunTest(failures, "Buttress reapply preserves unselected targets", ValidateButtressReapplyPreservesUnselectedTargets);
         RunTest(failures, "Modifier session removal removes every internal action", ValidateModifierSessionRemovalRemovesEveryAction);
@@ -133,6 +137,7 @@ public static class Program
         RunTest(failures, "Support style and cluster branch diameter survive save and load", ValidateSupportStyleAndClusterBranchDiameterSurviveSaveAndLoad);
         RunTest(failures, "Buttress style and bracing settings survive save and load", ValidateButtressStyleAndBracingSettingsSurviveSaveAndLoad);
         RunTest(failures, "Cluster modifier target batches survive save and load", ValidateClusterModifierTargetBatchesSurviveSaveAndLoad);
+        RunTest(failures, "Direct Edit geometry survives save and load", ValidateDirectEditSettingsSurviveSaveAndLoad);
         RunTest(failures, "Brace pair exclusions survive save and load", ValidateBracePairExclusionsSurviveSaveAndLoad);
         RunTest(failures, "Invalid cluster modifier revision is discarded on load", ValidateInvalidClusterModifierRevisionIsDiscardedOnLoad);
         RunTest(failures, "Invalid cluster modifier target is discarded on load", ValidateInvalidClusterModifierTargetIsDiscardedOnLoad);
@@ -536,9 +541,6 @@ public static class Program
         }
     }
 
-    /// <summary>
-    /// Validates that the angled head centerline cannot cross another model face before the intended contact.
-    /// </summary>
     /// <summary>
     /// Validates that individual support dimensions derive branch and head-bottom diameters from stem top.
     /// </summary>
@@ -2102,6 +2104,19 @@ public static class Program
             "Retain Source Supports");
         int addedCount = 0;
         int removedCount = 0;
+        int batchCompletionCount = 0;
+        document.EntityBatchUpdateCompleted += (sender, eventArgs) =>
+        {
+            _ = sender;
+            _ = eventArgs;
+
+            if (document.IsEntityBatchUpdateActive)
+            {
+                throw new InvalidOperationException("Expected the completed event after the entity batch ended.");
+            }
+
+            batchCompletionCount++;
+        };
         document.EntitiesChanged += (sender, eventArgs) =>
         {
             _ = sender;
@@ -2115,6 +2130,11 @@ public static class Program
         if (removedCount != 0 || addedCount != generatedCount)
         {
             throw new InvalidOperationException("Expected execute to add only generated brace members.");
+        }
+
+        if (batchCompletionCount != 1)
+        {
+            throw new InvalidOperationException("Expected execute to complete one grouped entity update.");
         }
 
         IReadOnlyList<SupportEntity> executedOutput = document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
@@ -2136,8 +2156,58 @@ public static class Program
         {
             throw new InvalidOperationException("Expected undo to remove only generated brace members.");
         }
+
+        if (batchCompletionCount != 2)
+        {
+            throw new InvalidOperationException("Expected undo to complete one additional grouped entity update.");
+        }
     }
 
+    /// <summary>
+    /// Validates that deterministic reinforcement replay keeps existing entity and mesh identities.
+    /// </summary>
+    private static void ValidateEquivalentRegeneratedReinforcementRetainsExistingEntities()
+    {
+        Guid supportLayerGroupId = Guid.NewGuid();
+        List<SupportEntity> sourceSupports = CreateSupportsForGroup(
+            supportLayerGroupId,
+            new List<Vector2> { Vector2.Zero, new Vector2(10.0f, 0.0f) },
+            30.0f,
+            SupportDefaults.CreateProfile());
+        SupportModifierDefinition modifier = SupportModifierDefinition.CreateNewButtress(
+            0,
+            new SupportButtressModifierSettings(0.0f, 8.0f),
+            CreateSupportIds(sourceSupports),
+            0);
+        IReadOnlyList<SupportEntity> firstOutput = SupportModifierPipeline.ApplyModifiers(
+            sourceSupports,
+            new[] { modifier });
+        IReadOnlyList<SupportEntity> replayedOutput = SupportModifierPipeline.ApplyModifiers(
+            sourceSupports,
+            new[] { modifier });
+        IReadOnlyList<SupportEntity> reconciledOutput = SupportOutputReferenceReconciler.ReuseEquivalentGeneratedSupports(
+            firstOutput,
+            replayedOutput);
+        int reusedGeneratedCount = 0;
+
+        for (int i = sourceSupports.Count; i < reconciledOutput.Count; i++)
+        {
+            if (ReferenceEquals(firstOutput[i], replayedOutput[i]))
+            {
+                throw new InvalidOperationException("Expected reinforcement replay to initially create fresh generated instances.");
+            }
+
+            if (ReferenceEquals(firstOutput[i], reconciledOutput[i]))
+            {
+                reusedGeneratedCount++;
+            }
+        }
+
+        if (reusedGeneratedCount != firstOutput.Count - sourceSupports.Count)
+        {
+            throw new InvalidOperationException("Expected every equivalent generated reinforcement entity to be retained.");
+        }
+    }
     /// <summary>
     /// Validates that clustered supports are excluded from both Brace and Buttress target populations.
     /// </summary>
@@ -2374,6 +2444,9 @@ public static class Program
         }
     }
 
+    /// <summary>
+    /// Validates that the angled head centerline cannot cross another model face before the intended contact.
+    /// </summary>
     private static void ValidateSupportPlacementRejectsCrossingAngledHead()
     {
         SupportProfile profile = CreateAngledProfile(45.0f);
@@ -3780,9 +3853,6 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that removing file versioning does not remove the Graphite file identity check.
-    /// </summary>
-    /// <summary>
     /// Validates that cumulative Cluster modifier target batches survive project persistence.
     /// </summary>
     private static void ValidateClusterModifierTargetBatchesSurviveSaveAndLoad()
@@ -3859,6 +3929,81 @@ public static class Program
             if (loadedDocument.SupportLayerGroups[0].SupportModifiers[0].TargetSupportIds.Count != 4)
             {
                 throw new InvalidOperationException("Expected loaded Cluster modifier target identities to survive save and load.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that Direct Edit transition geometry survives project persistence.
+    /// </summary>
+    private static void ValidateDirectEditSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+        SupportLayerGroup group = new SupportLayerGroup(mesh.Id, "Direct Edit Supports");
+        document.AddSupportLayerGroup(group);
+        SupportEntity support = new SupportEntity(
+            group.Id,
+            new Vector3(0.0f, 0.0f, 12.0f),
+            Vector3.Zero,
+            SupportDefaults.CreateProfile());
+        document.AddEntity(support);
+        float originalStemTopZ = SupportDirectEditPlanner.CalculateStemTop(support).Z;
+        SupportDirectEditSettings settings = new SupportDirectEditSettings(
+            new Vector3(2.0f, 3.0f, 0.0f),
+            originalStemTopZ - 1.0f,
+            support.BasePosition,
+            originalStemTopZ);
+        SupportModifierDefinition modifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { support.Id },
+            null,
+            group.SourceGeneratorRevision,
+            null,
+            null,
+            Guid.NewGuid(),
+            settings);
+        group.SetSupportModifiers(new[] { modifier });
+
+        string filePath = Path.Combine(Environment.CurrentDirectory, "DirectEditSmoke.gph");
+
+        try
+        {
+            GphDocumentSerializer serializer = new GphDocumentSerializer();
+            serializer.Save(document, filePath);
+            GphDocumentData loaded = serializer.LoadDocument(filePath);
+            SupportDirectEditSettings? loadedSettings = loaded.SupportLayerGroups[0].SupportModifiers[0].DirectEditSettings;
+
+            if (loadedSettings == null)
+            {
+                throw new InvalidOperationException("Expected Direct Edit settings to survive save and load.");
+            }
+
+            ValidateVectorNear(settings.BasePosition, loadedSettings.BasePosition, 0.0001f, "The edited Direct Edit base did not survive persistence.");
+            ValidateVectorNear(settings.OriginalBasePosition, loadedSettings.OriginalBasePosition, 0.0001f, "The original Direct Edit base did not survive persistence.");
+
+            if (MathF.Abs(settings.StemTopZ - loadedSettings.StemTopZ) > 0.0001f
+                || MathF.Abs(settings.OriginalStemTopZ - loadedSettings.OriginalStemTopZ) > 0.0001f)
+            {
+                throw new InvalidOperationException("Direct Edit stem heights did not survive persistence.");
             }
         }
         finally
@@ -4278,6 +4423,9 @@ public static class Program
 
         throw new InvalidOperationException("Expected saved smoke-test project to contain one support modifier.");
     }
+    /// <summary>
+    /// Validates that removing file versioning does not remove the Graphite file identity check.
+    /// </summary>
     private static void ValidateGphSerializerRejectsInvalidFormat()
     {
         GphDocumentSerializer serializer = new GphDocumentSerializer();
@@ -4546,6 +4694,159 @@ public static class Program
         return false;
     }
 
+    /// <summary>
+    /// Validates that per-stem actions apply one common delta without collapsing selected supports together.
+    /// </summary>
+    private static void ValidateDirectEditMultiSelectionPreservesRelativePositions()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity first = CreateSupport(Vector3.Zero, new Vector3(0.0f, 0.0f, 12.0f), profile);
+        SupportEntity second = CreateSupport(new Vector3(5.0f, 2.0f, 0.0f), new Vector3(5.0f, 2.0f, 12.0f), profile);
+        Vector3 delta = new Vector3(3.0f, -1.0f, 0.0f);
+        Guid sessionId = Guid.NewGuid();
+        SupportDirectEditSettings firstSettings = new SupportDirectEditSettings(
+            first.BasePosition + delta,
+            SupportDirectEditPlanner.CalculateStemTop(first).Z,
+            first.BasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(first).Z);
+        SupportDirectEditSettings secondSettings = new SupportDirectEditSettings(
+            second.BasePosition + delta,
+            SupportDirectEditPlanner.CalculateStemTop(second).Z,
+            second.BasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(second).Z);
+        SupportModifierDefinition firstModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { first.Id },
+            null,
+            0,
+            null,
+            null,
+            sessionId,
+            firstSettings);
+        SupportModifierDefinition secondModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            1,
+            null,
+            null,
+            null,
+            new[] { second.Id },
+            null,
+            0,
+            null,
+            null,
+            sessionId,
+            secondSettings);
+        IReadOnlyList<SupportEntity> edited = SupportModifierPipeline.ApplyModifiers(
+            new[] { first, second },
+            new[] { firstModifier, secondModifier });
+
+        ValidateVectorNear(first.BasePosition + delta, edited[0].BasePosition, 0.0001f, "The first selected stem did not receive the shared delta.");
+        ValidateVectorNear(second.BasePosition + delta, edited[1].BasePosition, 0.0001f, "The second selected stem did not receive the shared delta.");
+        ValidateVectorNear(
+            second.BasePosition - first.BasePosition,
+            edited[1].BasePosition - edited[0].BasePosition,
+            0.0001f,
+            "Direct Edit collapsed the relative spacing between selected stems.");
+    }
+
+    /// <summary>
+    /// Validates that Direct Edit moves the vertical stem while retaining the model contact point.
+    /// </summary>
+    private static void ValidateDirectEditPreservesContactAndRebuildsBranch()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity source = CreateSupport(Vector3.Zero, new Vector3(0.0f, 0.0f, 12.0f), profile);
+        Vector3 originalTip = source.TipPosition;
+        SupportDirectEditSettings settings = new SupportDirectEditSettings(
+            new Vector3(2.0f, -1.0f, 0.0f),
+            7.0f,
+            source.BasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(source).Z);
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, settings);
+
+        ValidateVectorNear(originalTip, edited.TipPosition, 0.0001f, "Direct Edit changed the model contact point.");
+        ValidateVectorNear(settings.BasePosition, edited.BasePosition, 0.0001f, "Direct Edit did not move the support base.");
+        ValidateVectorNear(
+            new Vector3(settings.BasePosition.X, settings.BasePosition.Y, settings.StemTopZ),
+            SupportDirectEditPlanner.CalculateStemTop(edited),
+            0.0001f,
+            "Direct Edit did not rebuild the branch from the edited stem top.");
+    }
+
+    /// <summary>
+    /// Validates that removing cumulative Direct Edit actions can recover generator source geometry.
+    /// </summary>
+    private static void ValidateDirectEditSourceRestorationReversesCumulativeEdits()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity source = CreateSupport(Vector3.Zero, new Vector3(0.0f, 0.0f, 12.0f), profile);
+        float originalStemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings firstSettings = new SupportDirectEditSettings(
+            new Vector3(1.0f, 0.0f, 0.0f),
+            originalStemTopZ - 1.0f,
+            source.BasePosition,
+            originalStemTopZ);
+        SupportModifierDefinition firstModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { source.Id },
+            null,
+            0,
+            null,
+            null,
+            Guid.NewGuid(),
+            firstSettings);
+        SupportEntity firstEdited = SupportDirectEditPlanner.RebuildSupport(source, firstSettings);
+        SupportDirectEditSettings secondSettings = new SupportDirectEditSettings(
+            new Vector3(2.0f, 1.0f, 0.0f),
+            originalStemTopZ - 2.0f,
+            firstSettings.BasePosition,
+            firstSettings.StemTopZ);
+        SupportModifierDefinition secondModifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            1,
+            null,
+            null,
+            null,
+            new[] { source.Id },
+            null,
+            0,
+            null,
+            null,
+            firstModifier.ToolSessionId,
+            secondSettings);
+        SupportEntity secondEdited = SupportDirectEditPlanner.RebuildSupport(firstEdited, secondSettings);
+        IReadOnlyList<SupportEntity> restored = SupportModifierSourceRestorer.Restore(
+            new[] { secondEdited },
+            new[] { firstModifier, secondModifier });
+
+        if (restored.Count != 1)
+        {
+            throw new InvalidOperationException("Direct Edit source restoration changed the support count.");
+        }
+
+        ValidateVectorNear(source.BasePosition, restored[0].BasePosition, 0.0001f, "Direct Edit source restoration did not recover the original base.");
+        ValidateVectorNear(
+            SupportDirectEditPlanner.CalculateStemTop(source),
+            SupportDirectEditPlanner.CalculateStemTop(restored[0]),
+            0.0001f,
+            "Direct Edit source restoration did not recover the original stem top.");
+    }
     /// <summary>
     /// Creates one support entity with a fresh group identity.
     /// </summary>

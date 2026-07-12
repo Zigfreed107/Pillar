@@ -1,4 +1,4 @@
-﻿<!--
+<!--
     ModePanel.xaml
     Defines the always-visible ribbon-style workflow panel that sits beside the layer panel and previews high-level mode and tool organization.
 -->
@@ -303,6 +303,15 @@
                                                    Text="Brace" />
                                         <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
                                                    Text="Add braces and buttresses" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                        Click="DirectEditSupportButton_Click">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
+                                                   Text="Direct Edit" />
+                                        <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                                   Text="Move support stems with viewport handles" />
                                     </StackPanel>
                                 </Button>
                             </primitives:UniformGrid>

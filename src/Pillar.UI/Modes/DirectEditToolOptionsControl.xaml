@@ -1,0 +1,37 @@
+<!--
+    DirectEditToolOptionsControl.xaml
+    Presents Direct Edit angle highlighting and session controls in the Tool Options panel.
+-->
+<UserControl x:Class="Pillar.UI.Modes.DirectEditToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls"
+             MinWidth="280">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Direct Edit" />
+            <TextBlock Margin="0,10,0,0"
+                       Style="{StaticResource ModeOverlayBodyTextStyle}"
+                       TextWrapping="Wrap"
+                       Text="Click or Ctrl-click support stems, or drag empty space for normal window/crossing selection. Drag the gizmo shown on the first selection to edit them together." />
+            <TextBlock Margin="0,12,0,0"
+                       Style="{StaticResource ModeOverlayLabelTextStyle}"
+                       Text="Highlight angles less than" />
+            <controls:NumericUpDown x:Name="HighlightAngleControl"
+                                    Margin="0,4,0,0"
+                                    Minimum="0"
+                                    Maximum="90"
+                                    Increment="1"
+                                    DecimalPlaces="1"
+                                    Value="30"
+                                    ValueChanged="HighlightAngleControl_ValueChanged" />
+            <TextBlock Margin="0,4,0,0"
+                       Style="{StaticResource ModeOverlayBodyTextStyle}"
+                       Text="degrees from the XY plane" />
+            <Button Margin="0,14,0,0"
+                    Content="Close"
+                    Click="CloseButton_Click" />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -494,6 +494,11 @@ public partial class MainWindow
     /// </summary>
     private void ShowToolOptionsForSelectedTool(string selectedToolName)
     {
+        if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl
+            && !string.Equals(selectedToolName, "Direct Edit Supports", StringComparison.Ordinal))
+        {
+            ClearDirectEditSessionState();
+        }
         if (IsModePanelSelectionPromptVisible())
         {
             HideToolOptionsOverlay();
@@ -564,6 +569,12 @@ public partial class MainWindow
             return;
         }
 
+        if (string.Equals(selectedToolName, "Direct Edit Supports", StringComparison.Ordinal))
+        {
+            ShowDirectEditTool(null);
+            return;
+        }
+
         if (string.Equals(selectedToolName, "Cluster Supports", StringComparison.Ordinal))
         {
             ShowSupportClusterTool(null);
@@ -584,6 +595,10 @@ public partial class MainWindow
     /// </summary>
     private void HideToolOptionsOverlay()
     {
+        if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl)
+        {
+            ClearDirectEditSessionState();
+        }
         _selectTool.ResetSelectionFilter();
         ClearTransformScaleToolState();
         ClearTransformRotationToolState();
@@ -766,7 +781,7 @@ public partial class MainWindow
     /// </summary>
     private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
-        if (IsSupportToolEditActive() || IsSupportClusterToolActive())
+        if (IsSupportToolEditActive() || IsSupportModifierToolActive())
         {
             return;
         }
@@ -798,11 +813,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Gets whether a support editing helper panel owns Tool Options until Close is clicked.
+    /// Gets whether a support modifier tool owns Tool Options until Close is clicked.
     /// </summary>
-    private bool IsSupportClusterToolActive()
+    private bool IsSupportModifierToolActive()
     {
-        return ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl
+        return ToolOptionsHostOverlay.Content == _directEditToolOptionsControl
+            || ToolOptionsHostOverlay.Content == _supportClusterToolOptionsControl
             || ToolOptionsHostOverlay.Content == _supportBracingToolOptionsControl;
     }
 
@@ -990,6 +1006,21 @@ public partial class MainWindow
                     return;
                 }
 
+                if (modifiers[i].Kind == SupportModifierKind.DirectEdit)
+                {
+                    int cutoffIndex = FindLastToolSessionModifierIndex(modifiers, e.ModifierId);
+
+                    if (!ConfirmEditSupportModifierWillRemoveDownstreamModifiers(modifiers, cutoffIndex))
+                    {
+                        _viewModel.SetStatusText("Support modifier edit cancelled.");
+                        return;
+                    }
+
+                    SetActiveMode(WorkspaceModeId.ManualSupport);
+                    _layerPanelViewModel.SelectSupportGroupLayer(supportLayerGroup.Id);
+                    ShowDirectEditTool(modifiers[i], cutoffIndex);
+                    return;
+                }
                 _viewModel.SetStatusText($"{modifiers[i].DisplayName} editing will be available when its tool is implemented.");
                 return;
             }
@@ -1079,6 +1110,179 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Opens a new or existing Direct Edit modifier session for the selected support layer.
+    /// </summary>
+    private void ShowDirectEditTool(SupportModifierDefinition? modifier, int? cutoffIndex = null)
+    {
+        Guid? supportLayerGroupId = _layerPanelViewModel.GetSelectedSupportLayerGroupId();
+        SupportLayerGroup? supportLayerGroup = supportLayerGroupId.HasValue
+            ? _document.FindSupportLayerGroupById(supportLayerGroupId.Value)
+            : null;
+
+        if (supportLayerGroup == null)
+        {
+            _viewModel.SetStatusText("Select one support layer before using Direct Edit.");
+            return;
+        }
+
+        _activeDirectEditToolSessionId = modifier?.ToolSessionId ?? Guid.NewGuid();
+        _activeDirectEditSupportLayerGroupId = supportLayerGroup.Id;
+        _activeDirectEditCutoffIndex = cutoffIndex;
+        _directEditToolOptionsControl.HighlightAngleDegrees = Properties.Settings.Default.DirectEditHighlightAngleDegrees;
+        ApplyDirectEditAngleHighlight();
+        _directEditTool.Begin(
+            supportLayerGroup.Id,
+            (float)Properties.Settings.Default.DirectEditXYGizmoScale,
+            (float)Properties.Settings.Default.DirectEditZGizmoScale);
+        _toolManager.SetTool(_directEditTool);
+        ShowToolOptionsControl(_directEditToolOptionsControl, ToolSessionPanelSet.None);
+        _viewModel.SetStatusText("Direct Edit: click a support stem to show its handles.");
+    }
+
+    /// <summary>
+    /// Applies one completed multi-selection gesture as a single undoable modifier-stack replacement.
+    /// </summary>
+    private void DirectEditTool_EditCommitted(IReadOnlyList<DirectEditCommitAction> actions)
+    {
+        if (!_activeDirectEditSupportLayerGroupId.HasValue
+            || !_activeDirectEditToolSessionId.HasValue
+            || actions.Count == 0)
+        {
+            return;
+        }
+
+        SupportLayerGroup? supportLayerGroup = _document.FindSupportLayerGroupById(
+            _activeDirectEditSupportLayerGroupId.Value);
+
+        if (supportLayerGroup == null)
+        {
+            return;
+        }
+
+        IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
+        IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
+        List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
+        int retainedCount = _activeDirectEditCutoffIndex.HasValue
+            ? Math.Min(oldModifiers.Count, _activeDirectEditCutoffIndex.Value + 1)
+            : oldModifiers.Count;
+
+        for (int i = 0; i < retainedCount; i++)
+        {
+            newModifiers.Add(oldModifiers[i].CloneWithOrder(newModifiers.Count));
+        }
+
+        HashSet<Guid> affectedSupportIds = new HashSet<Guid>();
+
+        for (int actionIndex = 0; actionIndex < actions.Count; actionIndex++)
+        {
+            DirectEditCommitAction action = actions[actionIndex];
+
+            for (int targetIndex = 0; targetIndex < action.TargetSupportIds.Count; targetIndex++)
+            {
+                affectedSupportIds.Add(action.TargetSupportIds[targetIndex]);
+            }
+
+            newModifiers.Add(new SupportModifierDefinition(
+                Guid.NewGuid(),
+                SupportModifierKind.DirectEdit,
+                true,
+                newModifiers.Count,
+                null,
+                null,
+                null,
+                action.TargetSupportIds,
+                null,
+                supportLayerGroup.SourceGeneratorRevision,
+                null,
+                null,
+                _activeDirectEditToolSessionId,
+                action.Settings));
+        }
+
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(
+            oldSupportEntities,
+            supportLayerGroup.SupportModifiers);
+        IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(
+            sourceSupportEntities,
+            newModifiers);
+        _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
+            _document,
+            supportLayerGroup,
+            oldSupportEntities,
+            newSupportEntities,
+            oldModifiers,
+            newModifiers,
+            "Direct Edit Supports"));
+
+        _activeDirectEditCutoffIndex = newModifiers.Count - 1;
+        _viewModel.SetStatusText($"Direct Edit applied to {affectedSupportIds.Count} support(s).");
+    }
+
+    /// <summary>
+    /// Mirrors Direct Edit tool guidance into the shell status bar.
+    /// </summary>
+    private void DirectEditTool_StatusMessageRequested(string statusMessage)
+    {
+        _viewModel.SetStatusText(statusMessage);
+    }
+
+    /// <summary>
+    /// Saves and applies the support head and branch angle highlight threshold.
+    /// </summary>
+    private void DirectEditToolOptionsControl_HighlightAngleChanged(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        Properties.Settings.Default.DirectEditHighlightAngleDegrees = _directEditToolOptionsControl.HighlightAngleDegrees;
+        Properties.Settings.Default.Save();
+        ApplyDirectEditAngleHighlight();
+    }
+
+    /// <summary>
+    /// Closes the Direct Edit session and returns viewport input to the active mode's normal tool.
+    /// </summary>
+    private void DirectEditToolOptionsControl_CloseRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        CloseDirectEditTool();
+    }
+
+    /// <summary>
+    /// Clears Direct Edit session state and transient visuals.
+    /// </summary>
+    private void CloseDirectEditTool()
+    {
+        ClearDirectEditSessionState();
+        HideToolOptionsOverlay();
+        RestoreViewportToolForActiveMode();
+        _viewModel.SetStatusText("Direct Edit closed.");
+    }
+
+    /// <summary>
+    /// Cancels viewport state and disables render-only highlighting for the active Direct Edit session.
+    /// </summary>
+    private void ClearDirectEditSessionState()
+    {
+        _directEditTool.Cancel();
+        _scene.ConfigureSupportAngleHighlight(false, 0.0, ReadFaceAngleHighlightColor());
+        _activeDirectEditToolSessionId = null;
+        _activeDirectEditSupportLayerGroupId = null;
+        _activeDirectEditCutoffIndex = null;
+    }
+
+    /// <summary>
+    /// Applies support angle highlighting only while Direct Edit options are active.
+    /// </summary>
+    private void ApplyDirectEditAngleHighlight()
+    {
+        _scene.ConfigureSupportAngleHighlight(
+            true,
+            _directEditToolOptionsControl.HighlightAngleDegrees,
+            ReadFaceAngleHighlightColor());
+    }
+
+    /// <summary>
     /// Refreshes Cluster Supports diagnostics when options change.
     /// </summary>
     private void SupportClusterToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
@@ -1128,7 +1332,7 @@ public partial class MainWindow
         IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
         SupportModifierDefinition? replacementClusterModifier = FindClusterModifierForApply(oldModifiers);
         bool isReplacingExistingClusterModifier = replacementClusterModifier != null;
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
         IReadOnlyList<Guid> targetSupportIds = targetAllSupports
             ? CreateAllClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id)
             : CreateSelectedClusterTargetSupportIds(oldSupportEntities, supportLayerGroup.Id);
@@ -1223,7 +1427,7 @@ public partial class MainWindow
                 return;
             }
 
-            IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+            IReadOnlyList<SupportEntity> restoredSourceEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
             IReadOnlyList<SupportModifierTargetBatch> remainingClusterTargetBatches = CreateRemainingClusterTargetBatches(
                 clusterModifier,
                 oldSupportEntities,
@@ -1266,7 +1470,7 @@ public partial class MainWindow
             }
 
             IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-            IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+            IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
             IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
             List<SupportModifierDefinition> newModifiers = new List<SupportModifierDefinition>();
 
@@ -1383,7 +1587,7 @@ public partial class MainWindow
 
         IReadOnlyList<SupportEntity> currentSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
         IReadOnlyList<SupportEntity> previewSourceEntities = _activeEditingClusterModifierId.HasValue
-            ? RestoreSourceSupportsForModifierReplay(currentSupportEntities)
+            ? RestoreSourceSupportsForModifierReplay(currentSupportEntities, supportLayerGroup.SupportModifiers)
             : currentSupportEntities;
         IReadOnlyList<Guid> selectedTargetSupportIds = CreateSelectedClusterTargetSupportIds(currentSupportEntities, supportLayerGroup.Id);
         bool isPreviewingSelection = selectedTargetSupportIds.Count > 0;
@@ -1681,40 +1885,11 @@ public partial class MainWindow
     /// <summary>
     /// Converts branched clustered output back to individual supports for modifier editing and removal.
     /// </summary>
-    private static IReadOnlyList<SupportEntity> RestoreSourceSupportsForModifierReplay(IReadOnlyList<SupportEntity> supportEntities)
+    private static IReadOnlyList<SupportEntity> RestoreSourceSupportsForModifierReplay(
+        IReadOnlyList<SupportEntity> supportEntities,
+        IReadOnlyList<SupportModifierDefinition> modifiers)
     {
-        List<SupportEntity> restoredSupports = new List<SupportEntity>(supportEntities.Count);
-
-        for (int i = 0; i < supportEntities.Count; i++)
-        {
-            SupportEntity support = supportEntities[i];
-
-            if (support.Style.Kind == SupportStyleKind.BraceMember || support.Style.Kind == SupportStyleKind.Buttress)
-            {
-                continue;
-            }
-            if (support.Style.Kind != SupportStyleKind.Clustered)
-            {
-                restoredSupports.Add(support);
-                continue;
-            }
-
-            Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
-            Vector3 headJointPosition = support.TipPosition - (headDirection * support.Profile.HeadHeight);
-            Vector3 basePosition = new Vector3(headJointPosition.X, headJointPosition.Y, support.BasePosition.Z);
-            restoredSupports.Add(SupportEntity.CreateLoaded(
-                support.Id,
-                support.Name,
-                support.SupportLayerGroupId,
-                support.TipPosition,
-                basePosition,
-                support.HeadDirection,
-                0.0f,
-                Vector3.UnitZ,
-                support.Profile));
-        }
-
-        return restoredSupports;
+        return SupportModifierSourceRestorer.Restore(supportEntities, modifiers);
     }
 
     /// <summary>
@@ -2187,7 +2362,7 @@ public partial class MainWindow
         {
             newModifiers = CreateBracingModifierReplacementList(oldModifiers, replacement, modifierKind, braceSettings, buttressSettings, targetIds, supportLayerGroup.SourceGeneratorRevision, _activeEditingBracingModifierId!.Value);
         }
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
         SupportModifierDefinition appliedModifier = replacement == null ? newModifiers[newModifiers.Count - 1] : FindModifierById(newModifiers, replacement.Id)!;
         SupportModifierPipelineEvaluation pipelineEvaluation = SupportModifierPipeline.EvaluateModifiers(sourceSupportEntities, newModifiers, appliedModifier.Id);
         IReadOnlyList<SupportEntity> newSupportEntities = pipelineEvaluation.SupportEntities;
@@ -2233,7 +2408,7 @@ public partial class MainWindow
 
         IReadOnlyList<SupportModifierDefinition> oldModifiers = supportLayerGroup.SupportModifiers;
         List<SupportModifierDefinition> newModifiers = CreateModifiersAfterRemovingBracingTargets(oldModifiers, _activeEditingBracingModifierId.Value, modifierKind, selectedTargetIds, supportLayerGroup.SourceGeneratorRevision);
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
         IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
         _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(_document, supportLayerGroup, oldSupportEntities, newSupportEntities, oldModifiers, newModifiers, "Remove Selected Bracing Targets"));
 
@@ -2282,7 +2457,7 @@ public partial class MainWindow
         }
 
         IReadOnlyList<SupportEntity> oldSupportEntities = _document.GetSupportEntitiesForGroup(supportLayerGroup.Id);
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreSourceSupportsForModifierReplay(oldSupportEntities, supportLayerGroup.SupportModifiers);
         IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
         string label = modifierKind == SupportModifierKind.Brace ? "Bracing" : "Buttresses";
         _commandRunner.Execute(new ReplaceSupportLayerOutputAndModifiersCommand(
@@ -2806,6 +2981,15 @@ public partial class MainWindow
     /// </summary>
     private void SetActiveMode(WorkspaceModeId modeId)
     {
+        if (_activeDirectEditToolSessionId.HasValue)
+        {
+            ClearDirectEditSessionState();
+
+            if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl)
+            {
+                _toolSessionOverlayCoordinator.EndSession();
+            }
+        }
         WorkspaceModeDefinition mode = _modeDefinitions[modeId];
 
         if (!mode.IsAvailable || mode.Tool == null)

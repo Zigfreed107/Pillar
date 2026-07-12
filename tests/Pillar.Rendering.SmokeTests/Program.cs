@@ -1,5 +1,7 @@
 // Program.cs
 // Runs focused smoke tests for rendering-layer screen-space selection geometry.
+using HelixToolkit.Wpf.SharpDX;
+using Pillar.Rendering.Preview;
 using Pillar.Rendering.Tools;
 using System;
 using System.Collections.Generic;
@@ -24,6 +26,7 @@ public static class Program
         RunTest(failures, "All control points inside passes within", ValidateAllControlPointsInsidePassesWithin);
         RunTest(failures, "Outside control point fails within", ValidateOutsideControlPointFailsWithin);
         RunTest(failures, "Edge-touching segment is accepted", ValidateEdgeTouchingSegmentIsAccepted);
+        RunTest(failures, "Direct Edit arrows use solid meshes", ValidateDirectEditArrowsUseSolidMeshes);
 
         if (failures.Count > 0)
         {
@@ -53,6 +56,28 @@ public static class Program
         catch (Exception ex)
         {
             failures.Add($"{name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Validates that Direct Edit arrows expose solid mesh hit targets instead of line geometry.
+    /// </summary>
+    private static void ValidateDirectEditArrowsUseSolidMeshes()
+    {
+        GroupModel3D root = new GroupModel3D();
+        _ = new DirectEditPreviewRenderer(root, 16);
+
+        if (root.Children.Count < 5)
+        {
+            throw new InvalidOperationException("Expected Direct Edit preview visuals to be created.");
+        }
+
+        for (int i = root.Children.Count - 3; i < root.Children.Count; i++)
+        {
+            if (root.Children[i] is not MeshGeometryModel3D)
+            {
+                throw new InvalidOperationException("Expected every Direct Edit arrow to use solid mesh geometry.");
+            }
         }
     }
 

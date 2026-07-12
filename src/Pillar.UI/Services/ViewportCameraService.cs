@@ -95,6 +95,7 @@ public sealed class ViewportCameraService : IDisposable
         _isDisposed = true;
         _viewport.CameraChanged -= Viewport_CameraChanged;
         _document.EntitiesChanged -= Document_EntitiesChanged;
+        _document.EntityBatchUpdateCompleted -= Document_EntityBatchUpdateCompleted;
 
         foreach (CadEntity entity in _subscribedEntities)
         {
@@ -152,6 +153,7 @@ public sealed class ViewportCameraService : IDisposable
     private void SubscribeToDocument()
     {
         _document.EntitiesChanged += Document_EntitiesChanged;
+        _document.EntityBatchUpdateCompleted += Document_EntityBatchUpdateCompleted;
 
         foreach (CadEntity entity in _document.Entities)
         {
@@ -192,6 +194,20 @@ public sealed class ViewportCameraService : IDisposable
             }
         }
 
+        if (!_document.IsEntityBatchUpdateActive)
+        {
+            RebuildSceneBounds();
+            UpdateCameraConfiguration(true);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds cached bounds once after a grouped document mutation.
+    /// </summary>
+    private void Document_EntityBatchUpdateCompleted(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
         RebuildSceneBounds();
         UpdateCameraConfiguration(true);
     }

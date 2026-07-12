@@ -1,4 +1,4 @@
-﻿// ModePanel.xaml.cs
+// ModePanel.xaml.cs
 // Provides the code-behind shell for the always-visible ribbon-style mode selection panel and forwards ribbon tool toggle changes to the owning window.
 using System;
 using System.Windows;
@@ -233,6 +233,18 @@ public partial class ModePanel : UserControl
     /// <summary>
     /// Publishes one selected tool name to the owning shell.
     /// </summary>
+    /// <summary>
+    /// Selects direct support editing and activates its viewport gizmos.
+    /// </summary>
+    private void DirectEditSupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        SupportOperationToggleRequested?.Invoke(
+            this,
+            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
+        RaiseToolSelected("Direct Edit Supports");
+    }
     private void RaiseToolSelected(string toolName)
     {
         ToolSelected?.Invoke(this, new ToolSelectedEventArgs(toolName));

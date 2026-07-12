@@ -20,6 +20,7 @@ public class CadDocument
     private readonly ObservableCollection<CadEntity> _entities = new ObservableCollection<CadEntity>();
     private readonly ObservableCollection<SupportLayerGroup> _supportLayerGroups = new ObservableCollection<SupportLayerGroup>();
     private readonly Dictionary<Guid, List<SupportEntity>> _supportEntitiesByGroupId = new Dictionary<Guid, List<SupportEntity>>();
+    private int _entityBatchUpdateDepth;
 
     public IReadOnlyList<CadEntity> Entities
     {
@@ -45,6 +46,28 @@ public class CadDocument
     {
         add { _entities.CollectionChanged += value; }
         remove { _entities.CollectionChanged -= value; }
+    }
+
+    /// <summary>
+    /// Raised once after a grouped entity mutation so observers can refresh expensive derived state once.
+    /// </summary>
+    public event EventHandler? EntityBatchUpdateCompleted;
+
+    /// <summary>
+    /// Gets whether document entities are currently being changed as one logical operation.
+    /// </summary>
+    public bool IsEntityBatchUpdateActive
+    {
+        get { return _entityBatchUpdateDepth > 0; }
+    }
+
+    /// <summary>
+    /// Groups entity notifications while allowing observers to defer expensive aggregate refreshes.
+    /// </summary>
+    public IDisposable BeginEntityBatchUpdate()
+    {
+        _entityBatchUpdateDepth++;
+        return new EntityBatchUpdateScope(this);
     }
 
     /// <summary>
@@ -407,6 +430,50 @@ public class CadDocument
             {
                 RemoveEntity(supportEntity);
             }
+        }
+    }
+
+    /// <summary>
+    /// Completes one nested entity batch and notifies observers when the outer operation ends.
+    /// </summary>
+    private void EndEntityBatchUpdate()
+    {
+        if (_entityBatchUpdateDepth <= 0)
+        {
+            throw new InvalidOperationException("No entity batch update is active.");
+        }
+
+        _entityBatchUpdateDepth--;
+
+        if (_entityBatchUpdateDepth == 0)
+        {
+            EntityBatchUpdateCompleted?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Ensures an entity batch completes even when the mutation throws.
+    /// </summary>
+    private sealed class EntityBatchUpdateScope : IDisposable
+    {
+        private CadDocument? _document;
+
+        /// <summary>
+        /// Creates one scope owned by the supplied document.
+        /// </summary>
+        public EntityBatchUpdateScope(CadDocument document)
+        {
+            _document = document;
+        }
+
+        /// <summary>
+        /// Completes the batch exactly once.
+        /// </summary>
+        public void Dispose()
+        {
+            CadDocument? document = _document;
+            _document = null;
+            document?.EndEntityBatchUpdate();
         }
     }
 }

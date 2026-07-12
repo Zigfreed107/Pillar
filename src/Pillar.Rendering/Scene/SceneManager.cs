@@ -7,6 +7,7 @@ using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Selection;
+using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
 using Pillar.Rendering.BackgroundGrid;
@@ -56,6 +57,8 @@ public class SceneManager
     private readonly LineSupportPreviewRenderer _lineSupportPreviewRenderer;
     private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
     private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
+    private readonly DirectEditPreviewRenderer _directEditPreviewRenderer;
+    private readonly SupportAngleHighlightRenderer _supportAngleHighlightRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly RotationOriginPreviewRenderer _rotationOriginPreviewRenderer;
     private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
@@ -68,6 +71,9 @@ public class SceneManager
     private readonly PhongMaterial _highlightMaterial;
     private readonly Dictionary<Guid, List<int>> _faceSelectionByMeshId = new Dictionary<Guid, List<int>>();
     private bool _isFaceAngleHighlightEnabled;
+    private bool _isSupportAngleHighlightEnabled;
+    private double _supportAngleHighlightThresholdDegrees;
+    private Color4 _supportAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.8f);
     private double _faceAngleThresholdDegrees = 45.0;
     private Color4 _faceAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.65f);
     private bool _isModelClipRangeConfigured;
@@ -191,6 +197,8 @@ public class SceneManager
         _lineSupportPreviewRenderer = new LineSupportPreviewRenderer(_previewRoot);
         _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
         _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
+        _directEditPreviewRenderer = new DirectEditPreviewRenderer(_previewRoot, _supportSides);
+        _supportAngleHighlightRenderer = new SupportAngleHighlightRenderer(_previewRoot, _supportSides);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _rotationOriginPreviewRenderer = new RotationOriginPreviewRenderer(_previewRoot);
         _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
@@ -199,6 +207,7 @@ public class SceneManager
 
         _selectionManager.SelectionChanged += OnSelectionChanged;
         _document.EntitiesChanged += OnEntitiesChanged;
+        _document.EntityBatchUpdateCompleted += Document_EntityBatchUpdateCompleted;
         _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
 
         SubscribeToExistingEntities();
@@ -228,6 +237,21 @@ public class SceneManager
                 RemoveEntity(entity);
             }
         }
+
+        if (!_document.IsEntityBatchUpdateActive)
+        {
+            RefreshSupportAngleHighlights();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes aggregate support overlays once after a grouped document mutation.
+    /// </summary>
+    private void Document_EntityBatchUpdateCompleted(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RefreshSupportAngleHighlights();
     }
 
     /// <summary>
@@ -271,6 +295,7 @@ public class SceneManager
         }
 
         ApplySupportLayerGroupColorToEntities(supportLayerGroup);
+        RefreshSupportAngleHighlights();
     }
 
     /// <summary>
@@ -487,6 +512,18 @@ public class SceneManager
     /// </summary>
     public bool TryHitSupportEntity(Vector2 screenPosition, Guid supportLayerGroupId, out SupportEntity supportEntity)
     {
+        return TryHitSupportEntity(screenPosition, supportLayerGroupId, out supportEntity, out _);
+    }
+
+    /// <summary>
+    /// Hit-tests support visuals and also returns the world-space surface position for part-aware tools.
+    /// </summary>
+    public bool TryHitSupportEntity(
+        Vector2 screenPosition,
+        Guid supportLayerGroupId,
+        out SupportEntity supportEntity,
+        out Vector3 hitPosition)
+    {
         IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
 
         for (int i = 0; i < hits.Count; i++)
@@ -497,14 +534,62 @@ public class SceneManager
                 && hitSupportEntity.SupportLayerGroupId == supportLayerGroupId)
             {
                 supportEntity = hitSupportEntity;
+                hitPosition = new Vector3(
+                    (float)hits[i].PointHit.X,
+                    (float)hits[i].PointHit.Y,
+                    (float)hits[i].PointHit.Z);
                 return true;
             }
         }
 
         supportEntity = null!;
+        hitPosition = Vector3.Zero;
         return false;
     }
 
+    /// <summary>
+    /// Hit-tests only the transient Direct Edit gizmo handles.
+    /// </summary>
+    public bool TryHitDirectEditGizmo(Vector2 screenPosition, out DirectEditGizmoHandleKind handleKind)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is Element3D hitModel
+                && _directEditPreviewRenderer.TryGetHandleKind(hitModel, out handleKind))
+            {
+                return true;
+            }
+        }
+
+        handleKind = DirectEditGizmoHandleKind.None;
+        return false;
+    }
+
+    /// <summary>
+    /// Shows the Direct Edit gizmo at one shared stem.
+    /// </summary>
+    public void ShowDirectEditGizmo(Vector3 basePosition, Vector3 stemTop, float xyLength, float zLength)
+    {
+        _directEditPreviewRenderer.ShowGizmo(basePosition, stemTop, xyLength, zLength);
+    }
+
+    /// <summary>
+    /// Shows rebuilt support geometry while a Direct Edit drag is active.
+    /// </summary>
+    public void ShowDirectEditSupportPreview(IReadOnlyList<SupportEntity> supports, SupportLayerColor color)
+    {
+        _directEditPreviewRenderer.ShowSupportPreview(supports, color);
+    }
+
+    /// <summary>
+    /// Hides all Direct Edit preview visuals.
+    /// </summary>
+    public void HideDirectEditPreview()
+    {
+        _directEditPreviewRenderer.Hide();
+    }
     /// <summary>
     /// Adds support entities from one support group that satisfy the supplied screen-space selection rectangle.
     /// </summary>
@@ -760,6 +845,7 @@ public class SceneManager
         }
 
         ApplySupportLayerGroupMaterial(supportLayerGroup, normalizedOpacity);
+        RefreshSupportAngleHighlights();
     }
 
     /// <summary>
@@ -821,6 +907,8 @@ public class SceneManager
         {
             _supportGroupQueryBuffer.Clear();
         }
+
+        RefreshSupportAngleHighlights();
     }
 
     /// <summary>
@@ -840,8 +928,15 @@ public class SceneManager
     }
 
     /// <summary>
-    /// Applies the horizontal-face highlight settings to all rendered mesh visuals.
+    /// Configures render-only highlighting for supports whose head or branch approaches the XY plane.
     /// </summary>
+    public void ConfigureSupportAngleHighlight(bool isEnabled, double thresholdDegrees, Color4 highlightColor)
+    {
+        _isSupportAngleHighlightEnabled = isEnabled;
+        _supportAngleHighlightThresholdDegrees = global::System.Math.Clamp(thresholdDegrees, 0.0, 90.0);
+        _supportAngleHighlightColor = highlightColor;
+        RefreshSupportAngleHighlights();
+    }
     public void ConfigureFaceAngleHighlight(bool isEnabled, double thresholdDegrees, Color4 highlightColor)
     {
         _isFaceAngleHighlightEnabled = isEnabled;
@@ -1187,7 +1282,6 @@ public class SceneManager
             for (int i = 0; i < _supportGroupQueryBuffer.Count; i++)
             {
                 SupportEntity supportEntity = _supportGroupQueryBuffer[i];
-
                 if (!_entityToVisual.TryGetValue(supportEntity, out GroupModel3D? visual))
                 {
                     continue;
@@ -1305,6 +1399,25 @@ public class SceneManager
 
         return _modelClipLowerZ > ModelClipRangeTolerance
             || _modelClipUpperZ < _printableVolumeDefinition.ZDistance - ModelClipRangeTolerance;
+    }
+
+    /// <summary>
+    /// Rebuilds or clears low-angle head and branch overlays from current scene state.
+    /// </summary>
+    private void RefreshSupportAngleHighlights()
+    {
+        if (!_isSupportAngleHighlightEnabled)
+        {
+            _supportAngleHighlightRenderer.Hide();
+            return;
+        }
+
+        _supportAngleHighlightRenderer.Refresh(
+            _document.Entities,
+            _supportAngleHighlightThresholdDegrees,
+            _supportAngleHighlightColor,
+            IsEntityVisible,
+            GetSupportLayerGroupOpacity);
     }
 
     /// <summary>

@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private readonly SelectTool _selectTool;
     private readonly LineTool _lineTool;
     private readonly ManualSupportTool _manualSupportTool;
+    private readonly DirectEditTool _directEditTool;
     private readonly IModelImporter _stlImporter;
     private readonly SnapManager _snapManager;
     private readonly SelectionWindowOverlayController _selectionWindowOverlay;
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
     private readonly AreaSupportToolOptionsControl _areaSupportToolOptionsControl;
     private readonly SupportClusterToolOptionsControl _supportClusterToolOptionsControl;
     private readonly SupportBracingToolOptionsControl _supportBracingToolOptionsControl;
+    private readonly DirectEditToolOptionsControl _directEditToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly RotationToolOptionsControl _rotationToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
@@ -66,6 +68,9 @@ public partial class MainWindow : Window
     private bool _isSynchronizingLayerAndViewportSelection;
     private Guid? _activeEditingClusterModifierId;
     private Guid? _activeEditingBracingModifierId;
+    private Guid? _activeDirectEditToolSessionId;
+    private Guid? _activeDirectEditSupportLayerGroupId;
+    private int? _activeDirectEditCutoffIndex;
     private SupportModifierKind? _activeEditingBracingModifierKind;
     private Dictionary<Guid, bool>? _clusterToolSupportLayerVisibilitySnapshot;
     private bool _isPrecisionSelectCursorActive;
@@ -88,6 +93,7 @@ public partial class MainWindow : Window
         _areaSupportToolOptionsControl = new AreaSupportToolOptionsControl();
         _supportClusterToolOptionsControl = new SupportClusterToolOptionsControl();
         _supportBracingToolOptionsControl = new SupportBracingToolOptionsControl();
+        _directEditToolOptionsControl = new DirectEditToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _rotationToolOptionsControl = new RotationToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
@@ -151,6 +157,7 @@ public partial class MainWindow : Window
             SetContourSupportClosedState,
             StartAreaSupportFaceSelectionSession,
             GetSelectedSupportProfile);
+        _directEditTool = new DirectEditTool(Viewport, _document, _scene, _projection, _selectTool);
         _stlImporter = new StlImporter();
         WireLayerPanel();
         InitializeModelClippingControls();
@@ -350,6 +357,10 @@ public partial class MainWindow : Window
         _supportBracingToolOptionsControl.RemoveAllBracingRequested += SupportBracingToolOptionsControl_RemoveAllBracingRequested;
         _supportBracingToolOptionsControl.RemoveAllButtressesRequested += SupportBracingToolOptionsControl_RemoveAllButtressesRequested;
         _supportBracingToolOptionsControl.CloseRequested += SupportBracingToolOptionsControl_CloseRequested;
+        _directEditToolOptionsControl.HighlightAngleChanged += DirectEditToolOptionsControl_HighlightAngleChanged;
+        _directEditToolOptionsControl.CloseRequested += DirectEditToolOptionsControl_CloseRequested;
+        _directEditTool.EditCommitted += DirectEditTool_EditCommitted;
+        _directEditTool.StatusMessageRequested += DirectEditTool_StatusMessageRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;

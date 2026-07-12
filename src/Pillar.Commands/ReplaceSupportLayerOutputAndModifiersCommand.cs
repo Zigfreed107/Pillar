@@ -3,6 +3,7 @@
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
 
@@ -37,7 +38,11 @@ public sealed class ReplaceSupportLayerOutputAndModifiersCommand : ICadCommand
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _supportLayerGroup = supportLayerGroup ?? throw new ArgumentNullException(nameof(supportLayerGroup));
         _oldSupportEntities = oldSupportEntities ?? throw new ArgumentNullException(nameof(oldSupportEntities));
-        _newSupportEntities = newSupportEntities ?? throw new ArgumentNullException(nameof(newSupportEntities));
+        IReadOnlyList<SupportEntity> requestedNewSupportEntities = newSupportEntities
+            ?? throw new ArgumentNullException(nameof(newSupportEntities));
+        _newSupportEntities = SupportOutputReferenceReconciler.ReuseEquivalentGeneratedSupports(
+            _oldSupportEntities,
+            requestedNewSupportEntities);
         _oldModifiers = CloneModifiers(oldModifiers ?? throw new ArgumentNullException(nameof(oldModifiers)));
         _newModifiers = CloneModifiers(newModifiers ?? throw new ArgumentNullException(nameof(newModifiers)));
         _displayName = string.IsNullOrWhiteSpace(displayName) ? "Update Support Edits" : displayName.Trim();
@@ -90,6 +95,7 @@ public sealed class ReplaceSupportLayerOutputAndModifiersCommand : ICadCommand
         IReadOnlyList<SupportEntity> supportsToAdd,
         IReadOnlyList<SupportModifierDefinition> modifiers)
     {
+        using IDisposable batchUpdate = _document.BeginEntityBatchUpdate();
         HashSet<SupportEntity> retainedSupports = new HashSet<SupportEntity>(supportsToAdd, ReferenceEqualityComparer.Instance);
 
         for (int i = supportsToRemove.Count - 1; i >= 0; i--)

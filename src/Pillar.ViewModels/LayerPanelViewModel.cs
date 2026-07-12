@@ -607,6 +607,7 @@ public partial class LayerPanelViewModel : ObservableObject
         bool hasCluster = false;
         bool hasBracing = false;
         bool hasDelete = false;
+        bool hasDirectEdit = false;
 
         for (int i = 0; i < modifiers.Count; i++)
         {
@@ -620,6 +621,7 @@ public partial class LayerPanelViewModel : ObservableObject
             hasCluster |= modifier.Kind == SupportModifierKind.Cluster;
             hasBracing |= modifier.Kind == SupportModifierKind.Brace || modifier.Kind == SupportModifierKind.Buttress;
             hasDelete |= modifier.Kind == SupportModifierKind.Delete;
+            hasDirectEdit |= modifier.Kind == SupportModifierKind.DirectEdit;
 
             for (int targetIndex = 0; targetIndex < modifier.TargetSupportIds.Count; targetIndex++)
             {
@@ -631,7 +633,9 @@ public partial class LayerPanelViewModel : ObservableObject
             ? "Brace"
             : hasCluster
                 ? "Cluster"
-                : hasDelete
+                : hasDirectEdit
+                    ? "Direct Edit"
+                    : hasDelete
                     ? "Delete"
                     : "Support Edit";
         return $"{name} ({targetIds.Count})";

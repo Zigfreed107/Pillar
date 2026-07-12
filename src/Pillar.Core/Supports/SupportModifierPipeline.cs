@@ -63,6 +63,8 @@ public static class SupportModifierPipeline
             orderedModifiers.Insert(insertIndex, modifier);
         }
 
+        MoveDirectEditsBeforeReinforcement(orderedModifiers);
+
         for (int i = 0; i < orderedModifiers.Count; i++)
         {
             SupportModifierDefinition modifier = orderedModifiers[i];
@@ -71,6 +73,10 @@ public static class SupportModifierPipeline
             {
                 SupportClusterEvaluationResult result = SupportClusterPlanner.Evaluate(currentSupports, modifier);
                 currentSupports = result.SupportEntities;
+            }
+            else if (modifier.Kind == SupportModifierKind.DirectEdit)
+            {
+                currentSupports = SupportDirectEditPlanner.Evaluate(currentSupports, modifier);
             }
             else if (modifier.Kind == SupportModifierKind.Brace)
             {
@@ -98,5 +104,34 @@ public static class SupportModifierPipeline
             ? new List<SupportEntity>(sourceSupports)
             : currentSupports;
         return new SupportModifierPipelineEvaluation(finalSupports, capturedBracingResult);
+    }
+    /// <summary>
+    /// Moves direct geometry edits ahead of reinforcement so stored brace rules replay against edited stems.
+    /// </summary>
+    private static void MoveDirectEditsBeforeReinforcement(List<SupportModifierDefinition> modifiers)
+    {
+        int firstReinforcementIndex = modifiers.Count;
+
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            if (modifiers[i].Kind == SupportModifierKind.Brace || modifiers[i].Kind == SupportModifierKind.Buttress)
+            {
+                firstReinforcementIndex = i;
+                break;
+            }
+        }
+
+        for (int i = firstReinforcementIndex + 1; i < modifiers.Count; i++)
+        {
+            if (modifiers[i].Kind != SupportModifierKind.DirectEdit)
+            {
+                continue;
+            }
+
+            SupportModifierDefinition directEdit = modifiers[i];
+            modifiers.RemoveAt(i);
+            modifiers.Insert(firstReinforcementIndex, directEdit);
+            firstReinforcementIndex++;
+        }
     }
 }

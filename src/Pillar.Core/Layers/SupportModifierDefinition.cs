@@ -62,7 +62,8 @@ public sealed class SupportModifierDefinition
         int? sourceGeneratorRevision,
         IReadOnlyList<SupportBracePair>? excludedBracePairs = null,
         IReadOnlyList<SupportModifierTargetBatch>? excludedBraceTargetBatches = null,
-        Guid? toolSessionId = null)
+        Guid? toolSessionId = null,
+        SupportDirectEditSettings? directEditSettings = null)
     {
         if (id == Guid.Empty)
         {
@@ -88,6 +89,7 @@ public sealed class SupportModifierDefinition
         ClusterSettings = clusterSettings?.Clone();
         BraceSettings = braceSettings?.Clone();
         ButtressSettings = buttressSettings?.Clone();
+        DirectEditSettings = directEditSettings?.Clone();
         SourceGeneratorRevision = sourceGeneratorRevision;
         _targetSupportIdBatches = CreateTargetSupportIdBatchList(targetSupportIds, targetSupportIdBatches);
         _targetSupportIds = CreateFlattenedTargetSupportIdList(targetSupportIds, _targetSupportIdBatches);
@@ -220,6 +222,11 @@ public sealed class SupportModifierDefinition
     public SupportButtressModifierSettings? ButtressSettings { get; }
 
     /// <summary>
+    /// Gets edited shared-stem geometry when this modifier was created by the Direct Edit tool.
+    /// </summary>
+    public SupportDirectEditSettings? DirectEditSettings { get; }
+
+    /// <summary>
     /// Gets the support identities targeted by this revision-bound modifier.
     /// </summary>
     public IReadOnlyList<Guid> TargetSupportIds
@@ -286,7 +293,8 @@ public sealed class SupportModifierDefinition
             SourceGeneratorRevision,
             _excludedBracePairs,
             _excludedBraceTargetBatches,
-            ToolSessionId);
+            ToolSessionId,
+            DirectEditSettings);
     }
 
     /// <summary>
@@ -307,7 +315,8 @@ public sealed class SupportModifierDefinition
             SourceGeneratorRevision,
             _excludedBracePairs,
             _excludedBraceTargetBatches,
-            ToolSessionId);
+            ToolSessionId,
+            DirectEditSettings);
     }
 
     /// <summary>
@@ -322,6 +331,9 @@ public sealed class SupportModifierDefinition
 
             case SupportModifierKind.Brace:
                 return "Brace";
+
+            case SupportModifierKind.DirectEdit:
+                return "Direct Edit";
 
             case SupportModifierKind.Buttress:
                 return "Buttress";
@@ -515,6 +527,7 @@ public sealed class SupportModifierDefinition
         bool hasClusterSettings = ClusterSettings != null;
         bool hasBraceSettings = BraceSettings != null;
         bool hasButtressSettings = ButtressSettings != null;
+        bool hasDirectEditSettings = DirectEditSettings != null;
 
         if (Kind == SupportModifierKind.Cluster && !hasClusterSettings)
         {
@@ -531,6 +544,11 @@ public sealed class SupportModifierDefinition
             throw new ArgumentException("Buttress modifiers require buttress settings.");
         }
 
+        if (Kind == SupportModifierKind.DirectEdit && !hasDirectEditSettings)
+        {
+            throw new ArgumentException("Direct Edit modifiers require direct-edit settings.");
+        }
+
         if (Kind != SupportModifierKind.Cluster && hasClusterSettings)
         {
             throw new ArgumentException("Only Cluster modifiers can store cluster settings.");
@@ -544,6 +562,11 @@ public sealed class SupportModifierDefinition
         if (Kind != SupportModifierKind.Buttress && hasButtressSettings)
         {
             throw new ArgumentException("Only Buttress modifiers can store buttress settings.");
+        }
+
+        if (Kind != SupportModifierKind.DirectEdit && hasDirectEditSettings)
+        {
+            throw new ArgumentException("Only Direct Edit modifiers can store direct-edit settings.");
         }
         if (Kind != SupportModifierKind.Brace && (_excludedBracePairs.Count > 0 || _excludedBraceTargetBatches.Count > 0))
         {

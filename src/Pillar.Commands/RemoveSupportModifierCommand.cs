@@ -6,7 +6,6 @@ using Pillar.Core.Layers;
 using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 
 namespace Pillar.Commands;
 
@@ -58,7 +57,7 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
             throw new InvalidOperationException("The requested support modifier was not found in the selected support layer.");
         }
 
-        IReadOnlyList<SupportEntity> sourceSupportEntities = RestoreIndividualSupportsForModifierReplay(oldSupportEntities);
+        IReadOnlyList<SupportEntity> sourceSupportEntities = SupportModifierSourceRestorer.Restore(oldSupportEntities, oldModifiers);
         IReadOnlyList<SupportEntity> newSupportEntities = SupportModifierPipeline.ApplyModifiers(sourceSupportEntities, newModifiers);
         _innerCommand = new ReplaceSupportLayerOutputAndModifiersCommand(
             document,
@@ -95,46 +94,6 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
     }
 
     /// <summary>
-    /// Converts clustered output back to individual supports before replaying the remaining modifier stack.
-    /// </summary>
-    private static IReadOnlyList<SupportEntity> RestoreIndividualSupportsForModifierReplay(IReadOnlyList<SupportEntity> supportEntities)
-    {
-        List<SupportEntity> restoredSupports = new List<SupportEntity>(supportEntities.Count);
-
-        for (int i = 0; i < supportEntities.Count; i++)
-        {
-            SupportEntity support = supportEntities[i];
-
-            if (support.Style.Kind == SupportStyleKind.BraceMember || support.Style.Kind == SupportStyleKind.Buttress)
-            {
-                continue;
-            }
-
-            if (support.Style.Kind != SupportStyleKind.Clustered)
-            {
-                restoredSupports.Add(support);
-                continue;
-            }
-
-            Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
-            Vector3 headJointPosition = support.TipPosition - (headDirection * support.Profile.HeadHeight);
-            Vector3 basePosition = new Vector3(headJointPosition.X, headJointPosition.Y, support.BasePosition.Z);
-            restoredSupports.Add(SupportEntity.CreateLoaded(
-                support.Id,
-                support.Name,
-                support.SupportLayerGroupId,
-                support.TipPosition,
-                basePosition,
-                support.HeadDirection,
-                0.0f,
-                Vector3.UnitZ,
-                support.Profile));
-        }
-
-        return restoredSupports;
-    }
-
-    /// <summary>
     /// Converts one modifier kind into a short user-facing action label.
     /// </summary>
     private static string GetModifierDisplayName(SupportModifierKind supportModifierKind)
@@ -149,6 +108,9 @@ public sealed class RemoveSupportModifierCommand : ICadCommand
 
             case SupportModifierKind.Buttress:
                 return "Buttress";
+
+            case SupportModifierKind.DirectEdit:
+                return "Direct Edit";
 
             case SupportModifierKind.Delete:
                 return "Delete";

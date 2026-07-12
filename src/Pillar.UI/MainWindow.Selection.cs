@@ -1,4 +1,4 @@
-﻿// MainWindow.Selection.cs
+// MainWindow.Selection.cs
 // Keeps shell-level selection feedback and layer-panel synchronization separate from viewport routing, mode switching, and file workflows.
 using Pillar.Core.Entities;
 using Pillar.ViewModels;
@@ -253,11 +253,11 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Keeps the single selected support group as Cluster Supports context during normal multi-selection gestures.
+    /// Keeps the single selected support group as modifier-tool context during normal multi-selection gestures.
     /// </summary>
     private bool TrySelectSingleSelectedSupportGroupLayer()
     {
-        if (!IsSupportClusterToolActive())
+        if (!IsSupportModifierToolActive())
         {
             return false;
         }

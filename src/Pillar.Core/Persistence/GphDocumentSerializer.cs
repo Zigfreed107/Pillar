@@ -29,6 +29,7 @@ public sealed class GphDocumentSerializer
     private const string ClusterModifierName = "cluster";
     private const string BraceModifierName = "brace";
     private const string ButtressModifierName = "buttress";
+    private const string DirectEditModifierName = "directEdit";
     private const string DeleteModifierName = "delete";
     private const string AutomaticClusterStemSizingName = "automatic";
     private const string ManualClusterStemSizingName = "manual";
@@ -805,7 +806,8 @@ public sealed class GphDocumentSerializer
                 ExcludedBraceTargetBatches = CreateTargetSupportIdBatchDtos(modifier.ExcludedBraceTargetBatches),
                 ClusterSettings = CreateClusterModifierSettingsDto(modifier.ClusterSettings),
                 BraceSettings = CreateBraceModifierSettingsDto(modifier.BraceSettings),
-                ButtressSettings = CreateButtressModifierSettingsDto(modifier.ButtressSettings)
+                ButtressSettings = CreateButtressModifierSettingsDto(modifier.ButtressSettings),
+                DirectEditSettings = CreateDirectEditSettingsDto(modifier.DirectEditSettings)
             });
         }
 
@@ -862,6 +864,9 @@ public sealed class GphDocumentSerializer
             case SupportModifierKind.Buttress:
                 return ButtressModifierName;
 
+            case SupportModifierKind.DirectEdit:
+                return DirectEditModifierName;
+
             case SupportModifierKind.Delete:
                 return DeleteModifierName;
 
@@ -870,6 +875,25 @@ public sealed class GphDocumentSerializer
         }
     }
 
+
+    /// <summary>
+    /// Converts Direct Edit settings into their persisted representation when present.
+    /// </summary>
+    private static GphDirectEditSettingsDto? CreateDirectEditSettingsDto(SupportDirectEditSettings? settings)
+    {
+        if (settings == null)
+        {
+            return null;
+        }
+
+        return new GphDirectEditSettingsDto
+        {
+            BasePosition = CreateVectorDto(settings.BasePosition),
+            StemTopZ = settings.StemTopZ,
+            OriginalBasePosition = CreateVectorDto(settings.OriginalBasePosition),
+            OriginalStemTopZ = settings.OriginalStemTopZ
+        };
+    }
 
     /// <summary>
     /// Converts cluster modifier settings into their persisted representation when present.
@@ -1283,7 +1307,8 @@ public sealed class GphDocumentSerializer
                 modifierDto.SourceGeneratorRevision,
                 CreateExcludedBracePairsOrDefault(modifierDto),
                 CreateExcludedBraceTargetBatchesOrDefault(modifierDto),
-                modifierDto.ToolSessionId));
+                modifierDto.ToolSessionId,
+                CreateDirectEditSettingsOrDefault(modifierDto)));
         }
 
         modifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
@@ -1387,6 +1412,11 @@ public sealed class GphDocumentSerializer
             return SupportModifierKind.Buttress;
         }
 
+        if (string.Equals(kind, DirectEditModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return SupportModifierKind.DirectEdit;
+        }
+
         if (string.Equals(kind, DeleteModifierName, StringComparison.OrdinalIgnoreCase))
         {
             return SupportModifierKind.Delete;
@@ -1395,6 +1425,34 @@ public sealed class GphDocumentSerializer
         throw new InvalidDataException($"Support modifier kind '{kind}' is not supported.");
     }
 
+
+    /// <summary>
+    /// Restores Direct Edit geometry from persisted modifier data.
+    /// </summary>
+    private static SupportDirectEditSettings? CreateDirectEditSettingsOrDefault(GphSupportModifierDto modifierDto)
+    {
+        if (!string.Equals(modifierDto.Kind, DirectEditModifierName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (modifierDto.DirectEditSettings?.BasePosition == null)
+        {
+            throw new InvalidDataException("A Direct Edit support modifier is missing its geometry settings.");
+        }
+
+        Vector3 basePosition = CreateVector(modifierDto.DirectEditSettings.BasePosition);
+        Vector3 originalBasePosition = modifierDto.DirectEditSettings.OriginalBasePosition == null
+            ? basePosition
+            : CreateVector(modifierDto.DirectEditSettings.OriginalBasePosition);
+        float originalStemTopZ = modifierDto.DirectEditSettings.OriginalStemTopZ
+            ?? modifierDto.DirectEditSettings.StemTopZ;
+        return new SupportDirectEditSettings(
+            basePosition,
+            modifierDto.DirectEditSettings.StemTopZ,
+            originalBasePosition,
+            originalStemTopZ);
+    }
 
     /// <summary>
     /// Converts saved Cluster settings into the runtime settings object when present.
@@ -1671,6 +1729,7 @@ public sealed class GphDocumentSerializer
         public GphClusterModifierSettingsDto? ClusterSettings { get; set; }
         public GphBraceModifierSettingsDto? BraceSettings { get; set; }
         public GphButtressModifierSettingsDto? ButtressSettings { get; set; }
+        public GphDirectEditSettingsDto? DirectEditSettings { get; set; }
     }
 
     /// <summary>
@@ -1680,6 +1739,17 @@ public sealed class GphDocumentSerializer
     {
         public Guid FirstSupportId { get; set; }
         public Guid SecondSupportId { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted Direct Edit geometry.
+    /// </summary>
+    private sealed class GphDirectEditSettingsDto
+    {
+        public GphVector3Dto? BasePosition { get; set; }
+        public float StemTopZ { get; set; }
+        public GphVector3Dto? OriginalBasePosition { get; set; }
+        public float? OriginalStemTopZ { get; set; }
     }
 
     /// <summary>
