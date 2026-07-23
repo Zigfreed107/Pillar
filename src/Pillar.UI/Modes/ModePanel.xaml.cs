@@ -245,6 +245,15 @@ public partial class ModePanel : UserControl
             new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
         RaiseToolSelected("Direct Edit Supports");
     }
+    /// <summary>
+    /// Opens the procedural raft tool for the current eligible model.
+    /// </summary>
+    private void RaftButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RaiseToolSelected("Raft");
+    }
     private void RaiseToolSelected(string toolName)
     {
         ToolSelected?.Invoke(this, new ToolSelectedEventArgs(toolName));

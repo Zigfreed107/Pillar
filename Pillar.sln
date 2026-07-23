@@ -74,6 +74,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Support Editing Tools", "Su
 		Documentation\Support Editing Tools\Support Editing Mode Behaviours.md = Documentation\Support Editing Tools\Support Editing Mode Behaviours.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Raft Tools", "Raft Tools", "{1F54A4A8-CE2D-42A4-8BE9-4A9945ACA4ED}"
+	ProjectSection(SolutionItems) = preProject
+		Raft Generation Tool.md = Raft Generation Tool.md
+		Tag.md = Tag.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -120,6 +126,7 @@ Global
 		{4425472E-0D4F-4B0C-A545-F0E431E20157} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 		{E6E8E711-7624-4468-86A4-1C8BBDED9869} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 		{A5F9F35A-2B9F-4CDA-8A1B-121E1E92FD49} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{1F54A4A8-CE2D-42A4-8BE9-4A9945ACA4ED} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7E64CCF2-ED87-450F-B577-DE4EFDA32C5A}

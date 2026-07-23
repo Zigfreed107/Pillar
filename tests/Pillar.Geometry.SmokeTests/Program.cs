@@ -147,6 +147,8 @@ public static class Program
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
         RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
+        RaftSmokeTests.Run(failures);
+
         if (failures.Count > 0)
         {
             Console.Error.WriteLine("Support mesh smoke tests failed:");

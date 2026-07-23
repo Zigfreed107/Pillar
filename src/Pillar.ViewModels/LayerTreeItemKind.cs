@@ -8,6 +8,7 @@ namespace Pillar.ViewModels;
 public enum LayerTreeItemKind
 {
     Model,
+    Raft,
     SupportGroup,
     SupportModifier
 }

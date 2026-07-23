@@ -226,6 +226,42 @@
                             </Border>
                         </primitives:Popup>
                     </Grid>
+
+                    <Border Width="1"
+                            Height="24"
+                            Margin="12,0"
+                            Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <ToggleButton x:Name="ShadedRenderModeButton"
+                                      Width="32"
+                                      MinHeight="28"
+                                      Padding="6,2"
+                                      VerticalAlignment="Center"
+                                      Content="S"
+                                      IsChecked="True"
+                                      Click="RenderModeButton_Click"
+                                      ToolTip="Shaded mode" />
+                        <ToggleButton x:Name="WireframeShadedRenderModeButton"
+                                      Width="36"
+                                      MinHeight="28"
+                                      Margin="2,0,0,0"
+                                      Padding="6,2"
+                                      VerticalAlignment="Center"
+                                      Content="WS"
+                                      Click="RenderModeButton_Click"
+                                      ToolTip="Wireframe and shaded mode" />
+                        <ToggleButton x:Name="WireframeRenderModeButton"
+                                      Width="32"
+                                      MinHeight="28"
+                                      Margin="2,0,0,0"
+                                      Padding="6,2"
+                                      VerticalAlignment="Center"
+                                      Content="W"
+                                      Click="RenderModeButton_Click"
+                                      ToolTip="Wireframe-only mode" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

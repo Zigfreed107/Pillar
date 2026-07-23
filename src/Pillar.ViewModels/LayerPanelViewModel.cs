@@ -20,6 +20,9 @@ public partial class LayerPanelViewModel : ObservableObject
     private readonly CadDocument _document;
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly HashSet<CadEntity> _subscribedEntities = new HashSet<CadEntity>();
+    private Guid? _raftTargetModelEntityId;
     private LayerTreeItemViewModel? _selectedLayer;
     private int _selectedModelCount;
     private int _selectedSupportLayerGroupCount;
@@ -32,6 +35,7 @@ public partial class LayerPanelViewModel : ObservableObject
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _document.EntitiesChanged += OnDocumentStructureChanged;
         _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
+        RefreshEntitySubscriptions();
         SubscribeToExistingSupportLayerGroups();
 
         RefreshFromDocument();
@@ -64,6 +68,14 @@ public partial class LayerPanelViewModel : ObservableObject
     public bool HasSelectedSupportGroupLayer
     {
         get { return _selectedLayer != null && _selectedLayer.Kind == LayerTreeItemKind.SupportGroup; }
+    }
+
+    /// <summary>
+    /// Gets whether the current selection resolves to one model that owns at least one support base.
+    /// </summary>
+    public bool CanGenerateRaft
+    {
+        get { return _raftTargetModelEntityId.HasValue && ModelHasSupportBases(_raftTargetModelEntityId.Value); }
     }
 
     /// <summary>
@@ -189,6 +201,28 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Updates the single model resolved from the current viewer or layer selection.
+    /// </summary>
+    public void SetRaftTargetModelEntityId(Guid? modelEntityId)
+    {
+        if (_raftTargetModelEntityId == modelEntityId)
+        {
+            return;
+        }
+
+        _raftTargetModelEntityId = modelEntityId;
+        OnPropertyChanged(nameof(CanGenerateRaft));
+    }
+
+    /// <summary>
+    /// Gets the model currently eligible for raft generation.
+    /// </summary>
+    public Guid? GetRaftTargetModelEntityId()
+    {
+        return _raftTargetModelEntityId;
+    }
+
+    /// <summary>
     /// Rebuilds the layer tree from the current document entities and support groups.
     /// </summary>
     public void RefreshFromDocument()
@@ -219,6 +253,25 @@ public partial class LayerPanelViewModel : ObservableObject
             }
         }
 
+        if (_raftTargetModelEntityId.HasValue && !modelRowsById.ContainsKey(_raftTargetModelEntityId.Value))
+        {
+            SetRaftTargetModelEntityId(null);
+        }
+        foreach (CadEntity entity in _document.Entities)
+        {
+            if (entity is RaftEntity raft
+                && modelRowsById.TryGetValue(raft.ModelEntityId, out LayerTreeItemViewModel? modelRow))
+            {
+                LayerTreeItemViewModel raftRow = new LayerTreeItemViewModel(
+                    raft.Id,
+                    raft.ModelEntityId,
+                    LayerTreeItemKind.Raft,
+                    raft.Settings.GetDisplayName(),
+                    raft.Color);
+                raftRow.IsVisible = GetRaftLayerVisibility(raft.Id);
+                modelRow.Children.Add(raftRow);
+            }
+        }
         foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
         {
             if (modelRowsById.TryGetValue(supportLayerGroup.ModelEntityId, out LayerTreeItemViewModel? modelRow))
@@ -297,6 +350,29 @@ public partial class LayerPanelViewModel : ObservableObject
             {
                 SelectedLayer = modelLayer;
                 return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Selects one generated raft row by entity id.
+    /// </summary>
+    public void SelectRaftLayer(Guid raftEntityId)
+    {
+        LayerTreeItemViewModel? raftLayer = FindLayer(raftEntityId, LayerTreeItemKind.Raft);
+        if (raftLayer == null)
+        {
+            return;
+        }
+
+        SelectedLayer = raftLayer;
+
+        foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
+        {
+            if (modelLayer.ModelEntityId == raftLayer.ModelEntityId)
+            {
+                modelLayer.IsExpanded = true;
+                break;
             }
         }
     }
@@ -385,6 +461,24 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Updates one raft layer's session visibility state.
+    /// </summary>
+    public void SetRaftLayerVisibility(Guid raftEntityId, bool isVisible)
+    {
+        _raftLayerVisibilityById[raftEntityId] = isVisible;
+        LayerTreeItemViewModel? layer = FindLayer(raftEntityId, LayerTreeItemKind.Raft);
+        if (layer != null) layer.IsVisible = isVisible;
+    }
+
+    /// <summary>
+    /// Gets one raft layer's current session visibility state.
+    /// </summary>
+    public bool GetRaftLayerVisibility(Guid raftEntityId)
+    {
+        return !_raftLayerVisibilityById.TryGetValue(raftEntityId, out bool isVisible) || isVisible;
+    }
+
+    /// <summary>
     /// Gets one model layer's current session visibility state.
     /// </summary>
     public bool GetModelLayerVisibility(Guid modelEntityId)
@@ -440,12 +534,17 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         HashSet<Guid> modelIds = new HashSet<Guid>();
         HashSet<Guid> supportLayerGroupIds = new HashSet<Guid>();
+        HashSet<Guid> raftIds = new HashSet<Guid>();
 
         foreach (CadEntity entity in _document.Entities)
         {
             if (entity is MeshEntity)
             {
                 modelIds.Add(entity.Id);
+            }
+            else if (entity is RaftEntity)
+            {
+                raftIds.Add(entity.Id);
             }
         }
 
@@ -455,6 +554,7 @@ public partial class LayerPanelViewModel : ObservableObject
         }
 
         RemoveMissingVisibilityEntries(_modelLayerVisibilityById, modelIds);
+        RemoveMissingVisibilityEntries(_raftLayerVisibilityById, raftIds);
         RemoveMissingVisibilityEntries(_supportLayerVisibilityById, supportLayerGroupIds);
     }
 
@@ -546,7 +646,9 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         _ = sender;
         _ = e;
+        RefreshEntitySubscriptions();
         RefreshFromDocument();
+        OnPropertyChanged(nameof(CanGenerateRaft));
     }
 
     /// <summary>
@@ -573,6 +675,24 @@ public partial class LayerPanelViewModel : ObservableObject
         }
 
         RefreshFromDocument();
+        OnPropertyChanged(nameof(CanGenerateRaft));
+    }
+
+    /// <summary>
+    /// Checks the document-owned support index without allocating support collections.
+    /// </summary>
+    private bool ModelHasSupportBases(Guid modelEntityId)
+    {
+        foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
+        {
+            if (supportLayerGroup.ModelEntityId == modelEntityId
+                && _document.HasSupportEntitiesForGroup(supportLayerGroup.Id))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -583,6 +703,37 @@ public partial class LayerPanelViewModel : ObservableObject
         _ = sender;
         _ = e;
         RefreshFromDocument();
+    }
+
+    /// <summary>
+    /// Refreshes the raft row when its durable display color changes.
+    /// </summary>
+    private void Entity_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is RaftEntity
+            && string.Equals(e.PropertyName, nameof(RaftEntity.Color), StringComparison.Ordinal))
+        {
+            RefreshFromDocument();
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds entity subscriptions after document structure changes, including collection resets.
+    /// </summary>
+    private void RefreshEntitySubscriptions()
+    {
+        foreach (CadEntity entity in _subscribedEntities)
+        {
+            entity.PropertyChanged -= Entity_PropertyChanged;
+        }
+
+        _subscribedEntities.Clear();
+
+        foreach (CadEntity entity in _document.Entities)
+        {
+            entity.PropertyChanged += Entity_PropertyChanged;
+            _subscribedEntities.Add(entity);
+        }
     }
 
     /// <summary>
@@ -640,6 +791,7 @@ public partial class LayerPanelViewModel : ObservableObject
                     : "Support Edit";
         return $"{name} ({targetIds.Count})";
     }
+
     /// <summary>
     /// Gets the effective support-layer selection count from either the layer tree or viewport support selection.
     /// </summary>

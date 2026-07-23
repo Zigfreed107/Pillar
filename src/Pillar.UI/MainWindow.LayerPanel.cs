@@ -151,7 +151,7 @@ public partial class MainWindow
 
         MessageBoxResult result = MessageBox.Show(
             this,
-            $"The model '{selectedModel.Name}' and all of its supports will be permanently deleted from the project.",
+            $"The model '{selectedModel.Name}' and all of its supports and raft will be permanently deleted from the project.",
             "Remove Model",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning);
@@ -212,7 +212,8 @@ public partial class MainWindow
                     dialog.FileName,
                     selectedModel,
                     supportEntities,
-                    Properties.Settings.Default.SupportSides);
+                    Properties.Settings.Default.SupportSides,
+                    _document.FindRaftForModel(selectedModel.Id));
             });
 
             string fileName = Path.GetFileName(dialog.FileName);
@@ -431,6 +432,21 @@ public partial class MainWindow
         if (e.LayerKind == LayerTreeItemKind.SupportGroup)
         {
             SetSupportLayerVisibility(e.LayerId, e.IsVisible);
+            return;
+        }
+
+        if (e.LayerKind == LayerTreeItemKind.Raft)
+        {
+            RaftEntity? raft = FindEntityById(e.LayerId) as RaftEntity;
+            if (raft == null)
+            {
+                _layerPanelViewModel.RefreshFromDocument();
+                return;
+            }
+
+            _layerPanelViewModel.SetRaftLayerVisibility(raft.Id, e.IsVisible);
+            _scene.SetRaftLayerVisibility(raft.Id, e.IsVisible);
+            _viewModel.SetStatusText(e.IsVisible ? "Showed raft" : "Hid raft");
         }
     }
 
@@ -563,6 +579,39 @@ public partial class MainWindow
         _viewModel.SetStatusText("Changed support group color");
     }
 
+    /// <summary>
+    /// Applies a raft color change transiently during editing or as an undoable document command otherwise.
+    /// </summary>
+    private void LayerPanel_ChangeRaftColorRequested(object? sender, LayerRaftColorChangeRequestedEventArgs e)
+    {
+        _ = sender;
+
+        RaftEntity? raft = FindEntityById(e.RaftEntityId) as RaftEntity;
+
+        if (raft == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        if (raft.Color == e.NewColor)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        if (ReferenceEquals(raft, _previewRaft) && IsRaftToolActive())
+        {
+            _document.SetRaftColor(raft, e.NewColor);
+        }
+        else
+        {
+            _commandRunner.Execute(new SetRaftColorCommand(_document, raft, e.OldColor, e.NewColor));
+        }
+
+        _layerPanelViewModel.RefreshFromDocument();
+        _viewModel.SetStatusText("Changed raft color");
+    }
     /// <summary>
     /// Captures the support groups owned by one imported model before the model is removed.
     /// </summary>

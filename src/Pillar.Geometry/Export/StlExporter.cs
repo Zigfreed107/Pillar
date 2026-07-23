@@ -21,7 +21,7 @@ public sealed class StlExporter
     /// <summary>
     /// Writes one imported model and its support entities as a single binary STL mesh.
     /// </summary>
-    public void ExportModelWithSupports(string filePath, MeshEntity model, IReadOnlyList<SupportEntity> supports, int supportSides)
+    public void ExportModelWithSupports(string filePath, MeshEntity model, IReadOnlyList<SupportEntity> supports, int supportSides, RaftEntity? raft = null)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -40,7 +40,7 @@ public sealed class StlExporter
 
         ValidateExportFilePath(filePath);
         List<SupportMeshData> supportMeshes = BuildSupportMeshes(supports, supportSides);
-        uint triangleCount = CountTriangles(model, supportMeshes);
+        uint triangleCount = CountTriangles(model, supportMeshes, raft);
 
         if (triangleCount == 0)
         {
@@ -54,6 +54,7 @@ public sealed class StlExporter
         writer.Write(triangleCount);
         WriteModelTriangles(writer, model);
         WriteSupportTriangles(writer, supportMeshes);
+        WriteRaftTriangles(writer, raft);
     }
 
     /// <summary>
@@ -119,9 +120,10 @@ public sealed class StlExporter
     /// <summary>
     /// Counts all triangles and validates that the binary STL count field can represent them.
     /// </summary>
-    private static uint CountTriangles(MeshEntity model, IReadOnlyList<SupportMeshData> supportMeshes)
+    private static uint CountTriangles(MeshEntity model, IReadOnlyList<SupportMeshData> supportMeshes, RaftEntity? raft)
     {
-        ulong triangleCount = checked((ulong)(model.TriangleIndices.Count / 3) + CountSupportTrianglesAsUnsignedLong(supportMeshes));
+        ulong raftTriangleCount = raft == null ? 0UL : (ulong)(raft.TriangleIndices.Count / 3);
+        ulong triangleCount = checked((ulong)(model.TriangleIndices.Count / 3) + CountSupportTrianglesAsUnsignedLong(supportMeshes) + raftTriangleCount);
 
         return ValidateBinaryStlTriangleCount(triangleCount);
     }
@@ -208,6 +210,25 @@ public sealed class StlExporter
                 Vector3 c = supportMesh.Positions[supportMesh.TriangleIndices[i + 2]];
                 WriteTriangle(writer, a, b, c);
             }
+        }
+    }
+
+    /// <summary>
+    /// Writes generated raft triangles, which are stored in world coordinates.
+    /// </summary>
+    private static void WriteRaftTriangles(BinaryWriter writer, RaftEntity? raft)
+    {
+        if (raft == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < raft.TriangleIndices.Count; i += 3)
+        {
+            Vector3 a = raft.Vertices[raft.TriangleIndices[i]];
+            Vector3 b = raft.Vertices[raft.TriangleIndices[i + 1]];
+            Vector3 c = raft.Vertices[raft.TriangleIndices[i + 2]];
+            WriteTriangle(writer, a, b, c);
         }
     }
 

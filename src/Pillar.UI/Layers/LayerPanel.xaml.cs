@@ -60,9 +60,19 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerColorChangeRequestedEventArgs>? ChangeSupportGroupColorRequested;
 
     /// <summary>
+    /// Raised when a raft color should be changed.
+    /// </summary>
+    public event EventHandler<LayerRaftColorChangeRequestedEventArgs>? ChangeRaftColorRequested;
+
+    /// <summary>
     /// Raised when the selected support group should be opened for tool-specific editing.
     /// </summary>
     public event EventHandler<LayerSupportGroupEditRequestedEventArgs>? EditSupportGroupRequested;
+
+    /// <summary>
+    /// Raised when the selected raft should be opened with its current settings.
+    /// </summary>
+    public event EventHandler<LayerRaftEditRequestedEventArgs>? EditRaftRequested;
 
     /// <summary>
     /// Raised when one support modifier row should be opened for tool-specific editing.
@@ -182,9 +192,9 @@ public partial class LayerPanel : UserControl
     }
 
     /// <summary>
-    /// Opens the support-group color picker and publishes the requested color change.
+    /// Opens the shared layer color picker and publishes a support-group or raft color change.
     /// </summary>
-    private void SupportGroupColorButton_Click(object sender, RoutedEventArgs e)
+    private void LayerColorButton_Click(object sender, RoutedEventArgs e)
     {
         _ = e;
 
@@ -211,6 +221,14 @@ public partial class LayerPanel : UserControl
             colorDialog.Color.G,
             colorDialog.Color.B);
 
+        if (layer.Kind == LayerTreeItemKind.Raft)
+        {
+            ChangeRaftColorRequested?.Invoke(
+                this,
+                new LayerRaftColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
+            return;
+        }
+
         ChangeSupportGroupColorRequested?.Invoke(
             this,
             new LayerColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
@@ -236,6 +254,12 @@ public partial class LayerPanel : UserControl
         if (layer.Kind == LayerTreeItemKind.SupportModifier)
         {
             EditSupportModifierRequested?.Invoke(this, new LayerSupportModifierEditRequestedEventArgs(layer.SupportLayerGroupId, layer.Id));
+            return;
+        }
+
+        if (layer.Kind == LayerTreeItemKind.Raft)
+        {
+            EditRaftRequested?.Invoke(this, new LayerRaftEditRequestedEventArgs(layer.Id));
             return;
         }
 
@@ -452,6 +476,36 @@ public sealed class LayerColorChangeRequestedEventArgs : EventArgs
 }
 
 /// <summary>
+/// Carries one completed raft color change request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerRaftColorChangeRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates raft color-change request data.
+    /// </summary>
+    public LayerRaftColorChangeRequestedEventArgs(Guid raftEntityId, SupportLayerColor oldColor, SupportLayerColor newColor)
+    {
+        RaftEntityId = raftEntityId;
+        OldColor = oldColor;
+        NewColor = newColor;
+    }
+
+    /// <summary>
+    /// Gets the raft entity whose color should change.
+    /// </summary>
+    public Guid RaftEntityId { get; }
+
+    /// <summary>
+    /// Gets the color displayed before the edit.
+    /// </summary>
+    public SupportLayerColor OldColor { get; }
+
+    /// <summary>
+    /// Gets the color requested by the color picker.
+    /// </summary>
+    public SupportLayerColor NewColor { get; }
+}
+/// <summary>
 /// Carries one support modifier edit request from the Layer Panel to the shell.
 /// </summary>
 public sealed class LayerSupportModifierEditRequestedEventArgs : EventArgs
@@ -493,4 +547,17 @@ public sealed class LayerSupportGroupEditRequestedEventArgs : EventArgs
     /// Gets the support group id that should be edited with its generator tool.
     /// </summary>
     public Guid SupportLayerGroupId { get; }
+}
+
+/// <summary>
+/// Carries one generated raft edit request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerRaftEditRequestedEventArgs : EventArgs
+{
+    public LayerRaftEditRequestedEventArgs(Guid raftEntityId)
+    {
+        RaftEntityId = raftEntityId;
+    }
+
+    public Guid RaftEntityId { get; }
 }

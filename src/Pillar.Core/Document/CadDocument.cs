@@ -161,7 +161,15 @@ public class CadDocument
 
         foreach (CadEntity entity in replacementEntities)
         {
-            if (entity is not SupportEntity)
+            if (entity is MeshEntity)
+            {
+                AddEntity(entity);
+            }
+        }
+
+        foreach (CadEntity entity in replacementEntities)
+        {
+            if (entity is not MeshEntity && entity is not SupportEntity)
             {
                 AddEntity(entity);
             }
@@ -276,6 +284,40 @@ public class CadDocument
     }
 
     /// <summary>
+    /// Updates one raft's display color while preserving its identity and generated geometry.
+    /// </summary>
+    public void SetRaftColor(RaftEntity raft, SupportLayerColor color)
+    {
+        if (raft == null)
+        {
+            throw new ArgumentNullException(nameof(raft));
+        }
+
+        if (!_entities.Contains(raft))
+        {
+            throw new InvalidOperationException("The raft is not part of this document.");
+        }
+
+        raft.SetColor(color);
+    }
+
+    /// <summary>
+    /// Finds the single raft owned by one imported model.
+    /// </summary>
+    public RaftEntity? FindRaftForModel(Guid modelEntityId)
+    {
+        foreach (CadEntity entity in _entities)
+        {
+            if (entity is RaftEntity raft && raft.ModelEntityId == modelEntityId)
+            {
+                return raft;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Gets all support entities owned by one support layer group.
     /// </summary>
     public IReadOnlyList<SupportEntity> GetSupportEntitiesForGroup(Guid supportLayerGroupId)
@@ -286,6 +328,15 @@ public class CadDocument
         }
 
         return new List<SupportEntity>(supportEntities);
+    }
+
+    /// <summary>
+    /// Gets whether one support layer group currently owns any concrete support bases.
+    /// </summary>
+    public bool HasSupportEntitiesForGroup(Guid supportLayerGroupId)
+    {
+        return _supportEntitiesByGroupId.TryGetValue(supportLayerGroupId, out List<SupportEntity>? supportEntities)
+            && supportEntities.Count > 0;
     }
 
     /// <summary>
@@ -389,6 +440,21 @@ public class CadDocument
     /// </summary>
     private void ValidateEntityOwnership(CadEntity entity)
     {
+        if (entity is RaftEntity raftEntity)
+        {
+            if (!ContainsMeshEntity(raftEntity.ModelEntityId))
+            {
+                throw new InvalidOperationException("Rafts can only be added under imported mesh entities.");
+            }
+
+            if (FindRaftForModel(raftEntity.ModelEntityId) != null)
+            {
+                throw new InvalidOperationException("An imported model can only own one raft.");
+            }
+
+            return;
+        }
+
         if (entity is not SupportEntity supportEntity)
         {
             return;
@@ -416,6 +482,13 @@ public class CadDocument
             {
                 RemoveSupportLayerGroup(_supportLayerGroups[i]);
             }
+        }
+
+        RaftEntity? raft = FindRaftForModel(entity.Id);
+
+        if (raft != null)
+        {
+            RemoveEntity(raft);
         }
     }
 

@@ -318,6 +318,37 @@
                         </StackPanel>
                     </Grid>
                 </TabItem>
+                <TabItem>
+                    <TabItem.Header>
+                        <TextBlock FontWeight="SemiBold" Text="Rafts" />
+                    </TabItem.Header>
+                    <StackPanel Margin="0,12,0,0">
+                        <primitives:UniformGrid Columns="3">
+                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                    IsEnabled="{Binding CanGenerateRaft}"
+                                    Click="RaftButton_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}" Text="Add Raft" />
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style BasedOn="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                                   TargetType="TextBlock">
+                                                <Setter Property="Text"
+                                                        Value="Select a model with at least one support." />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CanGenerateRaft}" Value="True">
+                                                        <Setter Property="Text"
+                                                                Value="Generate a build-plate raft for the active model." />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
+                        </primitives:UniformGrid>
+                    </StackPanel>
+                </TabItem>
             </TabControl>
         </Grid>
     </Border>

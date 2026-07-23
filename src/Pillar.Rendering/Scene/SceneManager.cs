@@ -44,6 +44,7 @@ public class SceneManager
     private readonly Dictionary<Guid, float> _supportLayerGroupOpacityOverrides = new Dictionary<Guid, float>();
     private readonly Dictionary<Guid, PhongMaterial> _supportLayerGroupMaterials = new Dictionary<Guid, PhongMaterial>();
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
     private readonly Point[] _supportWindowSelectionPathBuffer = new Point[5];
@@ -77,6 +78,7 @@ public class SceneManager
     private double _faceAngleThresholdDegrees = 45.0;
     private Color4 _faceAngleHighlightColor = new Color4(1.0f, 0.0f, 0.0f, 0.65f);
     private bool _isModelClipRangeConfigured;
+    private ViewportRenderMode _viewportRenderMode = ViewportRenderMode.Shaded;
     private float _modelClipLowerZ;
     private float _modelClipUpperZ;
     private const float ModelClipRangeTolerance = 0.001f;
@@ -329,12 +331,23 @@ public class SceneManager
     /// </summary>
     private void Entity_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not MeshEntity meshEntity)
+        if (sender is RaftEntity raftEntity)
         {
+            if (string.Equals(e.PropertyName, nameof(RaftEntity.Color), StringComparison.Ordinal)
+                && _entityToVisual.TryGetValue(raftEntity, out GroupModel3D? raftVisual))
+            {
+                PhongMaterial raftMaterial = RaftRenderer.CreateMaterial(raftEntity.Color);
+                MeshRenderer.ApplyToSelectableMeshModels(raftVisual, (MeshGeometryModel3D meshModel) =>
+                {
+                    meshModel.Material = raftMaterial;
+                });
+            }
+
             return;
         }
 
-        if (!_entityToVisual.TryGetValue(meshEntity, out GroupModel3D? visual))
+        if (sender is not MeshEntity meshEntity
+            || !_entityToVisual.TryGetValue(meshEntity, out GroupModel3D? visual))
         {
             return;
         }
@@ -376,6 +389,7 @@ public class SceneManager
             }
 
             ApplyDefaultMaterial(visual);
+            ApplyViewportRenderMode(visual);
             ApplyModelClipRangeIfConfigured(visual);
             if (entity is MeshEntity mesh)
             {
@@ -873,6 +887,29 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies session visibility to one generated raft.
+    /// </summary>
+    public void SetRaftLayerVisibility(Guid raftEntityId, bool isVisible)
+    {
+        _raftLayerVisibilityById[raftEntityId] = isVisible;
+        CadEntity? entity = FindEntityById(raftEntityId);
+
+        if (entity is not RaftEntity)
+        {
+            return;
+        }
+
+        if (_entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
+        {
+            ApplyEntityVisibility(entity, visual);
+        }
+
+        if (!isVisible)
+        {
+            _selectionManager.RemoveFromSelection(entity);
+        }
+    }
+    /// <summary>
     /// Applies session visibility to every support visual in one support group layer.
     /// </summary>
     public void SetSupportLayerGroupVisibility(Guid supportLayerGroupId, bool isVisible)
@@ -1123,6 +1160,11 @@ public class SceneManager
             return SupportRenderer.Create(support, GetSupportLayerGroupMaterial(support.SupportLayerGroupId), _supportSides);
         }
 
+        if (entity is RaftEntity raft)
+        {
+            return RaftRenderer.Create(raft);
+        }
+
         return null;
     }
 
@@ -1147,6 +1189,7 @@ public class SceneManager
         _entityToVisual[entity] = visual;
         _visualToEntity[visual] = entity;
         ApplyDefaultMaterial(visual);
+        ApplyViewportRenderMode(visual);
         ApplyModelClipRangeIfConfigured(visual);
         if (entity is MeshEntity mesh)
         {
@@ -1178,6 +1221,10 @@ public class SceneManager
         if (entity is MeshEntity)
         {
             _modelLayerVisibilityById.Remove(entity.Id);
+        }
+        else if (entity is RaftEntity)
+        {
+            _raftLayerVisibilityById.Remove(entity.Id);
         }
     }
 
@@ -1219,11 +1266,55 @@ public class SceneManager
             return;
         }
 
+        if (entity is RaftEntity raftEntity)
+        {
+            PhongMaterial raftMaterial = RaftRenderer.CreateMaterial(raftEntity.Color);
+            MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
+            {
+                meshModel.PostEffects = string.Empty;
+                meshModel.IsSelected = false;
+                meshModel.Material = raftMaterial;
+            });
+            return;
+        }
+
         MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
         {
             meshModel.PostEffects = string.Empty;
             meshModel.IsSelected = false;
             meshModel.Material = _defaultMeshMaterial;
+        });
+    }
+
+    /// <summary>
+    /// Sets the viewport render mode for all document mesh visuals.
+    /// </summary>
+    public void SetViewportRenderMode(ViewportRenderMode renderMode)
+    {
+        if (_viewportRenderMode == renderMode)
+        {
+            return;
+        }
+
+        _viewportRenderMode = renderMode;
+
+        foreach (GroupModel3D visual in _entityToVisual.Values)
+        {
+            ApplyViewportRenderMode(visual);
+        }
+    }
+
+    /// <summary>
+    /// Applies the current viewport mode to both normal and clipped render paths for one entity.
+    /// </summary>
+    private void ApplyViewportRenderMode(GroupModel3D visual)
+    {
+        MeshRenderer.ApplyToSelectableMeshModels(visual, (MeshGeometryModel3D meshModel) =>
+        {
+            meshModel.FillMode = _viewportRenderMode == ViewportRenderMode.Wireframe
+                ? SharpDX.Direct3D11.FillMode.Wireframe
+                : SharpDX.Direct3D11.FillMode.Solid;
+            meshModel.RenderWireframe = _viewportRenderMode == ViewportRenderMode.WireframeShaded;
         });
     }
 
@@ -1343,6 +1434,11 @@ public class SceneManager
         if (entity is SupportEntity supportEntity)
         {
             return IsSupportLayerGroupVisible(supportEntity.SupportLayerGroupId);
+        }
+
+        if (entity is RaftEntity raftEntity)
+        {
+            return !_raftLayerVisibilityById.TryGetValue(raftEntity.Id, out bool isVisible) || isVisible;
         }
 
         return true;

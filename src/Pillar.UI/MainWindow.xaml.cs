@@ -58,6 +58,7 @@ public partial class MainWindow : Window
     private readonly DirectEditToolOptionsControl _directEditToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly RotationToolOptionsControl _rotationToolOptionsControl;
+    private readonly RaftToolOptionsControl _raftToolOptionsControl;
     private readonly ToolSessionOptionsControl _toolSessionOptionsControl;
     private readonly ToolSessionOverlayCoordinator _toolSessionOverlayCoordinator;
     private readonly Dictionary<WorkspaceModeId, WorkspaceModeDefinition> _modeDefinitions = new Dictionary<WorkspaceModeId, WorkspaceModeDefinition>();
@@ -68,6 +69,10 @@ public partial class MainWindow : Window
     private bool _isSynchronizingLayerAndViewportSelection;
     private Guid? _activeEditingClusterModifierId;
     private Guid? _activeEditingBracingModifierId;
+    private Guid? _activeRaftModelEntityId;
+    private RaftEntity? _originalRaft;
+    private RaftEntity? _previewRaft;
+    private bool _raftSessionIsVisible = true;
     private Guid? _activeDirectEditToolSessionId;
     private Guid? _activeDirectEditSupportLayerGroupId;
     private int? _activeDirectEditCutoffIndex;
@@ -96,6 +101,7 @@ public partial class MainWindow : Window
         _directEditToolOptionsControl = new DirectEditToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _rotationToolOptionsControl = new RotationToolOptionsControl();
+        _raftToolOptionsControl = new RaftToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
             WorkflowModePanelOverlay,
@@ -368,6 +374,9 @@ public partial class MainWindow : Window
         _rotationToolOptionsControl.ResetRequested += RotationToolOptionsControl_ResetRequested;
         _rotationToolOptionsControl.FinishRequested += RotationToolOptionsControl_FinishRequested;
         _rotationToolOptionsControl.CancelRequested += RotationToolOptionsControl_CancelRequested;
+        _raftToolOptionsControl.OptionsChanged += RaftToolOptionsControl_OptionsChanged;
+        _raftToolOptionsControl.ApplyRequested += RaftToolOptionsControl_ApplyRequested;
+        _raftToolOptionsControl.CancelRequested += RaftToolOptionsControl_CancelRequested;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
         SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
@@ -381,7 +390,9 @@ public partial class MainWindow : Window
         LayerPanelOverlay.RenameLayerRequested += LayerPanel_RenameLayerRequested;
         LayerPanelOverlay.ChangeLayerVisibilityRequested += LayerPanel_ChangeLayerVisibilityRequested;
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
+        LayerPanelOverlay.ChangeRaftColorRequested += LayerPanel_ChangeRaftColorRequested;
         LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
+        LayerPanelOverlay.EditRaftRequested += LayerPanel_EditRaftRequested;
         LayerPanelOverlay.EditSupportModifierRequested += LayerPanel_EditSupportModifierRequested;
     }
 
@@ -390,6 +401,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void CancelTransientToolState()
     {
+        CancelRaftToolSession();
         _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
     }

@@ -17,6 +17,7 @@ public sealed class RemoveModelWithSupportGroupsCommand : ICadCommand
     private readonly MeshEntity _meshEntity;
     private readonly List<SupportLayerGroup> _supportLayerGroups;
     private readonly List<SupportEntity> _supportEntities;
+    private readonly RaftEntity? _raftEntity;
     private bool _hasExecuted;
 
     /// <summary>
@@ -36,6 +37,7 @@ public sealed class RemoveModelWithSupportGroupsCommand : ICadCommand
         }
 
         _supportLayerGroups = new List<SupportLayerGroup>(supportLayerGroups);
+        _raftEntity = _document.FindRaftForModel(_meshEntity.Id);
         _supportEntities = new List<SupportEntity>();
 
         foreach (SupportLayerGroup supportLayerGroup in _supportLayerGroups)
@@ -77,6 +79,11 @@ public sealed class RemoveModelWithSupportGroupsCommand : ICadCommand
         }
 
         _document.AddEntity(_meshEntity);
+
+        if (_raftEntity != null)
+        {
+            _document.AddEntity(_raftEntity);
+        }
 
         foreach (SupportLayerGroup supportLayerGroup in _supportLayerGroups)
         {

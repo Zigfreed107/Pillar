@@ -1,0 +1,57 @@
+<!--
+    RaftToolOptionsControl.xaml
+    Presents live procedural raft settings and explicit Apply/Cancel actions.
+-->
+<UserControl x:Class="Pillar.UI.Modes.RaftToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls"
+             MinWidth="290">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Raft" />
+            <TextBlock Margin="0,10,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Type" />
+            <ComboBox x:Name="RaftTypeComboBox" Margin="0,4,0,0" SelectedIndex="0" SelectionChanged="RaftTypeComboBox_SelectionChanged">
+                <ComboBoxItem Content="Footprint" />
+                <ComboBoxItem Content="Mesh" />
+                <ComboBoxItem Content="Feet" />
+            </ComboBox>
+
+            <StackPanel x:Name="FootprintOptionsPanel" Margin="0,4,0,0">
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Height (mm)" />
+                <controls:NumericUpDown x:Name="FootprintRaftHeightInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Lip Height (mm)" />
+                <controls:NumericUpDown x:Name="LipHeightInput" Margin="0,4,0,0" Minimum="0" Maximum="100" Increment="0.1" Value="15" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Lip Width (mm)" />
+                <controls:NumericUpDown x:Name="LipWidthInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Footprint Offset (mm)" />
+                <controls:NumericUpDown x:Name="FootprintOffsetInput" Margin="0,4,0,0" Minimum="0" Maximum="100" Increment="0.1" Value="0" ValueChanged="AnyOption_Changed" />
+            </StackPanel>
+
+            <StackPanel x:Name="MeshOptionsPanel" Margin="0,4,0,0" Visibility="Collapsed">
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Thickness (mm)" />
+                <controls:NumericUpDown x:Name="RaftThicknessInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Line Thickness (mm)" />
+                <controls:NumericUpDown x:Name="LineThicknessInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="1.5" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Max Side Length (mm)" />
+                <controls:NumericUpDown x:Name="MaxSideLengthInput" Margin="0,4,0,0" Minimum="0.01" Maximum="10000" Increment="1" Value="50" ValueChanged="AnyOption_Changed" />
+            </StackPanel>
+
+            <StackPanel x:Name="FeetOptionsPanel" Margin="0,4,0,0" Visibility="Collapsed">
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Height (mm)" />
+                <controls:NumericUpDown x:Name="FeetRaftHeightInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Foot Size (mm)" />
+                <controls:NumericUpDown x:Name="FootSizeInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.5" Value="10" ValueChanged="AnyOption_Changed" />
+            </StackPanel>
+
+            <TextBlock Margin="0,12,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Edge Angle (degrees)" />
+            <controls:NumericUpDown x:Name="EdgeAngleInput" Margin="0,4,0,0" Minimum="30" Maximum="90" Increment="1" DecimalPlaces="0" Value="45" ValueChanged="AnyOption_Changed" />
+
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="10" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="Apply" Click="ApplyButton_Click" />
+                <Button Grid.Column="2" Content="Cancel" Click="CancelButton_Click" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

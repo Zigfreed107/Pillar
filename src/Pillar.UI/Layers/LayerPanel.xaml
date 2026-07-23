@@ -61,7 +61,7 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="SupportGroupColorButtonStyle" TargetType="Button">
+        <Style x:Key="LayerColorButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="18" />
             <Setter Property="Margin" Value="0,0,6,0" />
@@ -117,10 +117,10 @@
                                   ToolTip="Toggle layer visibility"
                                   Click="LayerVisibilityToggleButton_Click" />
 
-                    <Button Style="{StaticResource SupportGroupColorButtonStyle}"
+                    <Button Style="{StaticResource LayerColorButtonStyle}"
                             Grid.Column="1"
-                            ToolTip="Choose support color"
-                            Click="SupportGroupColorButton_Click"
+                            ToolTip="Choose layer color"
+                            Click="LayerColorButton_Click"
                             Background="{Binding SupportColor, Converter={StaticResource SupportLayerColorToBrushConverter}}" />
 
                     <TextBlock x:Name="LayerNameTextBlock"

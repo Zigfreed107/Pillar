@@ -3,6 +3,7 @@
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Rafts;
 using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using System;
@@ -22,6 +23,7 @@ public sealed class GphDocumentSerializer
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
+    private const string RaftTypeName = "raft";
     private const string RingSupportGeneratorName = "ringSupport";
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
@@ -137,6 +139,7 @@ public sealed class GphDocumentSerializer
             }
         }
 
+        ValidateLoadedRafts(entities);
         List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
         AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
         ValidateLoadedSupportModifiers(supportLayerGroups, entities);
@@ -182,6 +185,39 @@ public sealed class GphDocumentSerializer
                 Start = CreateVectorDto(line.Start),
                 End = CreateVectorDto(line.End)
             };
+        }
+
+        if (entity is RaftEntity raft)
+        {
+            GphEntityDto dto = new GphEntityDto
+            {
+                Type = RaftTypeName,
+                Id = raft.Id,
+                Name = raft.Name,
+                ModelEntityId = raft.ModelEntityId,
+                TriangleIndices = new List<int>(raft.TriangleIndices),
+                Color = CreateSupportLayerColorDto(raft.Color),
+                RaftSettings = new GphRaftSettingsDto
+                {
+                    Type = raft.Settings.Type,
+                    RaftHeight = raft.Settings.RaftHeight,
+                    LipHeight = raft.Settings.LipHeight,
+                    LipWidth = raft.Settings.LipWidth,
+                    FootprintOffset = raft.Settings.FootprintOffset,
+                    RaftThickness = raft.Settings.RaftThickness,
+                    LineThickness = raft.Settings.LineThickness,
+                    MaxSideLength = raft.Settings.MaxSideLength,
+                    FootSize = raft.Settings.FootSize,
+                    EdgeAngleDegrees = raft.Settings.EdgeAngleDegrees
+                }
+            };
+
+            foreach (Vector3 vertex in raft.Vertices)
+            {
+                dto.Vertices.Add(CreateVectorDto(vertex));
+            }
+
+            return dto;
         }
 
         if (entity is MeshEntity mesh)
@@ -352,6 +388,33 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Validates model ownership and the one-raft-per-model invariant before applying loaded data.
+    /// </summary>
+    private static void ValidateLoadedRafts(IReadOnlyList<CadEntity> entities)
+    {
+        HashSet<Guid> meshEntityIds = CreateMeshEntityIdSet(entities);
+        HashSet<Guid> raftModelEntityIds = new HashSet<Guid>();
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is not RaftEntity raft)
+            {
+                continue;
+            }
+
+            if (!meshEntityIds.Contains(raft.ModelEntityId))
+            {
+                throw new InvalidDataException("A saved raft references an imported model that is not in the project.");
+            }
+
+            if (!raftModelEntityIds.Add(raft.ModelEntityId))
+            {
+                throw new InvalidDataException("A saved model contains more than one raft.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Recreates saved support entities after support group ownership has been validated and restored.
     /// </summary>
     private static void AddSupportEntities(
@@ -461,6 +524,11 @@ public sealed class GphDocumentSerializer
             return CreateMeshEntity(entityDto);
         }
 
+        if (string.Equals(entityDto.Type, RaftTypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateRaftEntity(entityDto);
+        }
+
         if (string.Equals(entityDto.Type, SupportTypeName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("Support entities must be created after support groups are loaded.");
@@ -527,6 +595,43 @@ public sealed class GphDocumentSerializer
             entityDto.OriginalFileName,
             CreateTransformOrIdentity(entityDto.ImportPlacementTransform),
             CreateTransformOrIdentity(entityDto.UserTransform));
+    }
+
+    /// <summary>
+    /// Recreates a generated raft and its settings from embedded triangle buffers.
+    /// </summary>
+    private static RaftEntity CreateRaftEntity(GphEntityDto entityDto)
+    {
+        if (!entityDto.ModelEntityId.HasValue || entityDto.ModelEntityId.Value == Guid.Empty)
+        {
+            throw new InvalidDataException("A saved raft is missing its owning model id.");
+        }
+
+        if (entityDto.RaftSettings == null || entityDto.TriangleIndices == null)
+        {
+            throw new InvalidDataException("A saved raft is missing settings or triangle indices.");
+        }
+
+        GphRaftSettingsDto settingsDto = entityDto.RaftSettings;
+        RaftSettings settings = new RaftSettings(
+            settingsDto.Type,
+            settingsDto.RaftHeight,
+            settingsDto.LipHeight,
+            settingsDto.LipWidth,
+            MathF.Max(0.0f, settingsDto.FootprintOffset),
+            settingsDto.RaftThickness,
+            settingsDto.LineThickness,
+            settingsDto.FootSize,
+            settingsDto.EdgeAngleDegrees,
+            settingsDto.MaxSideLength);
+
+        return RaftEntity.CreateLoaded(
+            entityDto.Id,
+            entityDto.ModelEntityId.Value,
+            settings,
+            CreateVectorList(entityDto.Vertices, "raft vertices"),
+            new List<int>(entityDto.TriangleIndices),
+            CreateLayerColorOrDefault(entityDto.Color, entityDto.Id));
     }
 
     /// <summary>
@@ -625,6 +730,7 @@ public sealed class GphDocumentSerializer
                 BranchDiameter = buttressStyle.BranchDiameter
             };
         }
+
         if (style is BraceMemberSupportStyle braceMemberStyle)
         {
             return new GphSupportStyleDto
@@ -1034,6 +1140,7 @@ public sealed class GphDocumentSerializer
 
             return new ButtressSupportStyle(supportStyleDto.BranchDiameter.Value);
         }
+
         if (string.Equals(supportStyleDto.Kind, BraceMemberSupportStyleName, StringComparison.OrdinalIgnoreCase))
         {
             if (!supportStyleDto.BranchDiameter.HasValue)
@@ -1066,6 +1173,19 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.Color.Red,
             supportLayerGroupDto.Color.Green,
             supportLayerGroupDto.Color.Blue);
+    }
+
+    /// <summary>
+    /// Converts an optional saved entity color into the runtime layer color or a stable legacy fallback.
+    /// </summary>
+    private static SupportLayerColor CreateLayerColorOrDefault(GphSupportLayerColorDto? colorDto, Guid stableSeed)
+    {
+        if (colorDto == null)
+        {
+            return SupportLayerColorGenerator.CreateFromStableSeed(stableSeed);
+        }
+
+        return new SupportLayerColor(colorDto.Red, colorDto.Green, colorDto.Blue);
     }
 
     /// <summary>
@@ -1631,6 +1751,26 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? BranchDirection { get; set; }
         public GphSupportProfileDto? SupportProfile { get; set; }
         public GphSupportStyleDto? SupportStyle { get; set; }
+        public Guid? ModelEntityId { get; set; }
+        public GphSupportLayerColorDto? Color { get; set; }
+        public GphRaftSettingsDto? RaftSettings { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted procedural raft settings.
+    /// </summary>
+    private sealed class GphRaftSettingsDto
+    {
+        public RaftType Type { get; set; } = RaftType.Footprint;
+        public float RaftHeight { get; set; } = RaftSettings.DefaultRaftHeight;
+        public float LipHeight { get; set; } = RaftSettings.DefaultLipHeight;
+        public float LipWidth { get; set; } = RaftSettings.DefaultLipWidth;
+        public float FootprintOffset { get; set; }
+        public float RaftThickness { get; set; } = RaftSettings.DefaultRaftThickness;
+        public float LineThickness { get; set; } = RaftSettings.DefaultLineThickness;
+        public float MaxSideLength { get; set; } = RaftSettings.DefaultMaxSideLength;
+        public float FootSize { get; set; } = RaftSettings.DefaultFootSize;
+        public float EdgeAngleDegrees { get; set; } = RaftSettings.DefaultEdgeAngleDegrees;
     }
 
     /// <summary>

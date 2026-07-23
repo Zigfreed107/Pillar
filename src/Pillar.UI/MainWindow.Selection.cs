@@ -24,6 +24,7 @@ public partial class MainWindow
         UpdateGeneratedSupportDeleteButtonState();
         RefreshSupportClusterPreviewStatusForSelectionChange();
         RefreshSupportBracingToolStatusForSelectionChange();
+        RefreshRaftTargetForSelection();
 
         if (_scene.SelectionManager.SelectedCount == 1)
         {
@@ -158,6 +159,7 @@ public partial class MainWindow
         }
 
         SynchronizeViewportSelectionFromLayerPanel();
+        RefreshRaftTargetForSelection();
         UpdateToolOptionsHostVisibilityForWorkflowContext();
     }
 
@@ -241,6 +243,12 @@ public partial class MainWindow
             if (selectedEntity is SupportEntity selectedSupport)
             {
                 _layerPanelViewModel.SelectSupportGroupLayer(selectedSupport.SupportLayerGroupId);
+                return;
+            }
+
+            if (selectedEntity is RaftEntity selectedRaft)
+            {
+                _layerPanelViewModel.SelectRaftLayer(selectedRaft.Id);
                 return;
             }
 
@@ -335,6 +343,11 @@ public partial class MainWindow
             if (hitEntity is SupportEntity hitSupport)
             {
                 _layerPanelViewModel.SelectSupportGroupLayer(hitSupport.SupportLayerGroupId);
+                return;
+            }
+            if (hitEntity is RaftEntity hitRaft)
+            {
+                _layerPanelViewModel.SelectRaftLayer(hitRaft.Id);
             }
         }
         finally

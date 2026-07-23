@@ -1,10 +1,15 @@
 // Program.cs
 // Runs focused smoke tests for rendering-layer screen-space selection geometry.
 using HelixToolkit.Wpf.SharpDX;
+using Pillar.Core.Entities;
+using Pillar.Core.Layers;
+using Pillar.Core.Rafts;
+using Pillar.Rendering.EntityRenderers;
 using Pillar.Rendering.Preview;
 using Pillar.Rendering.Tools;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Windows;
 
 namespace Pillar.Rendering.SmokeTests;
@@ -27,6 +32,7 @@ public static class Program
         RunTest(failures, "Outside control point fails within", ValidateOutsideControlPointFailsWithin);
         RunTest(failures, "Edge-touching segment is accepted", ValidateEdgeTouchingSegmentIsAccepted);
         RunTest(failures, "Direct Edit arrows use solid meshes", ValidateDirectEditArrowsUseSolidMeshes);
+        RunTest(failures, "Raft geometry includes flat lighting normals", ValidateRaftGeometryIncludesFlatLightingNormals);
 
         if (failures.Count > 0)
         {
@@ -56,6 +62,58 @@ public static class Program
         catch (Exception ex)
         {
             failures.Add($"{name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Validates that raft rendering supplies one face normal for every expanded triangle vertex.
+    /// </summary>
+    private static void ValidateRaftGeometryIncludesFlatLightingNormals()
+    {
+        SupportLayerColor color = new SupportLayerColor(64, 128, 192);
+        RaftEntity raft = new RaftEntity(
+            Guid.NewGuid(),
+            new RaftSettings(),
+            new[]
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(1.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 1.0f, 0.0f)
+            },
+            new[] { 0, 1, 2 },
+            color);
+        GroupModel3D group = RaftRenderer.Create(raft);
+
+        if (group.Children.Count == 0
+            || group.Children[0] is not MeshGeometryModel3D meshModel
+            || meshModel.Geometry is not HelixToolkit.SharpDX.MeshGeometry3D geometry)
+        {
+            throw new InvalidOperationException("Expected the raft renderer to create mesh geometry.");
+        }
+
+        if (geometry.Positions == null
+            || geometry.Normals == null
+            || geometry.Normals.Count != geometry.Positions.Count
+            || geometry.Normals.Count != 3)
+        {
+            throw new InvalidOperationException("Expected every expanded raft vertex to carry a lighting normal.");
+        }
+
+        if (meshModel.Material is not PhongMaterial material
+            || MathF.Abs(material.DiffuseColor.Red - (64.0f / 255.0f)) > 0.000001f
+            || MathF.Abs(material.DiffuseColor.Green - (128.0f / 255.0f)) > 0.000001f
+            || MathF.Abs(material.DiffuseColor.Blue - (192.0f / 255.0f)) > 0.000001f
+            || MathF.Abs(material.AmbientColor.Red - (16.0f / 255.0f)) > 0.000001f)
+        {
+            throw new InvalidOperationException("Expected the raft material to use its assigned layer color with reduced ambient light.");
+        }
+
+        for (int i = 0; i < geometry.Normals.Count; i++)
+        {
+            if (Vector3.DistanceSquared(geometry.Normals[i], Vector3.UnitZ) > 0.000001f)
+            {
+                throw new InvalidOperationException("Expected a planar raft triangle to use a consistent face normal.");
+            }
         }
     }
 

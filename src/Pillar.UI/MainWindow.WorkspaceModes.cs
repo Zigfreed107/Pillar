@@ -535,6 +535,11 @@ public partial class MainWindow
 
         ClearTransformScaleToolState();
         ClearTransformRotationToolState();
+        if (string.Equals(selectedToolName, "Raft", StringComparison.Ordinal))
+        {
+            ShowRaftToolForCurrentSelection();
+            return;
+        }
         if (string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal))
         {
             ShowPlaceholderToolOptions(
@@ -595,6 +600,7 @@ public partial class MainWindow
     /// </summary>
     private void HideToolOptionsOverlay()
     {
+        CancelRaftToolSession();
         if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl)
         {
             ClearDirectEditSessionState();
@@ -612,6 +618,7 @@ public partial class MainWindow
     /// </summary>
     private void CancelActiveDocumentMutationSessions()
     {
+        CancelRaftToolSession();
         _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -781,7 +788,7 @@ public partial class MainWindow
     /// </summary>
     private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
-        if (IsSupportToolEditActive() || IsSupportModifierToolActive())
+        if (IsRaftToolActive() || IsSupportToolEditActive() || IsSupportModifierToolActive())
         {
             return;
         }
