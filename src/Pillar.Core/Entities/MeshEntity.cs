@@ -12,6 +12,8 @@ namespace Pillar.Core.Entities;
 /// </summary>
 public class MeshEntity : CadEntity
 {
+    private readonly Vector3 _localBoundsMin;
+    private readonly Vector3 _localBoundsMax;
     private Transform3DData _importPlacementTransform;
     private Transform3DData _userTransform;
 
@@ -128,6 +130,7 @@ public class MeshEntity : CadEntity
         Vertices = new ReadOnlyCollection<Vector3>(new List<Vector3>(vertices));
         TriangleIndices = new ReadOnlyCollection<int>(new List<int>(triangleIndices));
         Normals = new ReadOnlyCollection<Vector3>(new List<Vector3>(normals));
+        (_localBoundsMin, _localBoundsMax) = CalculateLocalBounds(Vertices);
         _importPlacementTransform = importPlacementTransform ?? Transform3DData.Identity;
         _userTransform = userTransform ?? Transform3DData.Identity;
     }
@@ -152,17 +155,25 @@ public class MeshEntity : CadEntity
     }
 
     /// <summary>
-    /// Calculates the axis-aligned bounds for the raw imported mesh vertices in local mesh space.
+    /// Gets the cached axis-aligned bounds for the immutable imported mesh vertices.
     /// </summary>
     public (Vector3 Min, Vector3 Max) GetLocalBounds()
     {
-        Vector3 min = Vertices[0];
-        Vector3 max = Vertices[0];
+        return (_localBoundsMin, _localBoundsMax);
+    }
 
-        for (int i = 1; i < Vertices.Count; i++)
+    /// <summary>
+    /// Calculates immutable local bounds once when the imported mesh is created.
+    /// </summary>
+    private static (Vector3 Min, Vector3 Max) CalculateLocalBounds(IReadOnlyList<Vector3> vertices)
+    {
+        Vector3 min = vertices[0];
+        Vector3 max = vertices[0];
+
+        for (int i = 1; i < vertices.Count; i++)
         {
-            min = Vector3.Min(min, Vertices[i]);
-            max = Vector3.Max(max, Vertices[i]);
+            min = Vector3.Min(min, vertices[i]);
+            max = Vector3.Max(max, vertices[i]);
         }
 
         return (min, max);

@@ -105,6 +105,7 @@ public static class Program
         RunTest(failures, "Reset rotation restores imported orientation", ValidateResetRotationRestoresImportedOrientation);
         RunTest(failures, "X rotation follows the world X axis", ValidateRotationTransformUsesWorldXAxis);
         RunTest(failures, "X rotation follows the model local X axis", ValidateRotationTransformUsesLocalXAxis);
+        RunTest(failures, "Combined local rotation follows the changing model axes", ValidateCombinedLocalRotationUsesChangingModelAxes);
         RunTest(failures, "Line support pattern includes clicked endpoints", ValidateLineSupportPatternIncludesClickedEndpoints);
         RunTest(failures, "Line support pattern avoids duplicate shared vertices", ValidateLineSupportPatternAvoidsDuplicateSharedVertices);
         RunTest(failures, "Line support pattern respects spacing maximum", ValidateLineSupportPatternRespectsSpacingMaximum);
@@ -147,6 +148,7 @@ public static class Program
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
         RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
+        SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);
 
         if (failures.Count > 0)
@@ -2720,6 +2722,56 @@ public static class Program
         Vector3 rotatedLocalYAxis = Vector3.Transform(Vector3.UnitY, rotatedTransform.ToMatrix4x4());
 
         ValidateVectorNear(Vector3.UnitZ, rotatedLocalYAxis, 0.0001f, "Expected local X rotation to move the model's +Y axis toward its +Z axis.");
+    }
+
+    /// <summary>
+    /// Validates that combined local inputs match X, then Y, then Z rotations around the model's changing axes.
+    /// </summary>
+    private static void ValidateCombinedLocalRotationUsesChangingModelAxes()
+    {
+        Transform3DData originalTransform = new Transform3DData(
+            Vector3.Zero,
+            Quaternion.CreateFromAxisAngle(Vector3.UnitZ, 0.35f),
+            Vector3.One);
+        Vector3 rotationDegrees = new Vector3(25.0f, -40.0f, 15.0f);
+        Transform3DData combinedTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            originalTransform,
+            rotationDegrees,
+            Vector3.Zero,
+            RotationCoordinateSpace.Local);
+        Transform3DData sequentialTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            originalTransform,
+            new Vector3(rotationDegrees.X, 0.0f, 0.0f),
+            Vector3.Zero,
+            RotationCoordinateSpace.Local);
+        sequentialTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            sequentialTransform,
+            new Vector3(0.0f, rotationDegrees.Y, 0.0f),
+            Vector3.Zero,
+            RotationCoordinateSpace.Local);
+        sequentialTransform = MeshRotationTransform.CreateUserTransformForRotation(
+            sequentialTransform,
+            new Vector3(0.0f, 0.0f, rotationDegrees.Z),
+            Vector3.Zero,
+            RotationCoordinateSpace.Local);
+        Matrix4x4 combinedMatrix = combinedTransform.ToMatrix4x4();
+        Matrix4x4 sequentialMatrix = sequentialTransform.ToMatrix4x4();
+
+        ValidateVectorNear(
+            Vector3.Transform(Vector3.UnitX, sequentialMatrix),
+            Vector3.Transform(Vector3.UnitX, combinedMatrix),
+            0.0001f,
+            "Expected combined local rotation to match sequential X, Y, and Z rotations around the changing model axes.");
+        ValidateVectorNear(
+            Vector3.Transform(Vector3.UnitY, sequentialMatrix),
+            Vector3.Transform(Vector3.UnitY, combinedMatrix),
+            0.0001f,
+            "Expected combined local rotation to preserve the sequential local-axis orientation.");
+        ValidateVectorNear(
+            Vector3.Transform(Vector3.UnitZ, sequentialMatrix),
+            Vector3.Transform(Vector3.UnitZ, combinedMatrix),
+            0.0001f,
+            "Expected combined local rotation to preserve the sequential local-axis orientation.");
     }
 
     /// <summary>

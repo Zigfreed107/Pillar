@@ -29,13 +29,14 @@ public static class MeshRotationTransform
         }
 
         Matrix4x4 originalRotationMatrix = Matrix4x4.CreateFromQuaternion(originalTransform.Rotation);
-        Matrix4x4 deltaRotationMatrix = Matrix4x4.CreateRotationX(rotationDegrees.X * DegreesToRadians)
-            * Matrix4x4.CreateRotationY(rotationDegrees.Y * DegreesToRadians)
-            * Matrix4x4.CreateRotationZ(rotationDegrees.Z * DegreesToRadians);
+        Matrix4x4 xRotationMatrix = Matrix4x4.CreateRotationX(rotationDegrees.X * DegreesToRadians);
+        Matrix4x4 yRotationMatrix = Matrix4x4.CreateRotationY(rotationDegrees.Y * DegreesToRadians);
+        Matrix4x4 zRotationMatrix = Matrix4x4.CreateRotationZ(rotationDegrees.Z * DegreesToRadians);
         Matrix4x4 newRotationMatrix = coordinateSpace switch
         {
-            RotationCoordinateSpace.World => originalRotationMatrix * deltaRotationMatrix,
-            RotationCoordinateSpace.Local => deltaRotationMatrix * originalRotationMatrix,
+            RotationCoordinateSpace.World => originalRotationMatrix * xRotationMatrix * yRotationMatrix * zRotationMatrix,
+            // Numerics uses row vectors, so intrinsic local X, Y, Z rotations are prepended in reverse matrix order.
+            RotationCoordinateSpace.Local => zRotationMatrix * yRotationMatrix * xRotationMatrix * originalRotationMatrix,
             _ => throw new ArgumentOutOfRangeException(nameof(coordinateSpace), coordinateSpace, "Unknown rotation coordinate space.")
         };
 

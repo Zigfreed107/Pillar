@@ -60,6 +60,7 @@ public sealed class RemoveSupportLayerGroupCommand : ICadCommand
             return;
         }
 
+        using IDisposable batchUpdate = _document.BeginEntityBatchUpdate();
         _document.AddSupportLayerGroup(_supportLayerGroup);
 
         foreach (SupportEntity supportEntity in _supportEntities)

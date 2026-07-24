@@ -227,6 +227,7 @@ public class CadDocument
             return false;
         }
 
+        using IDisposable batchUpdate = BeginEntityBatchUpdate();
         RemoveSupportEntitiesForGroup(supportLayerGroup.Id);
         return _supportLayerGroups.Remove(supportLayerGroup);
     }

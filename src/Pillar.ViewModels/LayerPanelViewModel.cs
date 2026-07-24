@@ -23,6 +23,7 @@ public partial class LayerPanelViewModel : ObservableObject
     private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly HashSet<CadEntity> _subscribedEntities = new HashSet<CadEntity>();
     private Guid? _raftTargetModelEntityId;
+    private bool _isDocumentStructureRefreshPending;
     private LayerTreeItemViewModel? _selectedLayer;
     private int _selectedModelCount;
     private int _selectedSupportLayerGroupCount;
@@ -34,6 +35,7 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _document.EntitiesChanged += OnDocumentStructureChanged;
+        _document.EntityBatchUpdateCompleted += OnEntityBatchUpdateCompleted;
         _document.SupportLayerGroupsChanged += OnSupportLayerGroupsChanged;
         RefreshEntitySubscriptions();
         SubscribeToExistingSupportLayerGroups();
@@ -646,6 +648,38 @@ public partial class LayerPanelViewModel : ObservableObject
     {
         _ = sender;
         _ = e;
+
+        if (_document.IsEntityBatchUpdateActive)
+        {
+            _isDocumentStructureRefreshPending = true;
+            return;
+        }
+
+        RefreshDocumentStructure();
+    }
+
+    /// <summary>
+    /// Applies one deferred tree refresh after a grouped document mutation completes.
+    /// </summary>
+    private void OnEntityBatchUpdateCompleted(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (!_isDocumentStructureRefreshPending)
+        {
+            return;
+        }
+
+        _isDocumentStructureRefreshPending = false;
+        RefreshDocumentStructure();
+    }
+
+    /// <summary>
+    /// Rebuilds entity subscriptions and the user-visible layer tree from current document state.
+    /// </summary>
+    private void RefreshDocumentStructure()
+    {
         RefreshEntitySubscriptions();
         RefreshFromDocument();
         OnPropertyChanged(nameof(CanGenerateRaft));
@@ -672,6 +706,12 @@ public partial class LayerPanelViewModel : ObservableObject
             {
                 supportLayerGroup.PropertyChanged -= SupportLayerGroup_PropertyChanged;
             }
+        }
+
+        if (_document.IsEntityBatchUpdateActive)
+        {
+            _isDocumentStructureRefreshPending = true;
+            return;
         }
 
         RefreshFromDocument();
