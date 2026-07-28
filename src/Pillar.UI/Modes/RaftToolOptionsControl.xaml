@@ -21,7 +21,7 @@
                 <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Height (mm)" />
                 <controls:NumericUpDown x:Name="FootprintRaftHeightInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
                 <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Lip Height (mm)" />
-                <controls:NumericUpDown x:Name="LipHeightInput" Margin="0,4,0,0" Minimum="0" Maximum="100" Increment="0.1" Value="15" ValueChanged="AnyOption_Changed" />
+                <controls:NumericUpDown x:Name="LipHeightInput" Margin="0,4,0,0" Minimum="0" Maximum="100" Increment="0.1" Value="1.0" ValueChanged="AnyOption_Changed" />
                 <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Lip Width (mm)" />
                 <controls:NumericUpDown x:Name="LipWidthInput" Margin="0,4,0,0" Minimum="0.01" Maximum="100" Increment="0.1" Value="0.7" ValueChanged="AnyOption_Changed" />
                 <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Footprint Offset (mm)" />

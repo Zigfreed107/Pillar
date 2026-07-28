@@ -65,6 +65,11 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerRaftColorChangeRequestedEventArgs>? ChangeRaftColorRequested;
 
     /// <summary>
+    /// Raised when a tag color should be changed.
+    /// </summary>
+    public event EventHandler<LayerTagColorChangeRequestedEventArgs>? ChangeTagColorRequested;
+
+    /// <summary>
     /// Raised when the selected support group should be opened for tool-specific editing.
     /// </summary>
     public event EventHandler<LayerSupportGroupEditRequestedEventArgs>? EditSupportGroupRequested;
@@ -73,6 +78,11 @@ public partial class LayerPanel : UserControl
     /// Raised when the selected raft should be opened with its current settings.
     /// </summary>
     public event EventHandler<LayerRaftEditRequestedEventArgs>? EditRaftRequested;
+
+    /// <summary>
+    /// Raised when the selected tag should be opened with its current settings.
+    /// </summary>
+    public event EventHandler<LayerTagEditRequestedEventArgs>? EditTagRequested;
 
     /// <summary>
     /// Raised when one support modifier row should be opened for tool-specific editing.
@@ -229,6 +239,14 @@ public partial class LayerPanel : UserControl
             return;
         }
 
+        if (layer.Kind == LayerTreeItemKind.Tag)
+        {
+            ChangeTagColorRequested?.Invoke(
+                this,
+                new LayerTagColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
+            return;
+        }
+
         ChangeSupportGroupColorRequested?.Invoke(
             this,
             new LayerColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
@@ -260,6 +278,12 @@ public partial class LayerPanel : UserControl
         if (layer.Kind == LayerTreeItemKind.Raft)
         {
             EditRaftRequested?.Invoke(this, new LayerRaftEditRequestedEventArgs(layer.Id));
+            return;
+        }
+
+        if (layer.Kind == LayerTreeItemKind.Tag)
+        {
+            EditTagRequested?.Invoke(this, new LayerTagEditRequestedEventArgs(layer.Id));
             return;
         }
 
@@ -560,4 +584,43 @@ public sealed class LayerRaftEditRequestedEventArgs : EventArgs
     }
 
     public Guid RaftEntityId { get; }
+}
+
+/// <summary>
+/// Carries one generated tag edit request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerTagEditRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates one tag edit request.
+    /// </summary>
+    public LayerTagEditRequestedEventArgs(Guid tagEntityId)
+    {
+        TagEntityId = tagEntityId;
+    }
+
+    public Guid TagEntityId { get; }
+}
+
+/// <summary>
+/// Carries one completed tag color change request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerTagColorChangeRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates one completed tag color request.
+    /// </summary>
+    public LayerTagColorChangeRequestedEventArgs(
+        Guid tagEntityId,
+        SupportLayerColor oldColor,
+        SupportLayerColor newColor)
+    {
+        TagEntityId = tagEntityId;
+        OldColor = oldColor;
+        NewColor = newColor;
+    }
+
+    public Guid TagEntityId { get; }
+    public SupportLayerColor OldColor { get; }
+    public SupportLayerColor NewColor { get; }
 }

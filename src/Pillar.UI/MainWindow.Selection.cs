@@ -252,6 +252,12 @@ public partial class MainWindow
                 return;
             }
 
+            if (selectedEntity is TagEntity selectedTag)
+            {
+                _layerPanelViewModel.SelectTagLayer(selectedTag.Id);
+                return;
+            }
+
             _layerPanelViewModel.ClearSelectedLayer();
         }
         finally
@@ -348,6 +354,11 @@ public partial class MainWindow
             if (hitEntity is RaftEntity hitRaft)
             {
                 _layerPanelViewModel.SelectRaftLayer(hitRaft.Id);
+                return;
+            }
+            if (hitEntity is TagEntity hitTag)
+            {
+                _layerPanelViewModel.SelectTagLayer(hitTag.Id);
             }
         }
         finally

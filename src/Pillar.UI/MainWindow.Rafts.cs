@@ -119,6 +119,7 @@ public partial class MainWindow
             return;
         }
 
+        CancelTagToolSession();
         CancelRaftToolSession();
         _activeRaftModelEntityId = modelEntityId;
         _originalRaft = originalRaft;

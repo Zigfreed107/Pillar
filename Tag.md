@@ -29,6 +29,8 @@ The Tag Tool's Option Panel should have the following controls in order:
 - A numeric input for **Tag Height** (default: 0.7mm)
 - A numeric input for **Edge Angle** (default: 45 degrees, minimum: 30 degrees, maximum: 90 degrees)
 - A numeric input for **Border Offset** (default: 1.0mm, minimum: 0.0mm)
+- A numeric input for **Outer Width**
+- A numeric input for **Inner Width**
 - A **Text Entry Box** that allows the user to enter the text they wish displayed on the tag.
 - A combo box to choose the **Font**. The combo box displays all fonts available on the users computer. 
 - A numeric input for **Font size** that determines the size of the characters in mm.
@@ -55,28 +57,32 @@ After the user starts the tool, whether from the Mode Panel or clicking the edit
 This section details what a tag looks like and how it should be constructed as a 3D entity in the viewer.
 
 ### Tag Body
+
 - The tag body is rectangular in shape in the XY plane, and is extruded up in the Z axis by the **Tag Height**.
 - The tag is always flat to the XY plane.
 - Since the tag is placed around the raft, and the raft might be convex, it is aligned according to the tangent of the raft at the location where it joins. This will be referred to as the "tagnetial axis" in this document.
 - There are four sides of the rectangular tag:
 	- The "inner edge" which is parallel to the "tangential axis" and is closer to the centre of the raft and inside the raft boudnary.
 	- The "outer edge" which is parallel to the "tangential axis" and is further from the centre of the raft and outside the raft boudnary.
-	- Two "side edges" which are perpendicular to the "tangential axis". The "tangential axis" crosses the mid points of both these edges.
-	- In other words, the tag is a rectangle that is half inside and half outside the raft boudnary it is attached to.
-- The length of the "inner edge" and "outer edge" is enough so that the full text entered in the **text entry box** plus the **Border Offset** at each end of the text. If the text in the **Text Entry Box** is changed, the length of the Tag will need to dynamically update.
+	- Two "side edges" which are perpendicular to the "tangential axis".
+- "Outer Width". This is not the full lengths of the side edges, but the distance from the outer edge to the tangential axis. 
+	- The default value upon starting the tool is 1.5x the font size plus the boundary offset. This value does not need to be updated if the  user changes either the font size or the boundary offset.
+	- However, the value can never be below minimum of the font size plus the border offset. This needs to be maintained if the user changes the font size or the boundary offset.
+- "Inner Width". This is the distance from the tangential axis to the inner edge.
+	- The default value is 1.5x the font size plus the boundary offset. This value does not need to be updated if the  user changes either the font size or the boundary offset.
+- The length of the "inner edge" and "outer edge" is enough so that the full text entered in the **text entry box** plus the **Border Offset** at each end of the text. If the text in the **Text Entry Box** is changed, the length of the Tag will need to dynamically update. Use the visible glyph width when determining the border offset to the side edge.
 - The length of the "side edges" is the **Font Size** plus plus the **Border Offset** above and below the text.
 - The **Edge Angle** works similarly to Rafts. The edges faces of the tag make this angle to the vertical. The inner, outer and side edge lengths are applied to the bottom of the tag, and the edges at the top of the tag have their lengths increased to ensure this angle.
 
 ### Tag Text
-_To beign with, do not worry about coding this part of the tool. We will add it once the Tag Body features are working well._
-
 The Tag text is extruded 3D text that sits on top of the tag. 
 
 - The text is extruded up from the top of the Tag Body by the **Text Height**.
 - The text is also extruded down into the Tag Body by half the **Tag Height**. This ensures there is not a small gap between the top of the tag body and bottom of the tag text.
 - The text is drawn using the selected **Font** at the selected **Font Size**. The font size will need to relate to the actual mm size the font will be drawn (assuming the viewers 1 unit = 1mm).
 - The text itself is the contents of the **Text Entry Box**
-
+- The text is always placed so that it is the border offset away from the outer edge.
+- 
 # Notes
 - If when editing a file, a the font used is no longer available, default back to Arial.
 - Look for existing tools in Helix Toolkit or free libraries that allow the creation of 3D mesh entities by extruding fonts rather than creating your own. Before creating any code, discuss options you have found. If you cannot find any, then mention you will need to create your own.

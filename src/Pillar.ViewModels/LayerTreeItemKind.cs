@@ -9,6 +9,7 @@ public enum LayerTreeItemKind
 {
     Model,
     Raft,
+    Tag,
     SupportGroup,
     SupportModifier
 }

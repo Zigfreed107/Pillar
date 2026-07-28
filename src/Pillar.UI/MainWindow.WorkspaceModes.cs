@@ -499,6 +499,14 @@ public partial class MainWindow
         {
             ClearDirectEditSessionState();
         }
+        if (!string.Equals(selectedToolName, "Tag", StringComparison.Ordinal))
+        {
+            CancelTagToolSession();
+        }
+        if (!string.Equals(selectedToolName, "Raft", StringComparison.Ordinal))
+        {
+            CancelRaftToolSession();
+        }
         if (IsModePanelSelectionPromptVisible())
         {
             HideToolOptionsOverlay();
@@ -538,6 +546,11 @@ public partial class MainWindow
         if (string.Equals(selectedToolName, "Raft", StringComparison.Ordinal))
         {
             ShowRaftToolForCurrentSelection();
+            return;
+        }
+        if (string.Equals(selectedToolName, "Tag", StringComparison.Ordinal))
+        {
+            ShowTagToolForCurrentSelection();
             return;
         }
         if (string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal))
@@ -601,6 +614,7 @@ public partial class MainWindow
     private void HideToolOptionsOverlay()
     {
         CancelRaftToolSession();
+        CancelTagToolSession();
         if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl)
         {
             ClearDirectEditSessionState();
@@ -619,6 +633,7 @@ public partial class MainWindow
     private void CancelActiveDocumentMutationSessions()
     {
         CancelRaftToolSession();
+        CancelTagToolSession();
         _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -788,7 +803,7 @@ public partial class MainWindow
     /// </summary>
     private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
-        if (IsRaftToolActive() || IsSupportToolEditActive() || IsSupportModifierToolActive())
+        if (IsRaftToolActive() || IsTagToolActive() || IsSupportToolEditActive() || IsSupportModifierToolActive())
         {
             return;
         }

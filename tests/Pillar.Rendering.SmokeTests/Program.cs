@@ -4,9 +4,14 @@ using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Rafts;
+using Pillar.Core.Tags;
+using Pillar.Geometry.Tags;
 using Pillar.Rendering.EntityRenderers;
 using Pillar.Rendering.Preview;
 using Pillar.Rendering.Tools;
+using Pillar.UI.Controls;
+using Pillar.UI.Modes;
+using Pillar.UI.Tags;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -22,6 +27,7 @@ public static class Program
     /// <summary>
     /// Runs all smoke tests and returns a process exit code.
     /// </summary>
+    [STAThread]
     public static int Main()
     {
         List<string> failures = new List<string>();
@@ -33,6 +39,10 @@ public static class Program
         RunTest(failures, "Edge-touching segment is accepted", ValidateEdgeTouchingSegmentIsAccepted);
         RunTest(failures, "Direct Edit arrows use solid meshes", ValidateDirectEditArrowsUseSolidMeshes);
         RunTest(failures, "Raft geometry includes flat lighting normals", ValidateRaftGeometryIncludesFlatLightingNormals);
+        RunTest(failures, "Locked tag preview is opaque and visible", ValidateLockedTagPreviewIsOpaqueAndVisible);
+        RunTest(failures, "Installed font creates solid tag text", ValidateInstalledFontCreatesSolidTagText);
+        RunTest(failures, "Missing tag font falls back", ValidateMissingTagFontFallsBack);
+        RunTest(failures, "Tag options initialize safely", ValidateTagOptionsInitializeSafely);
 
         if (failures.Count > 0)
         {
@@ -114,6 +124,127 @@ public static class Program
             {
                 throw new InvalidOperationException("Expected a planar raft triangle to use a consistent face normal.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Validates that locking a tag switches its reusable preview into the opaque render pass.
+    /// </summary>
+    private static void ValidateLockedTagPreviewIsOpaqueAndVisible()
+    {
+        GroupModel3D root = new GroupModel3D();
+        TagPreviewRenderer renderer = new TagPreviewRenderer(root);
+        TagMeshData mesh = new TagMeshData(
+            new[]
+            {
+                new Vector3(0.0f, 0.0f, 0.0f),
+                new Vector3(1.0f, 0.0f, 0.0f),
+                new Vector3(0.0f, 1.0f, 0.0f)
+            },
+            new[] { 0, 1, 2 });
+        renderer.Show(mesh, new SupportLayerColor(64, 128, 192), 0.45f);
+
+        if (root.Children.Count != 1
+            || root.Children[0] is not MeshGeometryModel3D previewModel
+            || !previewModel.IsTransparent)
+        {
+            throw new InvalidOperationException("Expected the moving tag preview to use the transparent render pass.");
+        }
+
+        renderer.Show(mesh, new SupportLayerColor(64, 128, 192), 1.0f);
+
+        if (previewModel.IsTransparent || previewModel.Visibility != Visibility.Visible)
+        {
+            throw new InvalidOperationException("Expected the locked tag preview to remain visible in the opaque render pass.");
+        }
+    }
+
+    /// <summary>
+    /// Validates the WPF installed-font adapter and hole-aware text extrusion together.
+    /// </summary>
+    private static void ValidateInstalledFontCreatesSolidTagText()
+    {
+        TagSettings settings = new TagSettings(
+            text: "B8",
+            fontFamilyName: TagSettings.DefaultFontFamilyName,
+            fontSize: 5.0f,
+            textHeight: 1.0f);
+        TagTextOutlineData outline = WpfTagTextOutlineFactory.Create(settings);
+        TagTextMeshData mesh = TagTextMeshBuilder.Build(settings, outline);
+
+        if (outline.MeasuredWidth <= 0.0f || outline.Contours.Count < 2)
+        {
+            throw new InvalidOperationException("Expected the installed default font to produce measured glyph contours.");
+        }
+
+        if (mesh.Positions.Count == 0 || mesh.TriangleIndices.Count == 0)
+        {
+            throw new InvalidOperationException("Expected installed-font glyphs to produce extruded triangle geometry.");
+        }
+
+        TagSettings trailingSpaceSettings = new TagSettings(
+            text: "B8   ",
+            fontFamilyName: TagSettings.DefaultFontFamilyName,
+            fontSize: 5.0f,
+            textHeight: 1.0f);
+        TagTextOutlineData trailingSpaceOutline = WpfTagTextOutlineFactory.Create(trailingSpaceSettings);
+
+        if (MathF.Abs(trailingSpaceOutline.MeasuredWidth - outline.MeasuredWidth) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected trailing spaces to be excluded from visible glyph width.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an unavailable saved family still produces geometry through the Arial fallback.
+    /// </summary>
+    private static void ValidateMissingTagFontFallsBack()
+    {
+        TagSettings settings = new TagSettings(
+            text: "Fallback",
+            fontFamilyName: "Pillar Missing Font Family",
+            fontSize: 5.0f,
+            textHeight: 1.0f);
+        TagTextOutlineData outline = WpfTagTextOutlineFactory.Create(settings);
+        TagTextMeshData mesh = TagTextMeshBuilder.Build(settings, outline);
+
+        if (outline.MeasuredWidth <= 0.0f || mesh.TriangleIndices.Count == 0)
+        {
+            throw new InvalidOperationException("Expected an unavailable tag font to fall back to printable glyph geometry.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that early XAML value events cannot access controls created later in the options panel.
+    /// </summary>
+    private static void ValidateTagOptionsInitializeSafely()
+    {
+        if (Application.Current == null)
+        {
+            Pillar.UI.App application = new Pillar.UI.App();
+            application.InitializeComponent();
+        }
+
+        TagToolOptionsControl control = new TagToolOptionsControl();
+        TagSettings settings = control.GetSettings();
+
+        if (MathF.Abs(settings.OuterWidth - 8.5f) > 0.0001f
+            || MathF.Abs(settings.InnerWidth - 8.5f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the Tag options panel to initialize its default widths.");
+        }
+
+        NumericUpDown tagHeightInput = (NumericUpDown)control.FindName("TagHeightInput");
+        NumericUpDown borderOffsetInput = (NumericUpDown)control.FindName("BorderOffsetInput");
+        NumericUpDown fontSizeInput = (NumericUpDown)control.FindName("FontSizeInput");
+        NumericUpDown outerWidthInput = (NumericUpDown)control.FindName("OuterWidthInput");
+        tagHeightInput.Value = 3.0;
+
+        if (borderOffsetInput.Minimum < 3.0
+            || borderOffsetInput.Value < 3.0
+            || outerWidthInput.Minimum < fontSizeInput.Value + borderOffsetInput.Value)
+        {
+            throw new InvalidOperationException("Expected Tag Height to clamp Border Offset and its dependent Outer Width minimum.");
         }
     }
 

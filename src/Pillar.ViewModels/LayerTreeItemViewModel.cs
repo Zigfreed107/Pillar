@@ -94,7 +94,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanPickColor
     {
-        get { return Kind == LayerTreeItemKind.SupportGroup || Kind == LayerTreeItemKind.Raft; }
+        get { return Kind == LayerTreeItemKind.SupportGroup || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag; }
     }
 
     /// <summary>
@@ -114,6 +114,14 @@ public partial class LayerTreeItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether this row should show a tag tool edit button.
+    /// </summary>
+    public bool CanEditTag
+    {
+        get { return Kind == LayerTreeItemKind.Tag; }
+    }
+
+    /// <summary>
     /// Gets whether this row should show a support modifier edit button.
     /// </summary>
     public bool CanEditSupportModifier
@@ -126,7 +134,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanEditLayerTool
     {
-        get { return CanEditRaft || CanEditSupportGroup || CanEditSupportModifier; }
+        get { return CanEditRaft || CanEditTag || CanEditSupportGroup || CanEditSupportModifier; }
     }
 
     /// <summary>
@@ -134,7 +142,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanToggleVisibility
     {
-        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.SupportGroup; }
+        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag || Kind == LayerTreeItemKind.SupportGroup; }
     }
 
     /// <summary>

@@ -169,7 +169,15 @@ public class CadDocument
 
         foreach (CadEntity entity in replacementEntities)
         {
-            if (entity is not MeshEntity && entity is not SupportEntity)
+            if (entity is RaftEntity)
+            {
+                AddEntity(entity);
+            }
+        }
+
+        foreach (CadEntity entity in replacementEntities)
+        {
+            if (entity is not MeshEntity && entity is not SupportEntity && entity is not RaftEntity)
             {
                 AddEntity(entity);
             }
@@ -319,6 +327,42 @@ public class CadDocument
     }
 
     /// <summary>
+    /// Updates one tag display color while preserving its identity and generated geometry.
+    /// </summary>
+    public void SetTagColor(TagEntity tag, SupportLayerColor color)
+    {
+        if (tag == null)
+        {
+            throw new ArgumentNullException(nameof(tag));
+        }
+
+        if (!_entities.Contains(tag))
+        {
+            throw new InvalidOperationException("The tag is not part of this document.");
+        }
+
+        tag.SetColor(color);
+    }
+
+    /// <summary>
+    /// Gets all tags attached to the raft owned by one imported model.
+    /// </summary>
+    public IReadOnlyList<TagEntity> GetTagsForModel(Guid modelEntityId)
+    {
+        List<TagEntity> tags = new List<TagEntity>();
+
+        foreach (CadEntity entity in _entities)
+        {
+            if (entity is TagEntity tag && tag.ModelEntityId == modelEntityId)
+            {
+                tags.Add(tag);
+            }
+        }
+
+        return tags;
+    }
+
+    /// <summary>
     /// Gets all support entities owned by one support layer group.
     /// </summary>
     public IReadOnlyList<SupportEntity> GetSupportEntitiesForGroup(Guid supportLayerGroupId)
@@ -456,6 +500,21 @@ public class CadDocument
             return;
         }
 
+        if (entity is TagEntity tagEntity)
+        {
+            if (!ContainsMeshEntity(tagEntity.ModelEntityId))
+            {
+                throw new InvalidOperationException("Tags can only be added under imported mesh entities.");
+            }
+
+            if (FindRaftForModel(tagEntity.ModelEntityId) == null)
+            {
+                throw new InvalidOperationException("Tags can only be added to models that own a raft.");
+            }
+
+            return;
+        }
+
         if (entity is not SupportEntity supportEntity)
         {
             return;
@@ -486,6 +545,14 @@ public class CadDocument
         }
 
         RaftEntity? raft = FindRaftForModel(entity.Id);
+
+        for (int i = _entities.Count - 1; i >= 0; i--)
+        {
+            if (_entities[i] is TagEntity tag && tag.ModelEntityId == entity.Id)
+            {
+                RemoveEntity(tag);
+            }
+        }
 
         if (raft != null)
         {

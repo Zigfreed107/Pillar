@@ -10,6 +10,7 @@ using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
+using Pillar.Geometry.Tags;
 using Pillar.Rendering.BackgroundGrid;
 using Pillar.Rendering.EntityRenderers;
 using Pillar.Rendering.Preview;
@@ -45,6 +46,7 @@ public class SceneManager
     private readonly Dictionary<Guid, PhongMaterial> _supportLayerGroupMaterials = new Dictionary<Guid, PhongMaterial>();
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _tagLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
     private readonly Point[] _supportWindowSelectionPathBuffer = new Point[5];
@@ -59,6 +61,7 @@ public class SceneManager
     private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
     private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
     private readonly DirectEditPreviewRenderer _directEditPreviewRenderer;
+    private readonly TagPreviewRenderer _tagPreviewRenderer;
     private readonly SupportAngleHighlightRenderer _supportAngleHighlightRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly RotationOriginPreviewRenderer _rotationOriginPreviewRenderer;
@@ -200,6 +203,7 @@ public class SceneManager
         _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
         _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
         _directEditPreviewRenderer = new DirectEditPreviewRenderer(_previewRoot, _supportSides);
+        _tagPreviewRenderer = new TagPreviewRenderer(_previewRoot);
         _supportAngleHighlightRenderer = new SupportAngleHighlightRenderer(_previewRoot, _supportSides);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _rotationOriginPreviewRenderer = new RotationOriginPreviewRenderer(_previewRoot);
@@ -340,6 +344,21 @@ public class SceneManager
                 MeshRenderer.ApplyToSelectableMeshModels(raftVisual, (MeshGeometryModel3D meshModel) =>
                 {
                     meshModel.Material = raftMaterial;
+                });
+            }
+
+            return;
+        }
+
+        if (sender is TagEntity tagEntity)
+        {
+            if (string.Equals(e.PropertyName, nameof(TagEntity.Color), StringComparison.Ordinal)
+                && _entityToVisual.TryGetValue(tagEntity, out GroupModel3D? tagVisual))
+            {
+                PhongMaterial tagMaterial = TagRenderer.CreateMaterial(tagEntity.Color, 1.0f);
+                MeshRenderer.ApplyToSelectableMeshModels(tagVisual, (MeshGeometryModel3D meshModel) =>
+                {
+                    meshModel.Material = tagMaterial;
                 });
             }
 
@@ -909,6 +928,47 @@ public class SceneManager
             _selectionManager.RemoveFromSelection(entity);
         }
     }
+
+    /// <summary>
+    /// Applies session visibility to one generated raft tag.
+    /// </summary>
+    public void SetTagLayerVisibility(Guid tagEntityId, bool isVisible)
+    {
+        _tagLayerVisibilityById[tagEntityId] = isVisible;
+        CadEntity? entity = FindEntityById(tagEntityId);
+
+        if (entity is not TagEntity)
+        {
+            return;
+        }
+
+        if (_entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
+        {
+            ApplyEntityVisibility(entity, visual);
+        }
+
+        if (!isVisible)
+        {
+            _selectionManager.RemoveFromSelection(entity);
+        }
+    }
+
+    /// <summary>
+    /// Shows one transient tag body without adding it to the document entity tree.
+    /// </summary>
+    public void ShowTagPreview(TagMeshData mesh, SupportLayerColor color, float opacity)
+    {
+        _tagPreviewRenderer.Show(mesh, color, opacity);
+    }
+
+    /// <summary>
+    /// Removes the transient tag preview.
+    /// </summary>
+    public void HideTagPreview()
+    {
+        _tagPreviewRenderer.Hide();
+    }
+
     /// <summary>
     /// Applies session visibility to every support visual in one support group layer.
     /// </summary>
@@ -1165,6 +1225,11 @@ public class SceneManager
             return RaftRenderer.Create(raft);
         }
 
+        if (entity is TagEntity tag)
+        {
+            return TagRenderer.Create(tag);
+        }
+
         return null;
     }
 
@@ -1226,6 +1291,10 @@ public class SceneManager
         {
             _raftLayerVisibilityById.Remove(entity.Id);
         }
+        else if (entity is TagEntity)
+        {
+            _tagLayerVisibilityById.Remove(entity.Id);
+        }
     }
 
     /// <summary>
@@ -1274,6 +1343,18 @@ public class SceneManager
                 meshModel.PostEffects = string.Empty;
                 meshModel.IsSelected = false;
                 meshModel.Material = raftMaterial;
+            });
+            return;
+        }
+
+        if (entity is TagEntity tagEntity)
+        {
+            PhongMaterial tagMaterial = TagRenderer.CreateMaterial(tagEntity.Color, 1.0f);
+            MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
+            {
+                meshModel.PostEffects = string.Empty;
+                meshModel.IsSelected = false;
+                meshModel.Material = tagMaterial;
             });
             return;
         }
@@ -1439,6 +1520,11 @@ public class SceneManager
         if (entity is RaftEntity raftEntity)
         {
             return !_raftLayerVisibilityById.TryGetValue(raftEntity.Id, out bool isVisible) || isVisible;
+        }
+
+        if (entity is TagEntity tagEntity)
+        {
+            return !_tagLayerVisibilityById.TryGetValue(tagEntity.Id, out bool isVisible) || isVisible;
         }
 
         return true;

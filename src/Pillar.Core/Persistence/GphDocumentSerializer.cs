@@ -6,6 +6,7 @@ using Pillar.Core.Layers;
 using Pillar.Core.Rafts;
 using Pillar.Core.Selection;
 using Pillar.Core.Supports;
+using Pillar.Core.Tags;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,6 +25,7 @@ public sealed class GphDocumentSerializer
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
     private const string RaftTypeName = "raft";
+    private const string TagTypeName = "tag";
     private const string RingSupportGeneratorName = "ringSupport";
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
@@ -140,6 +142,7 @@ public sealed class GphDocumentSerializer
         }
 
         ValidateLoadedRafts(entities);
+        ValidateLoadedTags(entities);
         List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
         AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
         ValidateLoadedSupportModifiers(supportLayerGroups, entities);
@@ -213,6 +216,41 @@ public sealed class GphDocumentSerializer
             };
 
             foreach (Vector3 vertex in raft.Vertices)
+            {
+                dto.Vertices.Add(CreateVectorDto(vertex));
+            }
+
+            return dto;
+        }
+
+        if (entity is TagEntity tag)
+        {
+            GphEntityDto dto = new GphEntityDto
+            {
+                Type = TagTypeName,
+                Id = tag.Id,
+                Name = tag.Name,
+                ModelEntityId = tag.ModelEntityId,
+                AttachmentPoint = CreateVectorDto(tag.AttachmentPoint),
+                Tangent = CreateVectorDto(tag.Tangent),
+                TriangleIndices = new List<int>(tag.TriangleIndices),
+                Color = CreateSupportLayerColorDto(tag.Color),
+                TagSettings = new GphTagSettingsDto
+                {
+                    TagHeight = tag.Settings.TagHeight,
+                    EdgeAngleDegrees = tag.Settings.EdgeAngleDegrees,
+                    BorderOffset = tag.Settings.BorderOffset,
+                    Text = tag.Settings.Text,
+                    FontFamilyName = tag.Settings.FontFamilyName,
+                    FontSize = tag.Settings.FontSize,
+                    TextHeight = tag.Settings.TextHeight,
+                    IsTextFlipped = tag.Settings.IsTextFlipped,
+                    OuterWidth = tag.Settings.OuterWidth,
+                    InnerWidth = tag.Settings.InnerWidth
+                }
+            };
+
+            foreach (Vector3 vertex in tag.Vertices)
             {
                 dto.Vertices.Add(CreateVectorDto(vertex));
             }
@@ -415,6 +453,30 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Validates that every saved tag belongs to a model with a saved raft.
+    /// </summary>
+    private static void ValidateLoadedTags(IReadOnlyList<CadEntity> entities)
+    {
+        HashSet<Guid> raftModelEntityIds = new HashSet<Guid>();
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is RaftEntity raft)
+            {
+                raftModelEntityIds.Add(raft.ModelEntityId);
+            }
+        }
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is TagEntity tag && !raftModelEntityIds.Contains(tag.ModelEntityId))
+            {
+                throw new InvalidDataException("A saved tag references a model without a raft.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Recreates saved support entities after support group ownership has been validated and restored.
     /// </summary>
     private static void AddSupportEntities(
@@ -529,6 +591,11 @@ public sealed class GphDocumentSerializer
             return CreateRaftEntity(entityDto);
         }
 
+        if (string.Equals(entityDto.Type, TagTypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateTagEntity(entityDto);
+        }
+
         if (string.Equals(entityDto.Type, SupportTypeName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("Support entities must be created after support groups are loaded.");
@@ -635,6 +702,48 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Recreates a generated raft tag and its editable settings from embedded triangle buffers.
+    /// </summary>
+    private static TagEntity CreateTagEntity(GphEntityDto entityDto)
+    {
+        if (!entityDto.ModelEntityId.HasValue || entityDto.ModelEntityId.Value == Guid.Empty)
+        {
+            throw new InvalidDataException("A saved tag is missing its owning model id.");
+        }
+
+        if (entityDto.TagSettings == null
+            || entityDto.AttachmentPoint == null
+            || entityDto.Tangent == null
+            || entityDto.TriangleIndices == null)
+        {
+            throw new InvalidDataException("A saved tag is missing settings, placement, or triangle indices.");
+        }
+
+        GphTagSettingsDto settingsDto = entityDto.TagSettings;
+        TagSettings settings = new TagSettings(
+            settingsDto.TagHeight,
+            settingsDto.EdgeAngleDegrees,
+            settingsDto.BorderOffset,
+            settingsDto.Text,
+            settingsDto.FontFamilyName,
+            settingsDto.FontSize,
+            settingsDto.TextHeight,
+            settingsDto.IsTextFlipped,
+            settingsDto.OuterWidth,
+            settingsDto.InnerWidth);
+
+        return TagEntity.CreateLoaded(
+            entityDto.Id,
+            entityDto.ModelEntityId.Value,
+            settings,
+            CreateVector(entityDto.AttachmentPoint),
+            CreateVector(entityDto.Tangent),
+            CreateVectorList(entityDto.Vertices, "tag vertices"),
+            new List<int>(entityDto.TriangleIndices),
+            CreateLayerColorOrDefault(entityDto.Color, entityDto.Id));
+    }
+
+    /// <summary>
     /// Recreates a support entity after validating its owning support group and profile payload.
     /// </summary>
     private static SupportEntity CreateSupportEntity(GphEntityDto entityDto, HashSet<Guid> supportLayerGroupIds)
@@ -683,6 +792,26 @@ public sealed class GphDocumentSerializer
             Y = vector.Y,
             Z = vector.Z
         };
+    }
+
+    /// <summary>
+    /// Converts one runtime 2D vector into a stable serialized shape.
+    /// </summary>
+    private static GphVector2Dto CreateVectorDto(Vector2 vector)
+    {
+        return new GphVector2Dto
+        {
+            X = vector.X,
+            Y = vector.Y
+        };
+    }
+
+    /// <summary>
+    /// Converts one serialized 2D vector into its runtime value.
+    /// </summary>
+    private static Vector2 CreateVector(GphVector2Dto vector)
+    {
+        return new Vector2(vector.X, vector.Y);
     }
 
     /// <summary>
@@ -1754,6 +1883,9 @@ public sealed class GphDocumentSerializer
         public Guid? ModelEntityId { get; set; }
         public GphSupportLayerColorDto? Color { get; set; }
         public GphRaftSettingsDto? RaftSettings { get; set; }
+        public GphTagSettingsDto? TagSettings { get; set; }
+        public GphVector3Dto? AttachmentPoint { get; set; }
+        public GphVector2Dto? Tangent { get; set; }
     }
 
     /// <summary>
@@ -1771,6 +1903,32 @@ public sealed class GphDocumentSerializer
         public float MaxSideLength { get; set; } = RaftSettings.DefaultMaxSideLength;
         public float FootSize { get; set; } = RaftSettings.DefaultFootSize;
         public float EdgeAngleDegrees { get; set; } = RaftSettings.DefaultEdgeAngleDegrees;
+    }
+
+    /// <summary>
+    /// DTO for persisted editable tag settings.
+    /// </summary>
+    private sealed class GphTagSettingsDto
+    {
+        public float TagHeight { get; set; } = TagSettings.DefaultTagHeight;
+        public float EdgeAngleDegrees { get; set; } = TagSettings.DefaultEdgeAngleDegrees;
+        public float BorderOffset { get; set; } = TagSettings.DefaultBorderOffset;
+        public string Text { get; set; } = string.Empty;
+        public string FontFamilyName { get; set; } = TagSettings.DefaultFontFamilyName;
+        public float FontSize { get; set; } = TagSettings.DefaultFontSize;
+        public float TextHeight { get; set; } = TagSettings.DefaultTextHeight;
+        public bool IsTextFlipped { get; set; }
+        public float? OuterWidth { get; set; }
+        public float? InnerWidth { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for stable Vector2 serialization without relying on System.Numerics internals.
+    /// </summary>
+    private sealed class GphVector2Dto
+    {
+        public float X { get; set; }
+        public float Y { get; set; }
     }
 
     /// <summary>

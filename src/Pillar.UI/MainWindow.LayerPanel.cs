@@ -133,7 +133,32 @@ public partial class MainWindow
         if (selectedLayer.Kind == LayerTreeItemKind.SupportModifier)
         {
             RemoveSelectedSupportModifier(selectedLayer);
+            return;
         }
+
+        if (selectedLayer.Kind == LayerTreeItemKind.Tag)
+        {
+            RemoveSelectedTagLayer(selectedLayer);
+        }
+    }
+
+    /// <summary>
+    /// Removes one selected tag as an undoable document edit.
+    /// </summary>
+    private void RemoveSelectedTagLayer(LayerTreeItemViewModel selectedLayer)
+    {
+        TagEntity? tag = FindEntityById(selectedLayer.Id) as TagEntity;
+
+        if (tag == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        CancelLayerRemovalSessions();
+        _commandRunner.Execute(new ReplaceTagCommand(_document, tag, null));
+        _layerPanelViewModel.SelectRaftLayer(_document.FindRaftForModel(tag.ModelEntityId)?.Id ?? Guid.Empty);
+        _viewModel.SetStatusText("Removed tag.");
     }
 
     /// <summary>
@@ -151,7 +176,7 @@ public partial class MainWindow
 
         MessageBoxResult result = MessageBox.Show(
             this,
-            $"The model '{selectedModel.Name}' and all of its supports and raft will be permanently deleted from the project.",
+            $"The model '{selectedModel.Name}' and all of its supports, raft, and tags will be permanently deleted from the project.",
             "Remove Model",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning);
@@ -213,7 +238,8 @@ public partial class MainWindow
                     selectedModel,
                     supportEntities,
                     Properties.Settings.Default.SupportSides,
-                    _document.FindRaftForModel(selectedModel.Id));
+                    _document.FindRaftForModel(selectedModel.Id),
+                    _document.GetTagsForModel(selectedModel.Id));
             });
 
             string fileName = Path.GetFileName(dialog.FileName);
@@ -447,6 +473,21 @@ public partial class MainWindow
             _layerPanelViewModel.SetRaftLayerVisibility(raft.Id, e.IsVisible);
             _scene.SetRaftLayerVisibility(raft.Id, e.IsVisible);
             _viewModel.SetStatusText(e.IsVisible ? "Showed raft" : "Hid raft");
+            return;
+        }
+
+        if (e.LayerKind == LayerTreeItemKind.Tag)
+        {
+            TagEntity? tag = FindEntityById(e.LayerId) as TagEntity;
+            if (tag == null)
+            {
+                _layerPanelViewModel.RefreshFromDocument();
+                return;
+            }
+
+            _layerPanelViewModel.SetTagLayerVisibility(tag.Id, e.IsVisible);
+            _scene.SetTagLayerVisibility(tag.Id, e.IsVisible);
+            _viewModel.SetStatusText(e.IsVisible ? "Showed tag" : "Hid tag");
         }
     }
 
@@ -611,6 +652,31 @@ public partial class MainWindow
 
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText("Changed raft color");
+    }
+
+    /// <summary>
+    /// Applies a tag color change as one undoable document command.
+    /// </summary>
+    private void LayerPanel_ChangeTagColorRequested(object? sender, LayerTagColorChangeRequestedEventArgs e)
+    {
+        _ = sender;
+        TagEntity? tag = FindEntityById(e.TagEntityId) as TagEntity;
+
+        if (tag == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        if (tag.Color == e.NewColor)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _commandRunner.Execute(new SetTagColorCommand(_document, tag, e.OldColor, e.NewColor));
+        _layerPanelViewModel.RefreshFromDocument();
+        _viewModel.SetStatusText("Changed tag color");
     }
     /// <summary>
     /// Captures the support groups owned by one imported model before the model is removed.

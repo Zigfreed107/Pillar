@@ -150,6 +150,7 @@ public static class Program
 
         SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);
+        TagSmokeTests.Run(failures);
 
         if (failures.Count > 0)
         {

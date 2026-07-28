@@ -254,6 +254,17 @@ public partial class ModePanel : UserControl
         _ = e;
         RaiseToolSelected("Raft");
     }
+
+    /// <summary>
+    /// Opens the raft Tag tool for the current eligible model.
+    /// </summary>
+    private void TagButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RaiseToolSelected("Tag");
+    }
+
     private void RaiseToolSelected(string toolName)
     {
         ToolSelected?.Invoke(this, new ToolSelectedEventArgs(toolName));

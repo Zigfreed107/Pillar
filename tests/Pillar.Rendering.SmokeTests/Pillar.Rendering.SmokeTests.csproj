@@ -8,5 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pillar.Rendering\Pillar.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\Pillar.UI\Pillar.UI.csproj" />
   </ItemGroup>
 </Project>
