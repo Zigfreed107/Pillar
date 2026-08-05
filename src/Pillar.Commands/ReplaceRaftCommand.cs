@@ -16,6 +16,7 @@ public sealed class ReplaceRaftCommand : ICadCommand
     private readonly RaftEntity? _oldRaft;
     private readonly RaftEntity? _newRaft;
     private readonly List<TagEntity> _ownedTags;
+    private readonly List<RaftTextEntity> _ownedRaftTexts;
     private bool _hasExecuted;
 
     /// <summary>
@@ -36,6 +37,7 @@ public sealed class ReplaceRaftCommand : ICadCommand
         }
 
         _ownedTags = new List<TagEntity>(_document.GetTagsForModel(modelEntityId));
+        _ownedRaftTexts = new List<RaftTextEntity>(_document.GetRaftTextsForModel(modelEntityId));
 
         DisplayName = oldRaft == null ? "Add Raft" : newRaft == null ? "Remove Raft" : "Update Raft";
     }
@@ -74,6 +76,10 @@ public sealed class ReplaceRaftCommand : ICadCommand
             {
                 _document.RemoveEntity(_ownedTags[i]);
             }
+            for (int i = 0; i < _ownedRaftTexts.Count; i++)
+            {
+                _document.RemoveEntity(_ownedRaftTexts[i]);
+            }
         }
 
         if (removedRaft != null) _document.RemoveEntity(removedRaft);
@@ -84,6 +90,10 @@ public sealed class ReplaceRaftCommand : ICadCommand
             for (int i = 0; i < _ownedTags.Count; i++)
             {
                 _document.AddEntity(_ownedTags[i]);
+            }
+            for (int i = 0; i < _ownedRaftTexts.Count; i++)
+            {
+                _document.AddEntity(_ownedRaftTexts[i]);
             }
         }
     }

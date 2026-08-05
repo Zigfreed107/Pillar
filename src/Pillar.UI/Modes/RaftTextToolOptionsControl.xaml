@@ -1,0 +1,72 @@
+<!--
+    RaftTextToolOptionsControl.xaml
+    Presents editable raft text settings and placement guidance while the pointer controls location.
+-->
+<UserControl x:Class="Pillar.UI.Modes.RaftTextToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls"
+             MinWidth="290">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <Grid>
+            <StackPanel x:Name="OptionsPanel">
+                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Raft Text" />
+
+                <TextBlock Margin="0,10,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Text" />
+                <TextBox x:Name="RaftTextBox" Margin="0,4,0,0" TextChanged="AnyTextOption_Changed" />
+
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Font" />
+                <ComboBox x:Name="FontComboBox"
+                          Margin="0,4,0,0"
+                          IsTextSearchEnabled="True"
+                          SelectionChanged="AnySelectionOption_Changed" />
+
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Font Size (mm)" />
+                <controls:NumericUpDown x:Name="FontSizeInput"
+                                        Margin="0,4,0,0"
+                                        Minimum="0.01"
+                                        Maximum="100"
+                                        Increment="0.5"
+                                        Value="5"
+                                        ValueChanged="AnyOption_Changed" />
+
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Text Height (mm)" />
+                <controls:NumericUpDown x:Name="TextHeightInput"
+                                        Margin="0,4,0,0"
+                                        Minimum="0.1"
+                                        Maximum="100"
+                                        Increment="0.1"
+                                        Value="1"
+                                        ValueChanged="AnyOption_Changed" />
+
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Orientation (degrees)" />
+                <controls:NumericUpDown x:Name="OrientationInput"
+                                        Margin="0,4,0,0"
+                                        Minimum="0"
+                                        Maximum="360"
+                                        Increment="1"
+                                        Value="0"
+                                        ValueChanged="AnyOption_Changed" />
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="Place" Click="PlaceButton_Click" />
+                    <Button Grid.Column="2" Content="Close" Click="CloseButton_Click" />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel x:Name="PlacementInstructionsPanel"
+                        VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Place Raft Text" />
+                <TextBlock Margin="0,10,0,0"
+                           Style="{StaticResource ModeOverlayBodyTextStyle}"
+                           Text="Move the mouse in the viewer to choose the text's location. Click to place the text." />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

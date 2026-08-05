@@ -503,6 +503,10 @@ public partial class MainWindow
         {
             CancelTagToolSession();
         }
+        if (!string.Equals(selectedToolName, "Raft Text", StringComparison.Ordinal))
+        {
+            CancelRaftTextToolSession();
+        }
         if (!string.Equals(selectedToolName, "Raft", StringComparison.Ordinal))
         {
             CancelRaftToolSession();
@@ -551,6 +555,11 @@ public partial class MainWindow
         if (string.Equals(selectedToolName, "Tag", StringComparison.Ordinal))
         {
             ShowTagToolForCurrentSelection();
+            return;
+        }
+        if (string.Equals(selectedToolName, "Raft Text", StringComparison.Ordinal))
+        {
+            ShowRaftTextToolForCurrentSelection();
             return;
         }
         if (string.Equals(selectedToolName, "Point Support", StringComparison.Ordinal))
@@ -615,6 +624,7 @@ public partial class MainWindow
     {
         CancelRaftToolSession();
         CancelTagToolSession();
+        CancelRaftTextToolSession();
         if (ToolOptionsHostOverlay.Content == _directEditToolOptionsControl)
         {
             ClearDirectEditSessionState();
@@ -634,6 +644,7 @@ public partial class MainWindow
     {
         CancelRaftToolSession();
         CancelTagToolSession();
+        CancelRaftTextToolSession();
         _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
@@ -803,7 +814,7 @@ public partial class MainWindow
     /// </summary>
     private void UpdateToolOptionsHostVisibilityForWorkflowContext()
     {
-        if (IsRaftToolActive() || IsTagToolActive() || IsSupportToolEditActive() || IsSupportModifierToolActive())
+        if (IsRaftToolActive() || IsTagToolActive() || IsRaftTextToolActive() || IsSupportToolEditActive() || IsSupportModifierToolActive())
         {
             return;
         }
@@ -1088,6 +1099,7 @@ public partial class MainWindow
 
         return -1;
     }
+
     /// <summary>
     /// Confirms modifier edits that will remove later modifier stack entries.
     /// </summary>

@@ -9,6 +9,7 @@ using Pillar.Core.Layers;
 using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
+using Pillar.Geometry.RaftTexts;
 using Pillar.Geometry.Supports;
 using Pillar.Geometry.Tags;
 using Pillar.Rendering.BackgroundGrid;
@@ -47,6 +48,7 @@ public class SceneManager
     private readonly Dictionary<Guid, bool> _modelLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _tagLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _raftTextLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _supportLayerGroupVisibilityById = new Dictionary<Guid, bool>();
     private readonly List<SupportEntity> _supportGroupQueryBuffer = new List<SupportEntity>(256);
     private readonly Point[] _supportWindowSelectionPathBuffer = new Point[5];
@@ -62,6 +64,7 @@ public class SceneManager
     private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
     private readonly DirectEditPreviewRenderer _directEditPreviewRenderer;
     private readonly TagPreviewRenderer _tagPreviewRenderer;
+    private readonly RaftTextPreviewRenderer _raftTextPreviewRenderer;
     private readonly SupportAngleHighlightRenderer _supportAngleHighlightRenderer;
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly RotationOriginPreviewRenderer _rotationOriginPreviewRenderer;
@@ -204,6 +207,7 @@ public class SceneManager
         _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
         _directEditPreviewRenderer = new DirectEditPreviewRenderer(_previewRoot, _supportSides);
         _tagPreviewRenderer = new TagPreviewRenderer(_previewRoot);
+        _raftTextPreviewRenderer = new RaftTextPreviewRenderer(_previewRoot);
         _supportAngleHighlightRenderer = new SupportAngleHighlightRenderer(_previewRoot, _supportSides);
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _rotationOriginPreviewRenderer = new RotationOriginPreviewRenderer(_previewRoot);
@@ -364,6 +368,20 @@ public class SceneManager
 
             return;
         }
+        if (sender is RaftTextEntity raftTextEntity)
+        {
+            if (string.Equals(e.PropertyName, nameof(RaftTextEntity.Color), StringComparison.Ordinal)
+                && _entityToVisual.TryGetValue(raftTextEntity, out GroupModel3D? raftTextVisual))
+            {
+                PhongMaterial material = RaftTextRenderer.CreateMaterial(raftTextEntity.Color, 1.0f);
+                MeshRenderer.ApplyToSelectableMeshModels(raftTextVisual, (MeshGeometryModel3D meshModel) =>
+                {
+                    meshModel.Material = material;
+                });
+            }
+
+            return;
+        }
 
         if (sender is not MeshEntity meshEntity
             || !_entityToVisual.TryGetValue(meshEntity, out GroupModel3D? visual))
@@ -431,6 +449,7 @@ public class SceneManager
         }
         return null;
     }
+
     /// <summary>
     /// Hit-tests the viewport and returns the front-most document entity under the supplied screen position.
     /// </summary>
@@ -623,6 +642,7 @@ public class SceneManager
     {
         _directEditPreviewRenderer.Hide();
     }
+
     /// <summary>
     /// Adds support entities from one support group that satisfy the supplied screen-space selection rectangle.
     /// </summary>
@@ -970,6 +990,70 @@ public class SceneManager
     }
 
     /// <summary>
+    /// Applies session visibility to one generated raft text entity.
+    /// </summary>
+    public void SetRaftTextLayerVisibility(Guid raftTextEntityId, bool isVisible)
+    {
+        _raftTextLayerVisibilityById[raftTextEntityId] = isVisible;
+        CadEntity? entity = FindEntityById(raftTextEntityId);
+
+        if (entity is not RaftTextEntity)
+        {
+            return;
+        }
+
+        if (_entityToVisual.TryGetValue(entity, out GroupModel3D? visual))
+        {
+            ApplyEntityVisibility(entity, visual);
+        }
+
+        if (!isVisible)
+        {
+            _selectionManager.RemoveFromSelection(entity);
+        }
+    }
+
+    /// <summary>
+    /// Prepares reusable local raft text geometry before pointer movement begins.
+    /// </summary>
+    public void PrepareMovingRaftTextPreview(RaftTextMeshData localMesh, SupportLayerColor color, float opacity)
+    {
+        _raftTextPreviewRenderer.PrepareMoving(localMesh, color, opacity);
+    }
+
+    /// <summary>
+    /// Moves the prepared raft text preview without rebuilding its geometry.
+    /// </summary>
+    public void MovePreparedRaftTextPreview(Vector3 placement)
+    {
+        _raftTextPreviewRenderer.MovePrepared(placement);
+    }
+
+    /// <summary>
+    /// Hides prepared raft text while retaining its geometry for later pointer movement.
+    /// </summary>
+    public void HidePreparedRaftTextPreview()
+    {
+        _raftTextPreviewRenderer.HidePrepared();
+    }
+
+    /// <summary>
+    /// Shows one transient raft text mesh without adding it to the document tree.
+    /// </summary>
+    public void ShowRaftTextPreview(RaftTextMeshData mesh, SupportLayerColor color, float opacity)
+    {
+        _raftTextPreviewRenderer.Show(mesh, color, opacity);
+    }
+
+    /// <summary>
+    /// Removes the transient raft text preview.
+    /// </summary>
+    public void HideRaftTextPreview()
+    {
+        _raftTextPreviewRenderer.Hide();
+    }
+
+    /// <summary>
     /// Applies session visibility to every support visual in one support group layer.
     /// </summary>
     public void SetSupportLayerGroupVisibility(Guid supportLayerGroupId, bool isVisible)
@@ -1229,6 +1313,10 @@ public class SceneManager
         {
             return TagRenderer.Create(tag);
         }
+        if (entity is RaftTextEntity raftText)
+        {
+            return RaftTextRenderer.Create(raftText);
+        }
 
         return null;
     }
@@ -1295,6 +1383,10 @@ public class SceneManager
         {
             _tagLayerVisibilityById.Remove(entity.Id);
         }
+        else if (entity is RaftTextEntity)
+        {
+            _raftTextLayerVisibilityById.Remove(entity.Id);
+        }
     }
 
     /// <summary>
@@ -1355,6 +1447,17 @@ public class SceneManager
                 meshModel.PostEffects = string.Empty;
                 meshModel.IsSelected = false;
                 meshModel.Material = tagMaterial;
+            });
+            return;
+        }
+        if (entity is RaftTextEntity raftTextEntity)
+        {
+            PhongMaterial material = RaftTextRenderer.CreateMaterial(raftTextEntity.Color, 1.0f);
+            MeshRenderer.ApplyToSelectableMeshModels(group, (MeshGeometryModel3D meshModel) =>
+            {
+                meshModel.PostEffects = string.Empty;
+                meshModel.IsSelected = false;
+                meshModel.Material = material;
             });
             return;
         }
@@ -1525,6 +1628,10 @@ public class SceneManager
         if (entity is TagEntity tagEntity)
         {
             return !_tagLayerVisibilityById.TryGetValue(tagEntity.Id, out bool isVisible) || isVisible;
+        }
+        if (entity is RaftTextEntity raftTextEntity)
+        {
+            return !_raftTextLayerVisibilityById.TryGetValue(raftTextEntity.Id, out bool isVisible) || isVisible;
         }
 
         return true;

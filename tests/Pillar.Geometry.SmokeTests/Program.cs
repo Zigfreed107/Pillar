@@ -151,6 +151,7 @@ public static class Program
         SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);
         TagSmokeTests.Run(failures);
+        RaftTextSmokeTests.Run(failures);
 
         if (failures.Count > 0)
         {
@@ -1966,6 +1967,7 @@ public static class Program
             throw new InvalidOperationException("Expected selected buttressing to be replaced while unselected targets retain their existing modifiers.");
         }
     }
+
     /// <summary>
     /// Validates that removing one visible tool session removes and restores all of its internal actions together.
     /// </summary>
@@ -2067,6 +2069,7 @@ public static class Program
             throw new InvalidOperationException("Expected undo to restore the complete mixed bracing tool session.");
         }
     }
+
     /// <summary>
     /// Validates that output replacement adds and removes only generated members while retaining source instances.
     /// </summary>
@@ -2213,6 +2216,7 @@ public static class Program
             throw new InvalidOperationException("Expected every equivalent generated reinforcement entity to be retained.");
         }
     }
+
     /// <summary>
     /// Validates that clustered supports are excluded from both Brace and Buttress target populations.
     /// </summary>
@@ -4478,6 +4482,7 @@ public static class Program
 
         throw new InvalidOperationException("Expected saved smoke-test project to contain one support modifier.");
     }
+
     /// <summary>
     /// Validates that removing file versioning does not remove the Graphite file identity check.
     /// </summary>
@@ -4902,6 +4907,7 @@ public static class Program
             0.0001f,
             "Direct Edit source restoration did not recover the original stem top.");
     }
+
     /// <summary>
     /// Creates one support entity with a fresh group identity.
     /// </summary>
@@ -6001,14 +6007,3 @@ public static class Program
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-

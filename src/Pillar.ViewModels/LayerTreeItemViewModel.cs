@@ -94,7 +94,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanPickColor
     {
-        get { return Kind == LayerTreeItemKind.SupportGroup || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag; }
+        get { return Kind == LayerTreeItemKind.SupportGroup || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag || Kind == LayerTreeItemKind.RaftText; }
     }
 
     /// <summary>
@@ -122,6 +122,14 @@ public partial class LayerTreeItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether this row should show a raft text tool edit button.
+    /// </summary>
+    public bool CanEditRaftText
+    {
+        get { return Kind == LayerTreeItemKind.RaftText; }
+    }
+
+    /// <summary>
     /// Gets whether this row should show a support modifier edit button.
     /// </summary>
     public bool CanEditSupportModifier
@@ -134,7 +142,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanEditLayerTool
     {
-        get { return CanEditRaft || CanEditTag || CanEditSupportGroup || CanEditSupportModifier; }
+        get { return CanEditRaft || CanEditTag || CanEditRaftText || CanEditSupportGroup || CanEditSupportModifier; }
     }
 
     /// <summary>
@@ -142,7 +150,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public bool CanToggleVisibility
     {
-        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag || Kind == LayerTreeItemKind.SupportGroup; }
+        get { return Kind == LayerTreeItemKind.Model || Kind == LayerTreeItemKind.Raft || Kind == LayerTreeItemKind.Tag || Kind == LayerTreeItemKind.RaftText || Kind == LayerTreeItemKind.SupportGroup; }
     }
 
     /// <summary>

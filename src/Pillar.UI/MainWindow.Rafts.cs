@@ -120,6 +120,7 @@ public partial class MainWindow
         }
 
         CancelTagToolSession();
+        CancelRaftTextToolSession();
         CancelRaftToolSession();
         _activeRaftModelEntityId = modelEntityId;
         _originalRaft = originalRaft;

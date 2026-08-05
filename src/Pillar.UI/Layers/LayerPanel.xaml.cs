@@ -70,6 +70,11 @@ public partial class LayerPanel : UserControl
     public event EventHandler<LayerTagColorChangeRequestedEventArgs>? ChangeTagColorRequested;
 
     /// <summary>
+    /// Raised when a raft text color should be changed.
+    /// </summary>
+    public event EventHandler<LayerRaftTextColorChangeRequestedEventArgs>? ChangeRaftTextColorRequested;
+
+    /// <summary>
     /// Raised when the selected support group should be opened for tool-specific editing.
     /// </summary>
     public event EventHandler<LayerSupportGroupEditRequestedEventArgs>? EditSupportGroupRequested;
@@ -83,6 +88,11 @@ public partial class LayerPanel : UserControl
     /// Raised when the selected tag should be opened with its current settings.
     /// </summary>
     public event EventHandler<LayerTagEditRequestedEventArgs>? EditTagRequested;
+
+    /// <summary>
+    /// Raised when selected raft text should be opened with its current settings.
+    /// </summary>
+    public event EventHandler<LayerRaftTextEditRequestedEventArgs>? EditRaftTextRequested;
 
     /// <summary>
     /// Raised when one support modifier row should be opened for tool-specific editing.
@@ -246,6 +256,13 @@ public partial class LayerPanel : UserControl
                 new LayerTagColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
             return;
         }
+        if (layer.Kind == LayerTreeItemKind.RaftText)
+        {
+            ChangeRaftTextColorRequested?.Invoke(
+                this,
+                new LayerRaftTextColorChangeRequestedEventArgs(layer.Id, layer.SupportColor, requestedColor));
+            return;
+        }
 
         ChangeSupportGroupColorRequested?.Invoke(
             this,
@@ -284,6 +301,11 @@ public partial class LayerPanel : UserControl
         if (layer.Kind == LayerTreeItemKind.Tag)
         {
             EditTagRequested?.Invoke(this, new LayerTagEditRequestedEventArgs(layer.Id));
+            return;
+        }
+        if (layer.Kind == LayerTreeItemKind.RaftText)
+        {
+            EditRaftTextRequested?.Invoke(this, new LayerRaftTextEditRequestedEventArgs(layer.Id));
             return;
         }
 
@@ -529,6 +551,7 @@ public sealed class LayerRaftColorChangeRequestedEventArgs : EventArgs
     /// </summary>
     public SupportLayerColor NewColor { get; }
 }
+
 /// <summary>
 /// Carries one support modifier edit request from the Layer Panel to the shell.
 /// </summary>
@@ -621,6 +644,45 @@ public sealed class LayerTagColorChangeRequestedEventArgs : EventArgs
     }
 
     public Guid TagEntityId { get; }
+    public SupportLayerColor OldColor { get; }
+    public SupportLayerColor NewColor { get; }
+}
+
+/// <summary>
+/// Carries one generated raft text edit request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerRaftTextEditRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates one raft text edit request.
+    /// </summary>
+    public LayerRaftTextEditRequestedEventArgs(Guid raftTextEntityId)
+    {
+        RaftTextEntityId = raftTextEntityId;
+    }
+
+    public Guid RaftTextEntityId { get; }
+}
+
+/// <summary>
+/// Carries one completed raft text color change request from the Layer Panel to the shell.
+/// </summary>
+public sealed class LayerRaftTextColorChangeRequestedEventArgs : EventArgs
+{
+    /// <summary>
+    /// Creates one completed raft text color request.
+    /// </summary>
+    public LayerRaftTextColorChangeRequestedEventArgs(
+        Guid raftTextEntityId,
+        SupportLayerColor oldColor,
+        SupportLayerColor newColor)
+    {
+        RaftTextEntityId = raftTextEntityId;
+        OldColor = oldColor;
+        NewColor = newColor;
+    }
+
+    public Guid RaftTextEntityId { get; }
     public SupportLayerColor OldColor { get; }
     public SupportLayerColor NewColor { get; }
 }

@@ -369,6 +369,28 @@
                                     </TextBlock>
                                 </StackPanel>
                             </Button>
+                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                    IsEnabled="{Binding CanAddRaftText}"
+                                    Click="RaftTextButton_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}" Text="Raft Text" />
+                                    <TextBlock>
+                                        <TextBlock.Style>
+                                            <Style BasedOn="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                                   TargetType="TextBlock">
+                                                <Setter Property="Text"
+                                                        Value="Select a model with a raft." />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CanAddRaftText}" Value="True">
+                                                        <Setter Property="Text"
+                                                                Value="Add a text to a raft." />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
                         </primitives:UniformGrid>
                     </StackPanel>
                 </TabItem>

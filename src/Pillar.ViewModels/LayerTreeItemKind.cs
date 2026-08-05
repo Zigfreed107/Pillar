@@ -10,6 +10,7 @@ public enum LayerTreeItemKind
     Model,
     Raft,
     Tag,
+    RaftText,
     SupportGroup,
     SupportModifier
 }

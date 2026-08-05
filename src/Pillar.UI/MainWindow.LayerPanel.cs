@@ -139,6 +139,12 @@ public partial class MainWindow
         if (selectedLayer.Kind == LayerTreeItemKind.Tag)
         {
             RemoveSelectedTagLayer(selectedLayer);
+            return;
+        }
+
+        if (selectedLayer.Kind == LayerTreeItemKind.RaftText)
+        {
+            RemoveSelectedRaftTextLayer(selectedLayer);
         }
     }
 
@@ -162,6 +168,25 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Removes selected raft text as an undoable document edit.
+    /// </summary>
+    private void RemoveSelectedRaftTextLayer(LayerTreeItemViewModel selectedLayer)
+    {
+        RaftTextEntity? raftText = FindEntityById(selectedLayer.Id) as RaftTextEntity;
+
+        if (raftText == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        CancelLayerRemovalSessions();
+        _commandRunner.Execute(new ReplaceRaftTextCommand(_document, raftText, null));
+        _layerPanelViewModel.SelectRaftLayer(_document.FindRaftForModel(raftText.ModelEntityId)?.Id ?? Guid.Empty);
+        _viewModel.SetStatusText("Removed raft text.");
+    }
+
+    /// <summary>
     /// Removes the selected imported model and all support groups owned by it after user confirmation.
     /// </summary>
     private void RemoveSelectedModelLayer(LayerTreeItemViewModel selectedLayer)
@@ -176,7 +201,7 @@ public partial class MainWindow
 
         MessageBoxResult result = MessageBox.Show(
             this,
-            $"The model '{selectedModel.Name}' and all of its supports, raft, and tags will be permanently deleted from the project.",
+            $"The model '{selectedModel.Name}' and all of its supports, raft, tags, and raft text will be permanently deleted from the project.",
             "Remove Model",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning);
@@ -239,7 +264,8 @@ public partial class MainWindow
                     supportEntities,
                     Properties.Settings.Default.SupportSides,
                     _document.FindRaftForModel(selectedModel.Id),
-                    _document.GetTagsForModel(selectedModel.Id));
+                    _document.GetTagsForModel(selectedModel.Id),
+                    _document.GetRaftTextsForModel(selectedModel.Id));
             });
 
             string fileName = Path.GetFileName(dialog.FileName);
@@ -488,6 +514,21 @@ public partial class MainWindow
             _layerPanelViewModel.SetTagLayerVisibility(tag.Id, e.IsVisible);
             _scene.SetTagLayerVisibility(tag.Id, e.IsVisible);
             _viewModel.SetStatusText(e.IsVisible ? "Showed tag" : "Hid tag");
+            return;
+        }
+
+        if (e.LayerKind == LayerTreeItemKind.RaftText)
+        {
+            RaftTextEntity? raftText = FindEntityById(e.LayerId) as RaftTextEntity;
+            if (raftText == null)
+            {
+                _layerPanelViewModel.RefreshFromDocument();
+                return;
+            }
+
+            _layerPanelViewModel.SetRaftTextLayerVisibility(raftText.Id, e.IsVisible);
+            _scene.SetRaftTextLayerVisibility(raftText.Id, e.IsVisible);
+            _viewModel.SetStatusText(e.IsVisible ? "Showed raft text" : "Hid raft text");
         }
     }
 
@@ -678,6 +719,32 @@ public partial class MainWindow
         _layerPanelViewModel.RefreshFromDocument();
         _viewModel.SetStatusText("Changed tag color");
     }
+
+    /// <summary>
+    /// Applies a raft text color change as one undoable document command.
+    /// </summary>
+    private void LayerPanel_ChangeRaftTextColorRequested(object? sender, LayerRaftTextColorChangeRequestedEventArgs e)
+    {
+        _ = sender;
+        RaftTextEntity? raftText = FindEntityById(e.RaftTextEntityId) as RaftTextEntity;
+
+        if (raftText == null)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        if (raftText.Color == e.NewColor)
+        {
+            _layerPanelViewModel.RefreshFromDocument();
+            return;
+        }
+
+        _commandRunner.Execute(new SetRaftTextColorCommand(_document, raftText, e.OldColor, e.NewColor));
+        _layerPanelViewModel.RefreshFromDocument();
+        _viewModel.SetStatusText("Changed raft text color");
+    }
+
     /// <summary>
     /// Captures the support groups owned by one imported model before the model is removed.
     /// </summary>

@@ -32,19 +32,35 @@ public static class WpfTagTextOutlineFactory
             throw new ArgumentNullException(nameof(settings));
         }
 
-        if (string.IsNullOrEmpty(settings.Text))
+        return Create(
+            settings.Text,
+            settings.FontFamilyName,
+            settings.FontSize,
+            TagSettings.DefaultFontFamilyName);
+    }
+
+    /// <summary>
+    /// Shapes generic printable text while retaining the Tag tool's tested outline path.
+    /// </summary>
+    public static TagTextOutlineData Create(
+        string text,
+        string fontFamilyName,
+        float fontSize,
+        string fallbackFontFamilyName)
+    {
+        if (string.IsNullOrEmpty(text))
         {
             return new TagTextOutlineData(0.0f, Array.Empty<IReadOnlyList<Vector2>>());
         }
 
-        FontFamily fontFamily = ResolveFontFamily(settings.FontFamilyName);
+        FontFamily fontFamily = ResolveFontFamily(fontFamilyName, fallbackFontFamilyName);
         Typeface typeface = new Typeface(
             fontFamily,
             FontStyles.Normal,
             FontWeights.Normal,
             FontStretches.Normal);
         FormattedText formattedText = new FormattedText(
-            settings.Text,
+            text,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
             typeface,
@@ -59,7 +75,7 @@ public static class WpfTagTextOutlineFactory
 
         System.Windows.Media.Geometry geometry = formattedText.BuildGeometry(new Point(0.0, 0.0));
         Rect bounds = geometry.Bounds;
-        float scale = settings.FontSize / (float)formattedText.Height;
+        float scale = fontSize / (float)formattedText.Height;
         float measuredWidth = bounds.IsEmpty ? 0.0f : (float)bounds.Width * scale;
 
         if (bounds.IsEmpty)
@@ -156,20 +172,20 @@ public static class WpfTagTextOutlineFactory
     /// <summary>
     /// Resolves the requested installed family and applies the required Arial fallback.
     /// </summary>
-    private static FontFamily ResolveFontFamily(string requestedName)
+    private static FontFamily ResolveFontFamily(string requestedName, string fallbackName)
     {
         if (InstalledFonts.TryGetValue(requestedName, out FontFamily? requested))
         {
             return requested;
         }
 
-        if (InstalledFonts.TryGetValue(TagSettings.DefaultFontFamilyName, out FontFamily? fallback))
+        if (InstalledFonts.TryGetValue(fallbackName, out FontFamily? fallback))
         {
             return fallback;
         }
 
         return InstalledFonts.Values.FirstOrDefault()
-            ?? new FontFamily(TagSettings.DefaultFontFamilyName);
+            ?? new FontFamily(fallbackName);
     }
 
     /// <summary>

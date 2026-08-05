@@ -25,6 +25,26 @@ public static class TagTextMeshBuilder
             throw new ArgumentNullException(nameof(settings));
         }
 
+        float bottomZ = settings.TagHeight * 0.5f;
+        float topZ = settings.TagHeight + settings.TextHeight;
+        return Build(bottomZ, topZ, outline);
+    }
+
+    /// <summary>
+    /// Builds text between caller-supplied local Z planes so raft text can share glyph triangulation.
+    /// </summary>
+    public static TagTextMeshData Build(
+        float bottomZ,
+        float topZ,
+        TagTextOutlineData outline)
+    {
+        if (!float.IsFinite(bottomZ)
+            || !float.IsFinite(topZ)
+            || topZ <= bottomZ)
+        {
+            throw new ArgumentOutOfRangeException(nameof(topZ), "Text extrusion planes must be finite and ordered.");
+        }
+
         if (outline == null)
         {
             throw new ArgumentNullException(nameof(outline));
@@ -33,8 +53,6 @@ public static class TagTextMeshBuilder
         List<ContourNode> contours = CreateContourHierarchy(outline.Contours);
         List<Vector3> positions = new List<Vector3>();
         List<int> indices = new List<int>();
-        float bottomZ = settings.TagHeight * 0.5f;
-        float topZ = settings.TagHeight + settings.TextHeight;
 
         for (int contourIndex = 0; contourIndex < contours.Count; contourIndex++)
         {

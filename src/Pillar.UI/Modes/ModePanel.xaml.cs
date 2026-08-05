@@ -230,6 +230,7 @@ public partial class ModePanel : UserControl
             new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
         RaiseToolSelected("Brace Supports");
     }
+
     /// <summary>
     /// Publishes one selected tool name to the owning shell.
     /// </summary>
@@ -245,6 +246,7 @@ public partial class ModePanel : UserControl
             new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
         RaiseToolSelected("Direct Edit Supports");
     }
+
     /// <summary>
     /// Opens the procedural raft tool for the current eligible model.
     /// </summary>
@@ -263,6 +265,16 @@ public partial class ModePanel : UserControl
         _ = sender;
         _ = e;
         RaiseToolSelected("Tag");
+    }
+
+    /// <summary>
+    /// Opens the Raft Text tool for the current eligible model.
+    /// </summary>
+    private void RaftTextButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RaiseToolSelected("Raft Text");
     }
 
     private void RaiseToolSelected(string toolName)

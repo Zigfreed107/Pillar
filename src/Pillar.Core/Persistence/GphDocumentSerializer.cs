@@ -4,6 +4,7 @@ using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Rafts;
+using Pillar.Core.RaftTexts;
 using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Core.Tags;
@@ -26,6 +27,7 @@ public sealed class GphDocumentSerializer
     private const string SupportTypeName = "support";
     private const string RaftTypeName = "raft";
     private const string TagTypeName = "tag";
+    private const string RaftTextTypeName = "raftText";
     private const string RingSupportGeneratorName = "ringSupport";
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
@@ -143,6 +145,7 @@ public sealed class GphDocumentSerializer
 
         ValidateLoadedRafts(entities);
         ValidateLoadedTags(entities);
+        ValidateLoadedRaftTexts(entities);
         List<SupportLayerGroup> supportLayerGroups = CreateSupportLayerGroups(documentDto, entities);
         AddSupportEntities(deferredSupportEntities, supportLayerGroups, entities);
         ValidateLoadedSupportModifiers(supportLayerGroups, entities);
@@ -251,6 +254,35 @@ public sealed class GphDocumentSerializer
             };
 
             foreach (Vector3 vertex in tag.Vertices)
+            {
+                dto.Vertices.Add(CreateVectorDto(vertex));
+            }
+
+            return dto;
+        }
+        if (entity is RaftTextEntity raftText)
+        {
+            GphEntityDto dto = new GphEntityDto
+            {
+                Type = RaftTextTypeName,
+                Id = raftText.Id,
+                Name = raftText.Name,
+                ModelEntityId = raftText.ModelEntityId,
+                AttachmentPoint = CreateVectorDto(raftText.Placement),
+                TriangleIndices = new List<int>(raftText.TriangleIndices),
+                Color = CreateSupportLayerColorDto(raftText.Color),
+                RaftTextSettings = new GphRaftTextSettingsDto
+                {
+                    Text = raftText.Settings.Text,
+                    FontFamilyName = raftText.Settings.FontFamilyName,
+                    FontSize = raftText.Settings.FontSize,
+                    TextHeight = raftText.Settings.TextHeight,
+                    BorderOffset = raftText.Settings.BorderOffset,
+                    OrientationDegrees = raftText.Settings.OrientationDegrees
+                }
+            };
+
+            foreach (Vector3 vertex in raftText.Vertices)
             {
                 dto.Vertices.Add(CreateVectorDto(vertex));
             }
@@ -477,6 +509,30 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
+    /// Validates that every saved raft text belongs to a model with a saved raft.
+    /// </summary>
+    private static void ValidateLoadedRaftTexts(IReadOnlyList<CadEntity> entities)
+    {
+        HashSet<Guid> raftModelEntityIds = new HashSet<Guid>();
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is RaftEntity raft)
+            {
+                raftModelEntityIds.Add(raft.ModelEntityId);
+            }
+        }
+
+        foreach (CadEntity entity in entities)
+        {
+            if (entity is RaftTextEntity raftText && !raftModelEntityIds.Contains(raftText.ModelEntityId))
+            {
+                throw new InvalidDataException("Saved raft text references a model without a raft.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Recreates saved support entities after support group ownership has been validated and restored.
     /// </summary>
     private static void AddSupportEntities(
@@ -594,6 +650,10 @@ public sealed class GphDocumentSerializer
         if (string.Equals(entityDto.Type, TagTypeName, StringComparison.OrdinalIgnoreCase))
         {
             return CreateTagEntity(entityDto);
+        }
+        if (string.Equals(entityDto.Type, RaftTextTypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateRaftTextEntity(entityDto);
         }
 
         if (string.Equals(entityDto.Type, SupportTypeName, StringComparison.OrdinalIgnoreCase))
@@ -739,6 +799,42 @@ public sealed class GphDocumentSerializer
             CreateVector(entityDto.AttachmentPoint),
             CreateVector(entityDto.Tangent),
             CreateVectorList(entityDto.Vertices, "tag vertices"),
+            new List<int>(entityDto.TriangleIndices),
+            CreateLayerColorOrDefault(entityDto.Color, entityDto.Id));
+    }
+
+    /// <summary>
+    /// Recreates saved raft text and its editable settings from embedded triangle buffers.
+    /// </summary>
+    private static RaftTextEntity CreateRaftTextEntity(GphEntityDto entityDto)
+    {
+        if (!entityDto.ModelEntityId.HasValue || entityDto.ModelEntityId.Value == Guid.Empty)
+        {
+            throw new InvalidDataException("Saved raft text is missing its owning model id.");
+        }
+
+        if (entityDto.RaftTextSettings == null
+            || entityDto.AttachmentPoint == null
+            || entityDto.TriangleIndices == null)
+        {
+            throw new InvalidDataException("Saved raft text is missing settings, placement, or triangle indices.");
+        }
+
+        GphRaftTextSettingsDto settingsDto = entityDto.RaftTextSettings;
+        RaftTextSettings settings = new RaftTextSettings(
+            settingsDto.Text,
+            settingsDto.FontFamilyName,
+            settingsDto.FontSize,
+            settingsDto.TextHeight,
+            settingsDto.BorderOffset,
+            settingsDto.OrientationDegrees);
+
+        return RaftTextEntity.CreateLoaded(
+            entityDto.Id,
+            entityDto.ModelEntityId.Value,
+            settings,
+            CreateVector(entityDto.AttachmentPoint),
+            CreateVectorList(entityDto.Vertices, "raft text vertices"),
             new List<int>(entityDto.TriangleIndices),
             CreateLayerColorOrDefault(entityDto.Color, entityDto.Id));
     }
@@ -1884,6 +1980,7 @@ public sealed class GphDocumentSerializer
         public GphSupportLayerColorDto? Color { get; set; }
         public GphRaftSettingsDto? RaftSettings { get; set; }
         public GphTagSettingsDto? TagSettings { get; set; }
+        public GphRaftTextSettingsDto? RaftTextSettings { get; set; }
         public GphVector3Dto? AttachmentPoint { get; set; }
         public GphVector2Dto? Tangent { get; set; }
     }
@@ -1920,6 +2017,19 @@ public sealed class GphDocumentSerializer
         public bool IsTextFlipped { get; set; }
         public float? OuterWidth { get; set; }
         public float? InnerWidth { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for persisted editable raft text settings.
+    /// </summary>
+    private sealed class GphRaftTextSettingsDto
+    {
+        public string Text { get; set; } = string.Empty;
+        public string FontFamilyName { get; set; } = RaftTextSettings.DefaultFontFamilyName;
+        public float FontSize { get; set; } = RaftTextSettings.DefaultFontSize;
+        public float TextHeight { get; set; } = RaftTextSettings.DefaultTextHeight;
+        public float BorderOffset { get; set; } = RaftTextSettings.DefaultBorderOffset;
+        public float OrientationDegrees { get; set; } = RaftTextSettings.DefaultOrientationDegrees;
     }
 
     /// <summary>
@@ -2171,10 +2281,3 @@ public sealed class GphDocumentSerializer
         };
     }
 }
-
-
-
-
-
-
-

@@ -363,6 +363,42 @@ public class CadDocument
     }
 
     /// <summary>
+    /// Updates one raft text display color while preserving identity and generated geometry.
+    /// </summary>
+    public void SetRaftTextColor(RaftTextEntity raftText, SupportLayerColor color)
+    {
+        if (raftText == null)
+        {
+            throw new ArgumentNullException(nameof(raftText));
+        }
+
+        if (!_entities.Contains(raftText))
+        {
+            throw new InvalidOperationException("The raft text is not part of this document.");
+        }
+
+        raftText.SetColor(color);
+    }
+
+    /// <summary>
+    /// Gets all raft text entities owned by one imported model.
+    /// </summary>
+    public IReadOnlyList<RaftTextEntity> GetRaftTextsForModel(Guid modelEntityId)
+    {
+        List<RaftTextEntity> raftTexts = new List<RaftTextEntity>();
+
+        foreach (CadEntity entity in _entities)
+        {
+            if (entity is RaftTextEntity raftText && raftText.ModelEntityId == modelEntityId)
+            {
+                raftTexts.Add(raftText);
+            }
+        }
+
+        return raftTexts;
+    }
+
+    /// <summary>
     /// Gets all support entities owned by one support layer group.
     /// </summary>
     public IReadOnlyList<SupportEntity> GetSupportEntitiesForGroup(Guid supportLayerGroupId)
@@ -514,6 +550,20 @@ public class CadDocument
 
             return;
         }
+        if (entity is RaftTextEntity raftTextEntity)
+        {
+            if (!ContainsMeshEntity(raftTextEntity.ModelEntityId))
+            {
+                throw new InvalidOperationException("Raft text can only be added under imported mesh entities.");
+            }
+
+            if (FindRaftForModel(raftTextEntity.ModelEntityId) == null)
+            {
+                throw new InvalidOperationException("Raft text can only be added to models that own a raft.");
+            }
+
+            return;
+        }
 
         if (entity is not SupportEntity supportEntity)
         {
@@ -551,6 +601,10 @@ public class CadDocument
             if (_entities[i] is TagEntity tag && tag.ModelEntityId == entity.Id)
             {
                 RemoveEntity(tag);
+            }
+            else if (_entities[i] is RaftTextEntity raftText && raftText.ModelEntityId == entity.Id)
+            {
+                RemoveEntity(raftText);
             }
         }
 

@@ -30,6 +30,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentat
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Architecture", "Architecture", "{3A373EEF-92F3-4A21-8A56-94B4AB281925}"
 	ProjectSection(SolutionItems) = preProject
+		Indexed Mesh Upgrade.md = Indexed Mesh Upgrade.md
 		Documentation\Architecture\Modes-And-Tools.md = Documentation\Architecture\Modes-And-Tools.md
 		Documentation\Architecture\Overview.md = Documentation\Architecture\Overview.md
 		Documentation\Architecture\Rendering-Boundaries.md = Documentation\Architecture\Rendering-Boundaries.md
@@ -77,6 +78,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Raft Tools", "Raft Tools", "{1F54A4A8-CE2D-42A4-8BE9-4A9945ACA4ED}"
 	ProjectSection(SolutionItems) = preProject
 		Raft Generation Tool.md = Raft Generation Tool.md
+		Raft Text.md = Raft Text.md
 		Tag.md = Tag.md
 	EndProjectSection
 EndProject

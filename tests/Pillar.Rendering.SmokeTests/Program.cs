@@ -43,6 +43,7 @@ public static class Program
         RunTest(failures, "Installed font creates solid tag text", ValidateInstalledFontCreatesSolidTagText);
         RunTest(failures, "Missing tag font falls back", ValidateMissingTagFontFallsBack);
         RunTest(failures, "Tag options initialize safely", ValidateTagOptionsInitializeSafely);
+        RaftTextRenderingSmokeTests.Run(failures);
 
         if (failures.Count > 0)
         {

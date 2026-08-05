@@ -103,6 +103,7 @@ public partial class MainWindow : Window
         _rotationToolOptionsControl = new RotationToolOptionsControl();
         _raftToolOptionsControl = new RaftToolOptionsControl();
         _tagToolOptionsControl = new TagToolOptionsControl();
+        _raftTextToolOptionsControl = new RaftTextToolOptionsControl();
         _toolSessionOptionsControl = new ToolSessionOptionsControl();
         _toolSessionOverlayCoordinator = new ToolSessionOverlayCoordinator(
             WorkflowModePanelOverlay,
@@ -166,6 +167,7 @@ public partial class MainWindow : Window
             GetSelectedSupportProfile);
         _directEditTool = new DirectEditTool(Viewport, _document, _scene, _projection, _selectTool);
         _tagTool = new TagTool(_projection, _scene);
+        _raftTextTool = new RaftTextTool(_projection, _scene);
         _stlImporter = new StlImporter();
         WireLayerPanel();
         InitializeModelClippingControls();
@@ -383,6 +385,10 @@ public partial class MainWindow : Window
         _tagToolOptionsControl.PlaceRequested += TagToolOptionsControl_PlaceRequested;
         _tagToolOptionsControl.CloseRequested += TagToolOptionsControl_CloseRequested;
         _tagTool.PlacementAccepted += TagTool_PlacementAccepted;
+        _raftTextToolOptionsControl.OptionsChanged += RaftTextToolOptionsControl_OptionsChanged;
+        _raftTextToolOptionsControl.PlaceRequested += RaftTextToolOptionsControl_PlaceRequested;
+        _raftTextToolOptionsControl.CloseRequested += RaftTextToolOptionsControl_CloseRequested;
+        _raftTextTool.PlacementAccepted += RaftTextTool_PlacementAccepted;
         _toolSessionOptionsControl.FinishRequested += ToolSessionOptionsControl_FinishRequested;
         SupportPresetPanelOverlay.SetPresets(_supportPresetService.Presets);
         SupportPresetPanelOverlay.SelectPreset(_supportPresetService.SelectedPreset);
@@ -398,9 +404,11 @@ public partial class MainWindow : Window
         LayerPanelOverlay.ChangeSupportGroupColorRequested += LayerPanel_ChangeSupportGroupColorRequested;
         LayerPanelOverlay.ChangeRaftColorRequested += LayerPanel_ChangeRaftColorRequested;
         LayerPanelOverlay.ChangeTagColorRequested += LayerPanel_ChangeTagColorRequested;
+        LayerPanelOverlay.ChangeRaftTextColorRequested += LayerPanel_ChangeRaftTextColorRequested;
         LayerPanelOverlay.EditSupportGroupRequested += LayerPanel_EditSupportGroupRequested;
         LayerPanelOverlay.EditRaftRequested += LayerPanel_EditRaftRequested;
         LayerPanelOverlay.EditTagRequested += LayerPanel_EditTagRequested;
+        LayerPanelOverlay.EditRaftTextRequested += LayerPanel_EditRaftTextRequested;
         LayerPanelOverlay.EditSupportModifierRequested += LayerPanel_EditSupportModifierRequested;
     }
 
@@ -411,6 +419,7 @@ public partial class MainWindow : Window
     {
         CancelRaftToolSession();
         CancelTagToolSession();
+        CancelRaftTextToolSession();
         _selectTool.ResetSelectionFilter();
         _toolManager.CancelActiveTool();
     }

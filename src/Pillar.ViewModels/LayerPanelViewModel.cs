@@ -22,6 +22,7 @@ public partial class LayerPanelViewModel : ObservableObject
     private readonly Dictionary<Guid, bool> _supportLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _raftLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly Dictionary<Guid, bool> _tagLayerVisibilityById = new Dictionary<Guid, bool>();
+    private readonly Dictionary<Guid, bool> _raftTextLayerVisibilityById = new Dictionary<Guid, bool>();
     private readonly HashSet<CadEntity> _subscribedEntities = new HashSet<CadEntity>();
     private Guid? _raftTargetModelEntityId;
     private bool _isDocumentStructureRefreshPending;
@@ -90,6 +91,14 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Gets whether the active model or support selection belongs to a model with a raft.
+    /// </summary>
+    public bool CanAddRaftText
+    {
+        get { return _raftTargetModelEntityId.HasValue && _document.FindRaftForModel(_raftTargetModelEntityId.Value) != null; }
+    }
+
+    /// <summary>
     /// Gets whether multiple mesh models are currently selected in the scene.
     /// </summary>
     public bool HasMultipleSelectedModels
@@ -146,7 +155,8 @@ public partial class LayerPanelViewModel : ObservableObject
                 && (_selectedLayer.Kind == LayerTreeItemKind.Model
                     || _selectedLayer.Kind == LayerTreeItemKind.SupportGroup
                     || _selectedLayer.Kind == LayerTreeItemKind.SupportModifier
-                    || _selectedLayer.Kind == LayerTreeItemKind.Tag);
+                    || _selectedLayer.Kind == LayerTreeItemKind.Tag
+                    || _selectedLayer.Kind == LayerTreeItemKind.RaftText);
         }
     }
 
@@ -225,6 +235,7 @@ public partial class LayerPanelViewModel : ObservableObject
         _raftTargetModelEntityId = modelEntityId;
         OnPropertyChanged(nameof(CanGenerateRaft));
         OnPropertyChanged(nameof(CanAddTag));
+        OnPropertyChanged(nameof(CanAddRaftText));
     }
 
     /// <summary>
@@ -301,6 +312,21 @@ public partial class LayerPanelViewModel : ObservableObject
                     tag.Color);
                 tagRow.IsVisible = GetTagLayerVisibility(tag.Id);
                 raftRow.Children.Add(tagRow);
+            }
+        }
+        foreach (CadEntity entity in _document.Entities)
+        {
+            if (entity is RaftTextEntity raftText
+                && raftRowsByModelId.TryGetValue(raftText.ModelEntityId, out LayerTreeItemViewModel? raftRow))
+            {
+                LayerTreeItemViewModel raftTextRow = new LayerTreeItemViewModel(
+                    raftText.Id,
+                    raftText.ModelEntityId,
+                    LayerTreeItemKind.RaftText,
+                    raftText.Settings.GetDisplayName(),
+                    raftText.Color);
+                raftTextRow.IsVisible = GetRaftTextLayerVisibility(raftText.Id);
+                raftRow.Children.Add(raftTextRow);
             }
         }
         foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
@@ -444,6 +470,41 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Selects one raft text row and expands its owning raft and model rows.
+    /// </summary>
+    public void SelectRaftTextLayer(Guid raftTextEntityId)
+    {
+        LayerTreeItemViewModel? raftTextLayer = FindLayer(raftTextEntityId, LayerTreeItemKind.RaftText);
+        if (raftTextLayer == null)
+        {
+            return;
+        }
+
+        SelectedLayer = raftTextLayer;
+
+        foreach (LayerTreeItemViewModel modelLayer in ModelLayers)
+        {
+            if (modelLayer.ModelEntityId != raftTextLayer.ModelEntityId)
+            {
+                continue;
+            }
+
+            modelLayer.IsExpanded = true;
+
+            foreach (LayerTreeItemViewModel childLayer in modelLayer.Children)
+            {
+                if (childLayer.Kind == LayerTreeItemKind.Raft)
+                {
+                    childLayer.IsExpanded = true;
+                    break;
+                }
+            }
+
+            break;
+        }
+    }
+
+    /// <summary>
     /// Selects one support group row by support-layer-group id.
     /// </summary>
     public void SelectSupportGroupLayer(Guid supportLayerGroupId)
@@ -555,6 +616,24 @@ public partial class LayerPanelViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Updates one raft text layer session visibility state.
+    /// </summary>
+    public void SetRaftTextLayerVisibility(Guid raftTextEntityId, bool isVisible)
+    {
+        _raftTextLayerVisibilityById[raftTextEntityId] = isVisible;
+        LayerTreeItemViewModel? layer = FindLayer(raftTextEntityId, LayerTreeItemKind.RaftText);
+        if (layer != null) layer.IsVisible = isVisible;
+    }
+
+    /// <summary>
+    /// Gets one raft text layer current session visibility state.
+    /// </summary>
+    public bool GetRaftTextLayerVisibility(Guid raftTextEntityId)
+    {
+        return !_raftTextLayerVisibilityById.TryGetValue(raftTextEntityId, out bool isVisible) || isVisible;
+    }
+
+    /// <summary>
     /// Gets one raft layer's current session visibility state.
     /// </summary>
     public bool GetRaftLayerVisibility(Guid raftEntityId)
@@ -620,6 +699,7 @@ public partial class LayerPanelViewModel : ObservableObject
         HashSet<Guid> supportLayerGroupIds = new HashSet<Guid>();
         HashSet<Guid> raftIds = new HashSet<Guid>();
         HashSet<Guid> tagIds = new HashSet<Guid>();
+        HashSet<Guid> raftTextIds = new HashSet<Guid>();
 
         foreach (CadEntity entity in _document.Entities)
         {
@@ -635,6 +715,10 @@ public partial class LayerPanelViewModel : ObservableObject
             {
                 tagIds.Add(entity.Id);
             }
+            else if (entity is RaftTextEntity)
+            {
+                raftTextIds.Add(entity.Id);
+            }
         }
 
         foreach (SupportLayerGroup supportLayerGroup in _document.SupportLayerGroups)
@@ -645,6 +729,7 @@ public partial class LayerPanelViewModel : ObservableObject
         RemoveMissingVisibilityEntries(_modelLayerVisibilityById, modelIds);
         RemoveMissingVisibilityEntries(_raftLayerVisibilityById, raftIds);
         RemoveMissingVisibilityEntries(_tagLayerVisibilityById, tagIds);
+        RemoveMissingVisibilityEntries(_raftTextLayerVisibilityById, raftTextIds);
         RemoveMissingVisibilityEntries(_supportLayerVisibilityById, supportLayerGroupIds);
     }
 
@@ -772,6 +857,7 @@ public partial class LayerPanelViewModel : ObservableObject
         RefreshFromDocument();
         OnPropertyChanged(nameof(CanGenerateRaft));
         OnPropertyChanged(nameof(CanAddTag));
+        OnPropertyChanged(nameof(CanAddRaftText));
     }
 
     /// <summary>
@@ -840,7 +926,8 @@ public partial class LayerPanelViewModel : ObservableObject
     private void Entity_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if ((sender is RaftEntity && string.Equals(e.PropertyName, nameof(RaftEntity.Color), StringComparison.Ordinal))
-            || (sender is TagEntity && string.Equals(e.PropertyName, nameof(TagEntity.Color), StringComparison.Ordinal)))
+            || (sender is TagEntity && string.Equals(e.PropertyName, nameof(TagEntity.Color), StringComparison.Ordinal))
+            || (sender is RaftTextEntity && string.Equals(e.PropertyName, nameof(RaftTextEntity.Color), StringComparison.Ordinal)))
         {
             RefreshFromDocument();
         }

@@ -72,6 +72,7 @@ public partial class MainWindow
         }
 
         CancelRaftToolSession();
+        CancelRaftTextToolSession();
         CancelTagToolSession();
         _toolManager.SetTool(_selectTool);
         _activeTagModelEntityId = modelEntityId;
