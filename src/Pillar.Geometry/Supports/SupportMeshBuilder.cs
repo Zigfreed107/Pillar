@@ -37,22 +37,18 @@ public static class SupportMeshBuilder
         }
 
         int validatedRadialSegments = Math.Clamp(radialSegments, MinimumRadialSegments, MaximumRadialSegments);
-        List<Vector3> positions = new List<Vector3>();
-        List<int> triangleIndices = new List<int>();
-        List<Vector3> normals = new List<Vector3>();
+        SupportMeshAccumulator mesh = new SupportMeshAccumulator();
         SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(support.Profile, support.Style);
 
         if (support.Style.Kind == SupportStyleKind.BraceMember)
         {
             AddClosedBraceMember(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 support.BasePosition,
                 support.TipPosition,
                 dimensions.BranchDiameter,
                 validatedRadialSegments);
-            return new SupportMeshData(positions, triangleIndices, normals);
+            return mesh.CreateMeshData();
         }
 
         bool isButtress = support.Style.Kind == SupportStyleKind.Buttress;
@@ -77,37 +73,19 @@ public static class SupportMeshBuilder
         {
             (Vector3 U, Vector3 V) verticalFrame = CreatePerpendicularFrame(Vector3.UnitZ);
             List<SectionStation> stemStations = CreateVerticalSectionStations(support.Profile, dimensions, verticalLength);
-
-            for (int stationIndex = 0; stationIndex < stemStations.Count - 1; stationIndex++)
-            {
-                SectionStation startStation = stemStations[stationIndex];
-                SectionStation endStation = stemStations[stationIndex + 1];
-
-                AddFrustum(
-                    positions,
-                    triangleIndices,
-                    normals,
-                    stemBasePosition + (Vector3.UnitZ * startStation.DistanceFromBase),
-                    stemBasePosition + (Vector3.UnitZ * endStation.DistanceFromBase),
-                    startStation.Radius,
-                    endStation.Radius,
-                    verticalFrame.U,
-                    verticalFrame.V,
-                    validatedRadialSegments);
-            }
-
-            SectionStation baseStation = stemStations[0];
-            SectionStation topStation = stemStations[stemStations.Count - 1];
-            AddCap(positions, triangleIndices, normals, stemBasePosition, baseStation.Radius, -Vector3.UnitZ, verticalFrame.U, verticalFrame.V, validatedRadialSegments);
-            AddCap(positions, triangleIndices, normals, stemBasePosition + (Vector3.UnitZ * topStation.DistanceFromBase), topStation.Radius, Vector3.UnitZ, verticalFrame.U, verticalFrame.V, validatedRadialSegments);
+            AddClosedStem(
+                mesh,
+                stemBasePosition,
+                stemStations,
+                verticalFrame.U,
+                verticalFrame.V,
+                validatedRadialSegments);
         }
 
         if (!isButtress)
         {
             AddClosedHead(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 headJointPosition,
                 support.TipPosition,
                 headDirection,
@@ -119,9 +97,7 @@ public static class SupportMeshBuilder
         if (hasBranch)
         {
             AddClosedBranch(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 stemJointPosition,
                 headJointPosition,
                 branchDirection,
@@ -129,17 +105,13 @@ public static class SupportMeshBuilder
                 validatedRadialSegments);
 
             AddJointBall(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 stemJointPosition,
                 MathF.Max(dimensions.StemTopDiameter, dimensions.BranchDiameter) * 0.5f,
                 validatedRadialSegments);
 
             AddJointBall(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 headJointPosition,
                 dimensions.BranchDiameter * 0.5f,
                 validatedRadialSegments);
@@ -147,24 +119,20 @@ public static class SupportMeshBuilder
         else
         {
             AddJointBall(
-                positions,
-                triangleIndices,
-                normals,
+                mesh,
                 headJointPosition,
                 MathF.Max(dimensions.StemTopDiameter, dimensions.HeadBottomDiameter) * 0.5f,
                 validatedRadialSegments);
         }
 
-        return new SupportMeshData(positions, triangleIndices, normals);
+        return mesh.CreateMeshData();
     }
 
     /// <summary>
     /// Adds a simple closed cylindrical reinforcement member between two saved endpoints.
     /// </summary>
     private static void AddClosedBraceMember(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 startPosition,
         Vector3 endPosition,
         float diameter,
@@ -180,9 +148,50 @@ public static class SupportMeshBuilder
         Vector3 axisDirection = Vector3.Normalize(axis);
         float radius = diameter * 0.5f;
         (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(axisDirection);
-        AddFrustum(positions, triangleIndices, normals, startPosition, endPosition, radius, radius, frame.U, frame.V, radialSegments);
-        AddCap(positions, triangleIndices, normals, startPosition, radius, -axisDirection, frame.U, frame.V, radialSegments);
-        AddCap(positions, triangleIndices, normals, endPosition, radius, axisDirection, frame.U, frame.V, radialSegments);
+        AddClosedFrustum(
+            mesh,
+            startPosition,
+            endPosition,
+            radius,
+            radius,
+            axisDirection,
+            frame.U,
+            frame.V,
+            radialSegments);
+    }
+
+    /// <summary>
+    /// Adds the connected vertical profile while sharing every station ring between adjacent frustums and end caps.
+    /// </summary>
+    private static void AddClosedStem(
+        SupportMeshAccumulator mesh,
+        Vector3 stemBasePosition,
+        IReadOnlyList<SectionStation> stations,
+        Vector3 frameU,
+        Vector3 frameV,
+        int radialSegments)
+    {
+        int[][] stationRings = new int[stations.Count][];
+
+        for (int stationIndex = 0; stationIndex < stations.Count; stationIndex++)
+        {
+            SectionStation station = stations[stationIndex];
+            Vector3 stationCenter = stemBasePosition + (Vector3.UnitZ * station.DistanceFromBase);
+            stationRings[stationIndex] = AddRing(mesh, stationCenter, station.Radius, frameU, frameV, radialSegments);
+        }
+
+        for (int stationIndex = 0; stationIndex < stationRings.Length - 1; stationIndex++)
+        {
+            AddFrustum(mesh, stationRings[stationIndex], stationRings[stationIndex + 1]);
+        }
+
+        SectionStation topStation = stations[stations.Count - 1];
+        AddCap(mesh, stemBasePosition, stationRings[0], -Vector3.UnitZ);
+        AddCap(
+            mesh,
+            stemBasePosition + (Vector3.UnitZ * topStation.DistanceFromBase),
+            stationRings[stationRings.Length - 1],
+            Vector3.UnitZ);
     }
 
     /// <summary>
@@ -232,9 +241,7 @@ public static class SupportMeshBuilder
     /// Adds the angled head as a closed mesh from the joint through the model contact and penetration tip.
     /// </summary>
     private static void AddClosedHead(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 headBottomPosition,
         Vector3 tipPosition,
         Vector3 headDirection,
@@ -246,48 +253,88 @@ public static class SupportMeshBuilder
         float headTopRadius = dimensions.HeadTopDiameter * 0.5f;
         Vector3 penetrationTip = tipPosition + (headDirection * profile.HeadPenetrationDepth);
         (Vector3 U, Vector3 V) headFrame = CreatePerpendicularFrame(headDirection);
+        Vector3[] stationCenters = new Vector3[3];
+        float[] stationRadii = new float[3];
+        int stationCount = 0;
 
         if (Vector3.Distance(headBottomPosition, tipPosition) > AxialTolerance)
         {
-            AddFrustum(
-                positions,
-                triangleIndices,
-                normals,
-                headBottomPosition,
-                tipPosition,
-                headBottomRadius,
-                headTopRadius,
-                headFrame.U,
-                headFrame.V,
-                radialSegments);
+            stationCenters[stationCount] = headBottomPosition;
+            stationRadii[stationCount] = headBottomRadius;
+            stationCount++;
         }
+
+        stationCenters[stationCount] = tipPosition;
+        stationRadii[stationCount] = headTopRadius;
+        stationCount++;
 
         if (Vector3.Distance(tipPosition, penetrationTip) > AxialTolerance)
         {
-            AddFrustum(
-                positions,
-                triangleIndices,
-                normals,
-                tipPosition,
-                penetrationTip,
-                headTopRadius,
-                headTopRadius,
-                headFrame.U,
-                headFrame.V,
-                radialSegments);
+            stationCenters[stationCount] = penetrationTip;
+            stationRadii[stationCount] = headTopRadius;
+            stationCount++;
         }
 
-        AddCap(positions, triangleIndices, normals, headBottomPosition, headBottomRadius, -headDirection, headFrame.U, headFrame.V, radialSegments);
-        AddCap(positions, triangleIndices, normals, penetrationTip, headTopRadius, headDirection, headFrame.U, headFrame.V, radialSegments);
+        AddClosedAxialChain(
+            mesh,
+            stationCenters,
+            stationRadii,
+            stationCount,
+            headDirection,
+            headFrame.U,
+            headFrame.V,
+            radialSegments);
     }
 
     /// <summary>
-    /// Adds the optional branch cylinder as a closed mesh between the vertical stem and angled head.
+    /// Adds a connected axial chain with shared station rings and shared cap boundaries.
+    /// </summary>
+    private static void AddClosedAxialChain(
+        SupportMeshAccumulator mesh,
+        IReadOnlyList<Vector3> stationCenters,
+        IReadOnlyList<float> stationRadii,
+        int stationCount,
+        Vector3 axisDirection,
+        Vector3 frameU,
+        Vector3 frameV,
+        int radialSegments)
+    {
+        if (stationCount < 2)
+        {
+            return;
+        }
+
+        int[][] stationRings = new int[stationCount][];
+
+        for (int stationIndex = 0; stationIndex < stationCount; stationIndex++)
+        {
+            stationRings[stationIndex] = AddRing(
+                mesh,
+                stationCenters[stationIndex],
+                stationRadii[stationIndex],
+                frameU,
+                frameV,
+                radialSegments);
+        }
+
+        for (int stationIndex = 0; stationIndex < stationCount - 1; stationIndex++)
+        {
+            AddFrustum(mesh, stationRings[stationIndex], stationRings[stationIndex + 1]);
+        }
+
+        AddCap(mesh, stationCenters[0], stationRings[0], -axisDirection);
+        AddCap(
+            mesh,
+            stationCenters[stationCount - 1],
+            stationRings[stationCount - 1],
+            axisDirection);
+    }
+
+    /// <summary>
+    /// Adds the optional branch cylinder as a separately closed component.
     /// </summary>
     private static void AddClosedBranch(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 stemJointPosition,
         Vector3 headJointPosition,
         Vector3 branchDirection,
@@ -296,35 +343,28 @@ public static class SupportMeshBuilder
     {
         float branchRadius = dimensions.BranchDiameter * 0.5f;
         (Vector3 U, Vector3 V) branchFrame = CreatePerpendicularFrame(branchDirection);
-
-        AddFrustum(
-            positions,
-            triangleIndices,
-            normals,
+        AddClosedFrustum(
+            mesh,
             stemJointPosition,
             headJointPosition,
             branchRadius,
             branchRadius,
+            branchDirection,
             branchFrame.U,
             branchFrame.V,
             radialSegments);
-
-        AddCap(positions, triangleIndices, normals, stemJointPosition, branchRadius, -branchDirection, branchFrame.U, branchFrame.V, radialSegments);
-        AddCap(positions, triangleIndices, normals, headJointPosition, branchRadius, branchDirection, branchFrame.U, branchFrame.V, radialSegments);
     }
 
     /// <summary>
     /// Adds the smooth ball joint that visually bridges the shifted stem and angled head.
     /// </summary>
     private static void AddJointBall(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 center,
         float radius,
         int radialSegments)
     {
-        AddSphere(positions, triangleIndices, normals, center, radius, radialSegments);
+        AddSphere(mesh, center, radius, radialSegments);
     }
 
     /// <summary>
@@ -363,143 +403,161 @@ public static class SupportMeshBuilder
     /// <summary>
     /// Adds one frustum segment as a triangle list using modulo ring closure.
     /// </summary>
-    private static void AddFrustum(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+    private static void AddClosedFrustum(
+        SupportMeshAccumulator mesh,
         Vector3 startCenter,
         Vector3 endCenter,
         float startRadius,
         float endRadius,
+        Vector3 axisDirection,
         Vector3 frameU,
         Vector3 frameV,
         int radialSegments)
     {
-        Vector3[] startRing = CreateRingPositions(startCenter, startRadius, frameU, frameV, radialSegments);
-        Vector3[] endRing = CreateRingPositions(endCenter, endRadius, frameU, frameV, radialSegments);
+        int[] startRing = AddRing(mesh, startCenter, startRadius, frameU, frameV, radialSegments);
+        int[] endRing = AddRing(mesh, endCenter, endRadius, frameU, frameV, radialSegments);
+        AddFrustum(mesh, startRing, endRing);
+        AddCap(mesh, startCenter, startRing, -axisDirection);
+        AddCap(mesh, endCenter, endRing, axisDirection);
+    }
 
-        for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
+    /// <summary>
+    /// Adds one frustum wall between two existing station rings.
+    /// </summary>
+    private static void AddFrustum(
+        SupportMeshAccumulator mesh,
+        IReadOnlyList<int> startRing,
+        IReadOnlyList<int> endRing)
+    {
+        if (startRing.Count != endRing.Count)
         {
-            int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
-            Vector3 startA = startRing[segmentIndex];
-            Vector3 startB = startRing[nextSegmentIndex];
-            Vector3 endA = endRing[segmentIndex];
-            Vector3 endB = endRing[nextSegmentIndex];
+            throw new ArgumentException("Frustum rings must contain the same number of positions.");
+        }
 
-            // Wind the wall quads so the generated triangle normals point away from the support axis.
-            // Helix uses back-face culling for support meshes, so reversed winding makes the body render inside out.
-            AddTriangle(positions, triangleIndices, normals, startA, endB, endA);
-            AddTriangle(positions, triangleIndices, normals, startA, startB, endB);
+        for (int segmentIndex = 0; segmentIndex < startRing.Count; segmentIndex++)
+        {
+            int nextSegmentIndex = (segmentIndex + 1) % startRing.Count;
+            int startA = startRing[segmentIndex];
+            int startB = startRing[nextSegmentIndex];
+            int endA = endRing[segmentIndex];
+            int endB = endRing[nextSegmentIndex];
+
+            // Preserve outward wall winding while render vertices remain independently expanded.
+            mesh.AddTriangle(startA, endB, endA);
+            mesh.AddTriangle(startA, startB, endB);
         }
     }
 
     /// <summary>
-    /// Adds one circular end cap to close the support mesh.
+    /// Adds one indexed center and closes it against an existing wall ring.
     /// </summary>
     private static void AddCap(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 center,
-        float radius,
-        Vector3 capNormal,
-        Vector3 frameU,
-        Vector3 frameV,
-        int radialSegments)
+        IReadOnlyList<int> ring,
+        Vector3 capNormal)
     {
-        Vector3[] capRing = CreateRingPositions(center, radius, frameU, frameV, radialSegments);
+        int centerIndex = mesh.AddPosition(center);
 
-        for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
+        for (int segmentIndex = 0; segmentIndex < ring.Count; segmentIndex++)
         {
-            int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
-            Vector3 ringA = capRing[segmentIndex];
-            Vector3 ringB = capRing[nextSegmentIndex];
+            int nextSegmentIndex = (segmentIndex + 1) % ring.Count;
+            int ringAIndex = ring[segmentIndex];
+            int ringBIndex = ring[nextSegmentIndex];
+            Vector3 ringA = mesh.Positions[ringAIndex];
+            Vector3 ringB = mesh.Positions[ringBIndex];
             Vector3 cross = Vector3.Cross(ringA - center, ringB - center);
 
             if (Vector3.Dot(capNormal, cross) >= 0.0f)
             {
-                AddTriangle(positions, triangleIndices, normals, center, ringA, ringB);
+                mesh.AddTriangle(centerIndex, ringAIndex, ringBIndex);
             }
             else
             {
-                AddTriangle(positions, triangleIndices, normals, center, ringB, ringA);
+                mesh.AddTriangle(centerIndex, ringBIndex, ringAIndex);
             }
         }
     }
 
     /// <summary>
-    /// Creates one circular ring without adding a duplicate endpoint at 2 PI.
+    /// Adds one circular position ring without duplicating its endpoint at 2 PI.
     /// </summary>
-    private static Vector3[] CreateRingPositions(
+    private static int[] AddRing(
+        SupportMeshAccumulator mesh,
         Vector3 center,
         float radius,
         Vector3 frameU,
         Vector3 frameV,
         int radialSegments)
     {
-        Vector3[] ringPositions = new Vector3[radialSegments];
+        int[] ringIndices = new int[radialSegments];
 
         for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
         {
             float angle = (float)(segmentIndex * Math.PI * 2.0 / radialSegments);
-            ringPositions[segmentIndex] = center + (CreateRingOffset(angle, frameU, frameV) * radius);
+            Vector3 position = center + (CreateRingOffset(angle, frameU, frameV) * radius);
+            ringIndices[segmentIndex] = mesh.AddPosition(position);
         }
 
-        return ringPositions;
+        return ringIndices;
     }
 
     /// <summary>
-    /// Adds a closed UV sphere using the same radial side count as the support body.
+    /// Adds a closed indexed UV sphere using one pole and one shared position per latitude-ring segment.
     /// </summary>
     private static void AddSphere(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
+        SupportMeshAccumulator mesh,
         Vector3 center,
         float radius,
         int radialSegments)
     {
         int verticalSegments = Math.Max(4, radialSegments / 2);
         (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(Vector3.UnitZ);
-        Vector3 top = center + (Vector3.UnitZ * radius);
-        Vector3 bottom = center - (Vector3.UnitZ * radius);
-        Vector3[][] rings = new Vector3[verticalSegments - 1][];
+        int topIndex = mesh.AddPosition(center + (Vector3.UnitZ * radius));
+        int bottomIndex = mesh.AddPosition(center - (Vector3.UnitZ * radius));
+        int[][] rings = new int[verticalSegments - 1][];
 
         for (int stackIndex = 1; stackIndex < verticalSegments; stackIndex++)
         {
             float phi = (float)(Math.PI * stackIndex / verticalSegments);
             float ringRadius = MathF.Sin(phi) * radius;
             float zOffset = MathF.Cos(phi) * radius;
-            rings[stackIndex - 1] = CreateRingPositions(center + (Vector3.UnitZ * zOffset), ringRadius, frame.U, frame.V, radialSegments);
+            rings[stackIndex - 1] = AddRing(
+                mesh,
+                center + (Vector3.UnitZ * zOffset),
+                ringRadius,
+                frame.U,
+                frame.V,
+                radialSegments);
         }
 
-        Vector3[] firstRing = rings[0];
+        int[] firstRing = rings[0];
 
         for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
         {
             int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
-            AddTriangle(positions, triangleIndices, normals, top, firstRing[segmentIndex], firstRing[nextSegmentIndex]);
+            mesh.AddTriangle(topIndex, firstRing[segmentIndex], firstRing[nextSegmentIndex]);
         }
 
         for (int stackIndex = 0; stackIndex < rings.Length - 1; stackIndex++)
         {
-            Vector3[] upperRing = rings[stackIndex];
-            Vector3[] lowerRing = rings[stackIndex + 1];
+            int[] upperRing = rings[stackIndex];
+            int[] lowerRing = rings[stackIndex + 1];
 
             for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
             {
                 int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
-                AddTriangle(positions, triangleIndices, normals, upperRing[segmentIndex], lowerRing[segmentIndex], lowerRing[nextSegmentIndex]);
-                AddTriangle(positions, triangleIndices, normals, upperRing[segmentIndex], lowerRing[nextSegmentIndex], upperRing[nextSegmentIndex]);
+                mesh.AddTriangle(upperRing[segmentIndex], lowerRing[segmentIndex], lowerRing[nextSegmentIndex]);
+                mesh.AddTriangle(upperRing[segmentIndex], lowerRing[nextSegmentIndex], upperRing[nextSegmentIndex]);
             }
         }
 
-        Vector3[] lastRing = rings[rings.Length - 1];
+        int[] lastRing = rings[rings.Length - 1];
 
         for (int segmentIndex = 0; segmentIndex < radialSegments; segmentIndex++)
         {
             int nextSegmentIndex = (segmentIndex + 1) % radialSegments;
-            AddTriangle(positions, triangleIndices, normals, bottom, lastRing[nextSegmentIndex], lastRing[segmentIndex]);
+            mesh.AddTriangle(bottomIndex, lastRing[nextSegmentIndex], lastRing[segmentIndex]);
         }
     }
 
@@ -512,30 +570,41 @@ public static class SupportMeshBuilder
     }
 
     /// <summary>
-    /// Adds one flat-shaded triangle to the output mesh buffers.
+    /// Collects mutable indexed buffers while one procedural support is generated.
     /// </summary>
-    private static void AddTriangle(
-        List<Vector3> positions,
-        List<int> triangleIndices,
-        List<Vector3> normals,
-        Vector3 a,
-        Vector3 b,
-        Vector3 c)
+    private sealed class SupportMeshAccumulator
     {
-        int firstIndex = positions.Count;
-        Vector3 triangleNormal = Vector3.Normalize(Vector3.Cross(b - a, c - a));
+        public List<Vector3> Positions { get; } = new List<Vector3>();
 
-        positions.Add(a);
-        positions.Add(b);
-        positions.Add(c);
+        public List<int> TriangleIndices { get; } = new List<int>();
 
-        normals.Add(triangleNormal);
-        normals.Add(triangleNormal);
-        normals.Add(triangleNormal);
+        /// <summary>
+        /// Adds one authoritative position and returns its index.
+        /// </summary>
+        public int AddPosition(Vector3 position)
+        {
+            int positionIndex = Positions.Count;
+            Positions.Add(position);
+            return positionIndex;
+        }
 
-        triangleIndices.Add(firstIndex);
-        triangleIndices.Add(firstIndex + 1);
-        triangleIndices.Add(firstIndex + 2);
+        /// <summary>
+        /// Adds one triangle from existing authoritative position indices.
+        /// </summary>
+        public void AddTriangle(int firstPositionIndex, int secondPositionIndex, int thirdPositionIndex)
+        {
+            TriangleIndices.Add(firstPositionIndex);
+            TriangleIndices.Add(secondPositionIndex);
+            TriangleIndices.Add(thirdPositionIndex);
+        }
+
+        /// <summary>
+        /// Freezes and validates the completed support mesh.
+        /// </summary>
+        public SupportMeshData CreateMeshData()
+        {
+            return new SupportMeshData(Positions, TriangleIndices);
+        }
     }
 
     /// <summary>
@@ -563,7 +632,3 @@ public static class SupportMeshBuilder
         public float Radius { get; }
     }
 }
-
-
-
-

@@ -7,6 +7,7 @@ using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Geometry.Supports;
+using Pillar.Rendering.Geometry;
 
 namespace Pillar.Rendering.EntityRenderers;
 
@@ -37,12 +38,7 @@ public static class SupportRenderer
     public static GroupModel3D Create(SupportEntity support, PhongMaterial material, int supportSides)
     {
         SupportMeshData meshData = SupportMeshBuilder.Build(support, supportSides);
-        MeshGeometry3D geometry = new MeshGeometry3D
-        {
-            Positions = new Vector3Collection(meshData.Positions),
-            Indices = new IntCollection(meshData.TriangleIndices),
-            Normals = new Vector3Collection(meshData.Normals)
-        };
+        MeshGeometry3D geometry = FlatShadedMeshGeometryBuilder.Create(meshData.Positions, meshData.TriangleIndices);
 
         return MeshRenderer.CreateSelectableMeshGroup(geometry, material);
     }

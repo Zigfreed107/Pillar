@@ -306,8 +306,7 @@ internal static class RaftTextSmokeTests
     {
         Vector3[] vertices = { Vector3.Zero, Vector3.UnitX, Vector3.UnitY };
         int[] indices = { 0, 1, 2 };
-        Vector3[] normals = { Vector3.UnitZ, Vector3.UnitZ, Vector3.UnitZ };
-        return new MeshEntity("Raft Text Model", vertices, indices, normals);
+        return new MeshEntity("Raft Text Model", vertices, indices);
     }
 
     /// <summary>

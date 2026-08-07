@@ -1,6 +1,7 @@
 // FaceSetSelectionAnalyzer.cs
 // Provides renderer-agnostic mesh face queries for reusable face-set selection workflows.
 using Pillar.Core.Entities;
+using Pillar.Geometry.Topology;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -12,7 +13,6 @@ namespace Pillar.Geometry.Analysis;
 /// </summary>
 public static class FaceSetSelectionAnalyzer
 {
-    private const float EdgePointKeyScale = 10000.0f;
     private const float DegenerateNormalTolerance = 0.00000001f;
     private const double LineIntersectionTolerance = 0.0001;
 
@@ -130,7 +130,7 @@ public static class FaceSetSelectionAnalyzer
         }
 
         Vector3[] triangleNormals = CreateTriangleNormals(mesh);
-        List<int>[] adjacency = CreateTriangleAdjacency(mesh, triangleCount);
+        IndexedMeshTopology topology = IndexedMeshTopology.Create(mesh.Vertices, mesh.TriangleIndices);
         bool[] includedTriangles = new bool[triangleCount];
         Queue<int> openTriangles = new Queue<int>();
         double clampedThresholdDegrees = Math.Min(180.0, Math.Max(0.0, thresholdDegrees));
@@ -143,7 +143,7 @@ public static class FaceSetSelectionAnalyzer
         {
             int currentTriangleIndex = openTriangles.Dequeue();
             selectedTriangleIndices.Add(currentTriangleIndex);
-            IReadOnlyList<int> neighbors = adjacency[currentTriangleIndex];
+            IReadOnlyList<int> neighbors = topology.GetAdjacentTriangles(currentTriangleIndex);
 
             for (int i = 0; i < neighbors.Count; i++)
             {
@@ -278,58 +278,6 @@ public static class FaceSetSelectionAnalyzer
     }
 
     /// <summary>
-    /// Builds local-space triangle adjacency from shared geometric edges.
-    /// </summary>
-    private static List<int>[] CreateTriangleAdjacency(MeshEntity mesh, int triangleCount)
-    {
-        List<int>[] adjacency = new List<int>[triangleCount];
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge = new Dictionary<MeshEdgeKey, List<int>>();
-
-        for (int i = 0; i < triangleCount; i++)
-        {
-            adjacency[i] = new List<int>(3);
-        }
-
-        for (int triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
-        {
-            int baseIndex = triangleIndex * 3;
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], triangleIndex, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], triangleIndex, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], mesh.Vertices[mesh.TriangleIndices[baseIndex]], triangleIndex, edgeOwnersByEdge, adjacency);
-        }
-
-        return adjacency;
-    }
-
-    /// <summary>
-    /// Adds one mesh edge and links this triangle to previous owners of the same geometric edge.
-    /// </summary>
-    private static void AddTriangleEdge(
-        Vector3 firstVertex,
-        Vector3 secondVertex,
-        int triangleIndex,
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge,
-        List<int>[] adjacency)
-    {
-        MeshEdgeKey edgeKey = new MeshEdgeKey(new PointKey(firstVertex), new PointKey(secondVertex));
-
-        if (edgeOwnersByEdge.TryGetValue(edgeKey, out List<int>? ownerTriangleIndices))
-        {
-            for (int i = 0; i < ownerTriangleIndices.Count; i++)
-            {
-                int ownerTriangleIndex = ownerTriangleIndices[i];
-                adjacency[triangleIndex].Add(ownerTriangleIndex);
-                adjacency[ownerTriangleIndex].Add(triangleIndex);
-            }
-
-            ownerTriangleIndices.Add(triangleIndex);
-            return;
-        }
-
-        edgeOwnersByEdge.Add(edgeKey, new List<int> { triangleIndex });
-    }
-
-    /// <summary>
     /// Calculates a normalized triangle normal with a stable fallback for degenerate faces.
     /// </summary>
     private static Vector3 CalculateNormal(Vector3 a, Vector3 b, Vector3 c)
@@ -427,106 +375,6 @@ public static class FaceSetSelectionAnalyzer
 
         float t = Math.Clamp(Vector3.Dot(point - start, segment) / lengthSquared, 0.0f, 1.0f);
         return start + (segment * t);
-    }
-
-    /// <summary>
-    /// Compares two quantized point keys in deterministic XYZ order.
-    /// </summary>
-    private static int ComparePointKeys(PointKey first, PointKey second)
-    {
-        int xComparison = first.X.CompareTo(second.X);
-
-        if (xComparison != 0)
-        {
-            return xComparison;
-        }
-
-        int yComparison = first.Y.CompareTo(second.Y);
-
-        if (yComparison != 0)
-        {
-            return yComparison;
-        }
-
-        return first.Z.CompareTo(second.Z);
-    }
-
-    /// <summary>
-    /// Stores one mesh edge using deterministic quantized endpoint ordering.
-    /// </summary>
-    private readonly struct MeshEdgeKey : IEquatable<MeshEdgeKey>
-    {
-        public MeshEdgeKey(PointKey first, PointKey second)
-        {
-            if (ComparePointKeys(first, second) <= 0)
-            {
-                First = first;
-                Second = second;
-            }
-            else
-            {
-                First = second;
-                Second = first;
-            }
-        }
-
-        public PointKey First { get; }
-
-        public PointKey Second { get; }
-
-        public bool Equals(MeshEdgeKey other)
-        {
-            return First.Equals(other.First) && Second.Equals(other.Second);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is MeshEdgeKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(First, Second);
-        }
-    }
-
-    /// <summary>
-    /// Stores one quantized mesh point for geometric edge matching.
-    /// </summary>
-    private readonly struct PointKey : IEquatable<PointKey>
-    {
-        public PointKey(Vector3 point)
-        {
-            X = Quantize(point.X);
-            Y = Quantize(point.Y);
-            Z = Quantize(point.Z);
-        }
-
-        public long X { get; }
-
-        public long Y { get; }
-
-        public long Z { get; }
-
-        public bool Equals(PointKey other)
-        {
-            return X == other.X && Y == other.Y && Z == other.Z;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is PointKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(X, Y, Z);
-        }
-
-        private static long Quantize(float value)
-        {
-            return (long)MathF.Round(value * EdgePointKeyScale);
-        }
     }
 }
 

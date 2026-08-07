@@ -9,6 +9,7 @@ using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Analysis;
 using Pillar.Geometry.Supports;
+using Pillar.Geometry.Topology;
 using Pillar.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -24,7 +25,6 @@ namespace Pillar.Geometry.SmokeTests;
 public static class Program
 {
     private const float TriangleAreaTolerance = 0.00000001f;
-    private const float CoordinateQuantizationScale = 100000.0f;
 
     /// <summary>
     /// Runs all smoke tests and returns a process exit code.
@@ -112,11 +112,11 @@ public static class Program
         RunTest(failures, "Line support pattern handles degenerate segments", ValidateLineSupportPatternHandlesDegenerateSegments);
         RunTest(failures, "Line support pattern can skip bend supports", ValidateLineSupportPatternCanSkipBendSupports);
         RunTest(failures, "Contour support stays in seeded connected patch", ValidateContourSupportStaysInSeededConnectedPatch);
-        RunTest(failures, "Contour support traverses duplicated STL-style panel vertices", ValidateContourSupportTraversesDuplicatedPanelVertices);
+        RunTest(failures, "Contour support traverses an indexed shared edge", ValidateContourSupportTraversesIndexedPanel);
         RunTest(failures, "Contour support selects nearby longer path when seed slice is short", ValidateContourSupportSelectsNearbyLongerPathWhenSeedSliceIsShort);
         RunTest(failures, "Contour support bridges tiny slice endpoint gaps", ValidateContourSupportBridgesTinySliceEndpointGaps);
         RunTest(failures, "Contour support threshold blocks sharp face transitions", ValidateContourSupportThresholdBlocksSharpFaceTransitions);
-        RunTest(failures, "Contour support threshold works with duplicated STL-style vertices", ValidateContourSupportThresholdWorksWithDuplicatedVertices);
+        RunTest(failures, "Contour support threshold works with indexed adjacency", ValidateContourSupportThresholdWorksWithIndexedVertices);
         RunTest(failures, "Contour support closed loop spacing is even", ValidateContourSupportClosedLoopSpacingIsEven);
         RunTest(failures, "Contour support closed loop start offset rotates supports", ValidateContourSupportClosedLoopStartOffsetRotatesSupports);
         RunTest(failures, "Contour support places supports on noisy near-vertical faces", ValidateContourSupportPlacesSupportsOnNoisyNearVerticalFaces);
@@ -148,6 +148,7 @@ public static class Program
         RunTest(failures, "Horizontal face angle classifier excludes vertical faces", ValidateHorizontalFaceAngleClassifierExcludesVerticalFace);
         RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
+        IndexedMeshSmokeTests.Run(failures);
         SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);
         TagSmokeTests.Run(failures);
@@ -372,7 +373,7 @@ public static class Program
             }
 
             Vector3 centroidDirection = ((a + b + c) / 3.0f) - jointCenter;
-            Vector3 normal = meshData.Normals[indexA];
+            Vector3 normal = Vector3.Normalize(Vector3.Cross(b - a, c - a));
 
             if (Vector3.Dot(normal, centroidDirection) <= 0.0f)
             {
@@ -2939,11 +2940,11 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that imported STL-style triangle soup still traverses coincident geometric edges.
+    /// Validates that indexed adjacent triangles traverse their shared authoritative edge.
     /// </summary>
-    private static void ValidateContourSupportTraversesDuplicatedPanelVertices()
+    private static void ValidateContourSupportTraversesIndexedPanel()
     {
-        MeshEntity mesh = CreateStlStyleSingleVerticalPanel();
+        MeshEntity mesh = CreateSingleVerticalPanel();
         ContourSupportSettings settings = new ContourSupportSettings(
             new Vector3(0.0f, 2.0f, 2.0f),
             0,
@@ -2956,12 +2957,12 @@ public static class Program
 
         if (!ContourSupportPattern.TryCreate(mesh, settings, out result))
         {
-            throw new InvalidOperationException("Expected a contour on the duplicated-vertex panel.");
+            throw new InvalidOperationException("Expected a contour on the indexed panel.");
         }
 
         if (result.Length < 9.999f)
         {
-            throw new InvalidOperationException("Expected the contour to span both duplicated-vertex triangles edge-to-edge.");
+            throw new InvalidOperationException("Expected the contour to span both indexed triangles edge-to-edge.");
         }
 
         float minimumY = float.MaxValue;
@@ -2975,7 +2976,7 @@ public static class Program
 
         if (minimumY > 0.0001f || maximumY < 9.999f)
         {
-            throw new InvalidOperationException("Expected the duplicated-vertex panel contour to reach both panel edges.");
+            throw new InvalidOperationException("Expected the indexed panel contour to reach both panel edges.");
         }
     }
 
@@ -3081,11 +3082,11 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that geometric adjacency still respects normal-angle thresholding on STL-style meshes.
+    /// Validates that indexed adjacency respects normal-angle thresholding.
     /// </summary>
-    private static void ValidateContourSupportThresholdWorksWithDuplicatedVertices()
+    private static void ValidateContourSupportThresholdWorksWithIndexedVertices()
     {
-        MeshEntity mesh = CreateStlStyleBentVerticalPanels();
+        MeshEntity mesh = CreateBentVerticalPanels();
         ContourSupportSettings blockedSettings = new ContourSupportSettings(
             new Vector3(0.0f, 2.0f, 2.0f),
             0,
@@ -3108,17 +3109,17 @@ public static class Program
         if (!ContourSupportPattern.TryCreate(mesh, blockedSettings, out blockedResult)
             || !ContourSupportPattern.TryCreate(mesh, allowedSettings, out allowedResult))
         {
-            throw new InvalidOperationException("Expected both duplicated-vertex threshold cases to produce contours.");
+            throw new InvalidOperationException("Expected both indexed threshold cases to produce contours.");
         }
 
         if (blockedResult.Length < 9.999f)
         {
-            throw new InvalidOperationException("Expected the blocked duplicated-vertex contour to still span the seeded panel.");
+            throw new InvalidOperationException("Expected the blocked indexed contour to still span the seeded panel.");
         }
 
         if (allowedResult.Length <= blockedResult.Length + 9.0f)
         {
-            throw new InvalidOperationException("Expected the relaxed threshold to include the adjacent duplicated-vertex face.");
+            throw new InvalidOperationException("Expected the relaxed threshold to include the adjacent indexed face.");
         }
     }
 
@@ -5021,7 +5022,6 @@ public static class Program
                 1,
                 2
             },
-            new List<Vector3>(),
             userTransform: userTransform);
     }
 
@@ -5108,7 +5108,6 @@ public static class Program
                 4,
                 7
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5137,7 +5136,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5172,7 +5170,6 @@ public static class Program
                 4,
                 5
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5201,7 +5198,6 @@ public static class Program
                 4,
                 5
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5228,7 +5224,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5255,7 +5250,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5282,7 +5276,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5309,36 +5302,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
-            userTransform: Transform3DData.Identity);
-    }
-
-    /// <summary>
-    /// Creates one STL-style vertical panel where adjacent triangles duplicate coincident vertices.
-    /// </summary>
-    private static MeshEntity CreateStlStyleSingleVerticalPanel()
-    {
-        return new MeshEntity(
-            "STL-style single vertical panel",
-            new List<Vector3>
-            {
-                new Vector3(0.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 0.0f, 10.0f)
-            },
-            new List<int>
-            {
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-            },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5389,7 +5352,6 @@ public static class Program
                 8,
                 2
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5448,7 +5410,6 @@ public static class Program
                 11,
                 10
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5485,7 +5446,6 @@ public static class Program
                 6,
                 7
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5520,48 +5480,6 @@ public static class Program
                 5,
                 2
             },
-            new List<Vector3>(),
-            userTransform: Transform3DData.Identity);
-    }
-
-    /// <summary>
-    /// Creates two bent STL-style panels where each triangle owns its own vertex records.
-    /// </summary>
-    private static MeshEntity CreateStlStyleBentVerticalPanels()
-    {
-        return new MeshEntity(
-            "STL-style bent vertical panels",
-            new List<Vector3>
-            {
-                new Vector3(0.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 0.0f, 0.0f),
-                new Vector3(0.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 0.0f, 10.0f),
-                new Vector3(0.0f, 10.0f, 0.0f),
-                new Vector3(10.0f, 10.0f, 0.0f),
-                new Vector3(10.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 10.0f, 0.0f),
-                new Vector3(10.0f, 10.0f, 10.0f),
-                new Vector3(0.0f, 10.0f, 10.0f)
-            },
-            new List<int>
-            {
-                0,
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11
-            },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5610,7 +5528,6 @@ public static class Program
                 4,
                 7
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5661,7 +5578,6 @@ public static class Program
                 4,
                 7
             },
-            new List<Vector3>(),
             userTransform: Transform3DData.Identity);
     }
 
@@ -5688,7 +5604,6 @@ public static class Program
                 2,
                 3
             },
-            new List<Vector3>(),
             userTransform: userTransform);
     }
 
@@ -5707,12 +5622,22 @@ public static class Program
             throw new InvalidOperationException("The mesh did not contain complete triangles.");
         }
 
-        if (meshData.Normals.Count != meshData.Positions.Count)
+        if (meshData.Positions.Count >= meshData.TriangleIndices.Count)
         {
-            throw new InvalidOperationException("The mesh normal count did not match the position count.");
+            throw new InvalidOperationException("Expected generated support primitives to reuse indexed positions.");
         }
 
-        Dictionary<EdgeKey, int> edgeUseCounts = new Dictionary<EdgeKey, int>();
+        IndexedMeshTopology topology = IndexedMeshTopology.Create(meshData.Positions, meshData.TriangleIndices);
+
+        if (topology.OpenEdgeCount != 0)
+        {
+            throw new InvalidOperationException($"Expected a closed indexed support mesh, but found {topology.OpenEdgeCount} open edge(s).");
+        }
+
+        if (topology.NonManifoldEdgeCount != 0)
+        {
+            throw new InvalidOperationException($"Expected manifold support components, but found {topology.NonManifoldEdgeCount} non-manifold edge(s).");
+        }
 
         for (int i = 0; i < meshData.TriangleIndices.Count; i += 3)
         {
@@ -5727,17 +5652,6 @@ public static class Program
             ValidateFinite(b);
             ValidateFinite(c);
             ValidateTriangleArea(a, b, c);
-            AddEdge(edgeUseCounts, a, b);
-            AddEdge(edgeUseCounts, b, c);
-            AddEdge(edgeUseCounts, c, a);
-        }
-
-        foreach (KeyValuePair<EdgeKey, int> edgeUseCount in edgeUseCounts)
-        {
-            if (edgeUseCount.Value % 2 != 0)
-            {
-                throw new InvalidOperationException($"Expected every mesh edge to have no open boundary, but an edge was used {edgeUseCount.Value} time(s).");
-            }
         }
     }
 
@@ -5784,7 +5698,7 @@ public static class Program
             }
 
             Vector3 centroidDirection = ((a + b + c) / 3.0f) - center;
-            Vector3 normal = meshData.Normals[indexA];
+            Vector3 normal = Vector3.Normalize(Vector3.Cross(b - a, c - a));
 
             if (Vector3.Dot(normal, centroidDirection) <= 0.0f)
             {
@@ -5837,173 +5751,4 @@ public static class Program
         }
     }
 
-    /// <summary>
-    /// Adds one undirected edge to the manifold edge-use counter.
-    /// </summary>
-    private static void AddEdge(Dictionary<EdgeKey, int> edgeUseCounts, Vector3 a, Vector3 b)
-    {
-        EdgeKey edgeKey = new EdgeKey(VertexKey.FromVector(a), VertexKey.FromVector(b));
-
-        if (edgeUseCounts.TryGetValue(edgeKey, out int useCount))
-        {
-            edgeUseCounts[edgeKey] = useCount + 1;
-        }
-        else
-        {
-            edgeUseCounts.Add(edgeKey, 1);
-        }
-    }
-
-    /// <summary>
-    /// Stores one quantized vertex coordinate for stable topology comparison.
-    /// </summary>
-    private readonly struct VertexKey : IComparable<VertexKey>, IEquatable<VertexKey>
-    {
-        /// <summary>
-        /// Creates one quantized vertex key.
-        /// </summary>
-        public VertexKey(long x, long y, long z)
-        {
-            X = x;
-            Y = y;
-            Z = z;
-        }
-
-        /// <summary>
-        /// Gets the quantized X component.
-        /// </summary>
-        public long X { get; }
-
-        /// <summary>
-        /// Gets the quantized Y component.
-        /// </summary>
-        public long Y { get; }
-
-        /// <summary>
-        /// Gets the quantized Z component.
-        /// </summary>
-        public long Z { get; }
-
-        /// <summary>
-        /// Creates a vertex key from a floating-point position.
-        /// </summary>
-        public static VertexKey FromVector(Vector3 position)
-        {
-            return new VertexKey(
-                Quantize(position.X),
-                Quantize(position.Y),
-                Quantize(position.Z));
-        }
-
-        /// <summary>
-        /// Compares this key to another key in lexicographic coordinate order.
-        /// </summary>
-        public int CompareTo(VertexKey other)
-        {
-            int xComparison = X.CompareTo(other.X);
-
-            if (xComparison != 0)
-            {
-                return xComparison;
-            }
-
-            int yComparison = Y.CompareTo(other.Y);
-
-            if (yComparison != 0)
-            {
-                return yComparison;
-            }
-
-            return Z.CompareTo(other.Z);
-        }
-
-        /// <summary>
-        /// Checks whether two vertex keys describe the same quantized coordinate.
-        /// </summary>
-        public bool Equals(VertexKey other)
-        {
-            return X == other.X && Y == other.Y && Z == other.Z;
-        }
-
-        /// <summary>
-        /// Checks whether an object is the same vertex key.
-        /// </summary>
-        public override bool Equals(object? obj)
-        {
-            return obj is VertexKey other && Equals(other);
-        }
-
-        /// <summary>
-        /// Gets the hash code for dictionary lookups.
-        /// </summary>
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(X, Y, Z);
-        }
-
-        /// <summary>
-        /// Converts one component to a stable integer grid.
-        /// </summary>
-        private static long Quantize(float value)
-        {
-            return (long)MathF.Round(value * CoordinateQuantizationScale);
-        }
-    }
-
-    /// <summary>
-    /// Stores one undirected edge between two quantized vertices.
-    /// </summary>
-    private readonly struct EdgeKey : IEquatable<EdgeKey>
-    {
-        /// <summary>
-        /// Creates one edge key with deterministic endpoint ordering.
-        /// </summary>
-        public EdgeKey(VertexKey first, VertexKey second)
-        {
-            if (first.CompareTo(second) <= 0)
-            {
-                First = first;
-                Second = second;
-            }
-            else
-            {
-                First = second;
-                Second = first;
-            }
-        }
-
-        /// <summary>
-        /// Gets the first ordered endpoint.
-        /// </summary>
-        public VertexKey First { get; }
-
-        /// <summary>
-        /// Gets the second ordered endpoint.
-        /// </summary>
-        public VertexKey Second { get; }
-
-        /// <summary>
-        /// Checks whether two edge keys describe the same undirected edge.
-        /// </summary>
-        public bool Equals(EdgeKey other)
-        {
-            return First.Equals(other.First) && Second.Equals(other.Second);
-        }
-
-        /// <summary>
-        /// Checks whether an object is the same edge key.
-        /// </summary>
-        public override bool Equals(object? obj)
-        {
-            return obj is EdgeKey other && Equals(other);
-        }
-
-        /// <summary>
-        /// Gets the hash code for dictionary lookups.
-        /// </summary>
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(First, Second);
-        }
-    }
 }

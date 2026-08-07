@@ -4,6 +4,7 @@ using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Rendering.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -44,6 +45,6 @@ public static class RaftTextRenderer
         IReadOnlyList<Vector3> vertices,
         IReadOnlyList<int> triangleIndices)
     {
-        return TagRenderer.CreateFlatShadedGeometry(vertices, triangleIndices);
+        return FlatShadedMeshGeometryBuilder.Create(vertices, triangleIndices);
     }
 }

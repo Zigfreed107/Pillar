@@ -154,7 +154,6 @@ internal static class BracingPerformanceBenchmarks
                 new Vector3(1.0f, 0.0f, 0.0f),
                 new Vector3(0.0f, 1.0f, 0.0f)
             },
-            new List<int> { 0, 1, 2 },
-            new List<Vector3>());
+            new List<int> { 0, 1, 2 });
     }
 }

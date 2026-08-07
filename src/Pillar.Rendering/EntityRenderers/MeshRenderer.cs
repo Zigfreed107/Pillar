@@ -6,6 +6,7 @@ using HelixToolkit.Maths;
 using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using Pillar.Geometry.Analysis;
+using Pillar.Rendering.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -40,14 +41,7 @@ public static class MeshRenderer
     /// </summary>
     public static GroupModel3D Create(MeshEntity mesh, PhongMaterial material)
     {
-        MeshGeometry3D geometry = new MeshGeometry3D
-        {
-            Positions = new Vector3Collection(mesh.Vertices),
-            Indices = new IntCollection(mesh.TriangleIndices),
-            Normals = mesh.Normals.Count == mesh.Vertices.Count
-                ? new Vector3Collection(mesh.Normals)
-                : null
-        };
+        MeshGeometry3D geometry = FlatShadedMeshGeometryBuilder.Create(mesh.Vertices, mesh.TriangleIndices);
 
         GroupModel3D group = CreateSelectableMeshGroup(geometry, material);
 
@@ -249,14 +243,7 @@ public static class MeshRenderer
             thresholdDegrees);
 
         highlightModel.Material = CreateFaceHighlightMaterial(highlightColor);
-        highlightModel.Geometry = new MeshGeometry3D
-        {
-            Positions = new Vector3Collection(mesh.Vertices),
-            Indices = new IntCollection(matchingTriangleIndices),
-            Normals = mesh.Normals.Count == mesh.Vertices.Count
-                ? new Vector3Collection(mesh.Normals)
-                : null
-        };
+        highlightModel.Geometry = FlatShadedMeshGeometryBuilder.Create(mesh.Vertices, matchingTriangleIndices);
         highlightModel.Visibility = matchingTriangleIndices.Count == 0
             ? System.Windows.Visibility.Collapsed
             : System.Windows.Visibility.Visible;
@@ -324,14 +311,7 @@ public static class MeshRenderer
 
         ClearFaceHighlightSelectionState(selectionModel);
         selectionModel.Material = CreateFaceHighlightMaterial(selectionColor);
-        selectionModel.Geometry = new MeshGeometry3D
-        {
-            Positions = new Vector3Collection(mesh.Vertices),
-            Indices = new IntCollection(selectedMeshIndices),
-            Normals = mesh.Normals.Count == mesh.Vertices.Count
-                ? new Vector3Collection(mesh.Normals)
-                : null
-        };
+        selectionModel.Geometry = FlatShadedMeshGeometryBuilder.Create(mesh.Vertices, selectedMeshIndices);
         selectionModel.Visibility = selectedMeshIndices.Count == 0
             ? System.Windows.Visibility.Collapsed
             : System.Windows.Visibility.Visible;

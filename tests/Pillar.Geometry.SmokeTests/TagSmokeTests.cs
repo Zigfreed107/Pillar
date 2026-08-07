@@ -386,13 +386,7 @@ internal static class TagSmokeTests
             Vector3.UnitY
         };
         int[] indices = { 0, 1, 2 };
-        Vector3[] normals =
-        {
-            Vector3.UnitZ,
-            Vector3.UnitZ,
-            Vector3.UnitZ
-        };
-        return new MeshEntity("Tag Model", vertices, indices, normals);
+        return new MeshEntity("Tag Model", vertices, indices);
     }
 
     /// <summary>

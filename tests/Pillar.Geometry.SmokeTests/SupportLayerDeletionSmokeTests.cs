@@ -116,8 +116,7 @@ internal static class SupportLayerDeletionSmokeTests
         MeshEntity mesh = new MeshEntity(
             "Cached bounds",
             sourceVertices,
-            new[] { 0, 1, 2 },
-            Array.Empty<Vector3>());
+            new[] { 0, 1, 2 });
 
         (Vector3 Min, Vector3 Max) localBounds = mesh.GetLocalBounds();
         Require(AreClose(localBounds.Min, new Vector3(-2.0f, -1.0f, -3.0f)), "Cached local minimum was incorrect.");
@@ -146,8 +145,7 @@ internal static class SupportLayerDeletionSmokeTests
                 new Vector3(100.0f, 0.0f, 0.0f),
                 new Vector3(0.0f, 100.0f, 0.0f)
             },
-            new[] { 0, 1, 2 },
-            Array.Empty<Vector3>());
+            new[] { 0, 1, 2 });
     }
 
     /// <summary>

@@ -22,6 +22,7 @@ namespace Pillar.Core.Persistence;
 public sealed class GphDocumentSerializer
 {
     private const string FormatName = "Graphite";
+    private const int CurrentSchemaVersion = 1;
     private const string LineTypeName = "line";
     private const string MeshTypeName = "mesh";
     private const string SupportTypeName = "support";
@@ -160,7 +161,8 @@ public sealed class GphDocumentSerializer
     {
         GphDocumentDto dto = new GphDocumentDto
         {
-            Format = FormatName
+            Format = FormatName,
+            SchemaVersion = CurrentSchemaVersion
         };
 
         foreach (CadEntity entity in document.Entities)
@@ -309,11 +311,6 @@ public sealed class GphDocumentSerializer
                 dto.Vertices.Add(CreateVectorDto(vertex));
             }
 
-            foreach (Vector3 normal in mesh.Normals)
-            {
-                dto.Normals.Add(CreateVectorDto(normal));
-            }
-
             return dto;
         }
 
@@ -367,6 +364,12 @@ public sealed class GphDocumentSerializer
         if (!string.Equals(documentDto.Format, FormatName, StringComparison.Ordinal))
         {
             throw new InvalidDataException("The selected file is not a Graphite project file.");
+        }
+
+        if (documentDto.SchemaVersion != CurrentSchemaVersion)
+        {
+            throw new InvalidDataException(
+                $"The project uses unsupported schema version {documentDto.SchemaVersion}. Expected version {CurrentSchemaVersion}.");
         }
 
         if (documentDto.Entities == null)
@@ -698,12 +701,11 @@ public sealed class GphDocumentSerializer
     }
 
     /// <summary>
-    /// Recreates a mesh entity from embedded vertex, index, and normal buffers.
+    /// Recreates a mesh entity from embedded position and triangle-index buffers.
     /// </summary>
     private static MeshEntity CreateMeshEntity(GphEntityDto entityDto)
     {
         List<Vector3> vertices = CreateVectorList(entityDto.Vertices, "vertices");
-        List<Vector3> normals = CreateVectorList(entityDto.Normals, "normals");
 
         if (entityDto.TriangleIndices == null)
         {
@@ -717,7 +719,6 @@ public sealed class GphDocumentSerializer
             entityDto.Name,
             vertices,
             triangleIndices,
-            normals,
             entityDto.SourcePath,
             entityDto.OriginalFileName,
             CreateTransformOrIdentity(entityDto.ImportPlacementTransform),
@@ -1947,6 +1948,7 @@ public sealed class GphDocumentSerializer
     private sealed class GphDocumentDto
     {
         public string Format { get; set; } = string.Empty;
+        public int SchemaVersion { get; set; }
         public List<GphEntityDto> Entities { get; set; } = new List<GphEntityDto>();
         public List<GphSupportLayerGroupDto> SupportLayerGroups { get; set; } = new List<GphSupportLayerGroupDto>();
     }
@@ -1965,7 +1967,6 @@ public sealed class GphDocumentSerializer
         public string? OriginalFileName { get; set; }
         public List<GphVector3Dto> Vertices { get; set; } = new List<GphVector3Dto>();
         public List<int>? TriangleIndices { get; set; }
-        public List<GphVector3Dto> Normals { get; set; } = new List<GphVector3Dto>();
         public GphTransform3DDto? ImportPlacementTransform { get; set; }
         public GphTransform3DDto? UserTransform { get; set; }
         public Guid? SupportLayerGroupId { get; set; }

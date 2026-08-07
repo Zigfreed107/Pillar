@@ -71,29 +71,27 @@ public class StlImporter : IModelImporter
     /// </summary>
     private static MeshEntity ReadBinary(string filePath)
     {
-        List<Vector3> vertices = new List<Vector3>();
-        List<int> indices = new List<int>();
-        List<Vector3> normals = new List<Vector3>();
-
         using FileStream stream = File.OpenRead(filePath);
         using BinaryReader reader = new BinaryReader(stream);
 
         stream.Position = BinaryHeaderLength;
         string name = Path.GetFileNameWithoutExtension(filePath);
         uint triangleCount = reader.ReadUInt32();
+        int indexCapacity = CalculateIndexCapacity(triangleCount);
+        IndexedStlMeshBuilder meshBuilder = new IndexedStlMeshBuilder(indexCapacity);
 
         for (uint triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
         {
-            Vector3 normal = ReadVector(reader);
+            _ = ReadVector(reader);
             Vector3 a = ReadVector(reader);
             Vector3 b = ReadVector(reader);
             Vector3 c = ReadVector(reader);
             _ = reader.ReadUInt16();
 
-            AddTriangle(vertices, indices, normals, a, b, c, normal);
+            meshBuilder.AddTriangle(a, b, c);
         }
 
-        return new MeshEntity(name, vertices, indices, normals, filePath, originalFileName: Path.GetFileName(filePath));
+        return new MeshEntity(name, meshBuilder.Positions, meshBuilder.TriangleIndices, filePath, originalFileName: Path.GetFileName(filePath));
     }
 
     /// <summary>
@@ -101,11 +99,8 @@ public class StlImporter : IModelImporter
     /// </summary>
     private static MeshEntity ReadAscii(string filePath)
     {
-        List<Vector3> vertices = new List<Vector3>();
-        List<int> indices = new List<int>();
-        List<Vector3> normals = new List<Vector3>();
+        IndexedStlMeshBuilder meshBuilder = new IndexedStlMeshBuilder();
         List<Vector3> pendingVertices = new List<Vector3>(3);
-        Vector3 currentNormal = Vector3.Zero;
         string name = Path.GetFileNameWithoutExtension(filePath);
 
         using StreamReader reader = new StreamReader(filePath);
@@ -126,7 +121,6 @@ public class StlImporter : IModelImporter
 
             if (trimmed.StartsWith("facet normal ", StringComparison.OrdinalIgnoreCase))
             {
-                currentNormal = ParseVector(trimmed.Substring("facet normal ".Length));
                 continue;
             }
 
@@ -139,46 +133,25 @@ public class StlImporter : IModelImporter
 
             if (pendingVertices.Count == 3)
             {
-                AddTriangle(vertices, indices, normals, pendingVertices[0], pendingVertices[1], pendingVertices[2], currentNormal);
+                meshBuilder.AddTriangle(pendingVertices[0], pendingVertices[1], pendingVertices[2]);
                 pendingVertices.Clear();
             }
         }
 
-        return new MeshEntity(name, vertices, indices, normals, filePath, originalFileName: Path.GetFileName(filePath));
+        return new MeshEntity(name, meshBuilder.Positions, meshBuilder.TriangleIndices, filePath, originalFileName: Path.GetFileName(filePath));
     }
 
     /// <summary>
-    /// Appends one STL triangle to the mesh buffers and computes a fallback normal when required.
+    /// Converts the binary facet count into the list capacity required by the triangle index buffer.
     /// </summary>
-    private static void AddTriangle(
-        List<Vector3> vertices,
-        List<int> indices,
-        List<Vector3> normals,
-        Vector3 a,
-        Vector3 b,
-        Vector3 c,
-        Vector3 normal)
+    private static int CalculateIndexCapacity(uint triangleCount)
     {
-        if (normal.LengthSquared() < float.Epsilon)
+        if (triangleCount > int.MaxValue / 3)
         {
-            Vector3 calculatedNormal = Vector3.Cross(b - a, c - a);
-            normal = calculatedNormal.LengthSquared() < float.Epsilon
-                ? Vector3.UnitZ
-                : Vector3.Normalize(calculatedNormal);
+            throw new InvalidDataException("The STL file contains too many triangles for an in-memory mesh.");
         }
 
-        int firstIndex = vertices.Count;
-        vertices.Add(a);
-        vertices.Add(b);
-        vertices.Add(c);
-
-        indices.Add(firstIndex);
-        indices.Add(firstIndex + 1);
-        indices.Add(firstIndex + 2);
-
-        normals.Add(normal);
-        normals.Add(normal);
-        normals.Add(normal);
+        return (int)triangleCount * 3;
     }
 
     /// <summary>
@@ -205,5 +178,64 @@ public class StlImporter : IModelImporter
             float.Parse(parts[0], CultureInfo.InvariantCulture),
             float.Parse(parts[1], CultureInfo.InvariantCulture),
             float.Parse(parts[2], CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Accumulates STL facets while reusing position indices for exactly equal local-space coordinates.
+    /// </summary>
+    private sealed class IndexedStlMeshBuilder
+    {
+        private readonly Dictionary<Vector3, int> _positionIndices;
+
+        /// <summary>
+        /// Creates an indexed STL mesh builder with optional preallocation for binary imports.
+        /// </summary>
+        public IndexedStlMeshBuilder(int indexCapacity = 0)
+        {
+            Positions = new List<Vector3>(indexCapacity);
+            TriangleIndices = new List<int>(indexCapacity);
+            _positionIndices = new Dictionary<Vector3, int>(indexCapacity);
+        }
+
+        /// <summary>
+        /// Gets the unique local-space positions in first-seen order.
+        /// </summary>
+        public List<Vector3> Positions { get; }
+
+        /// <summary>
+        /// Gets triangle position indices in original STL facet order.
+        /// </summary>
+        public List<int> TriangleIndices { get; }
+
+        /// <summary>
+        /// Appends one facet without changing its winding or triangle ordinal.
+        /// </summary>
+        public void AddTriangle(Vector3 a, Vector3 b, Vector3 c)
+        {
+            TriangleIndices.Add(GetOrAddPosition(a));
+            TriangleIndices.Add(GetOrAddPosition(b));
+            TriangleIndices.Add(GetOrAddPosition(c));
+        }
+
+        /// <summary>
+        /// Resolves one finite coordinate to its exact shared position index.
+        /// </summary>
+        private int GetOrAddPosition(Vector3 position)
+        {
+            if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z))
+            {
+                throw new InvalidDataException("An STL facet contains a non-finite vertex position.");
+            }
+
+            if (_positionIndices.TryGetValue(position, out int positionIndex))
+            {
+                return positionIndex;
+            }
+
+            positionIndex = Positions.Count;
+            Positions.Add(position);
+            _positionIndices.Add(position, positionIndex);
+            return positionIndex;
+        }
     }
 }

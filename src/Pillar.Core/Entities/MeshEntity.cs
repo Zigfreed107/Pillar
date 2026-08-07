@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Numerics;
+using Pillar.Core.Geometry;
 
 namespace Pillar.Core.Entities;
 
@@ -21,7 +22,6 @@ public class MeshEntity : CadEntity
     public string OriginalFileName { get; }
     public IReadOnlyList<Vector3> Vertices { get; }
     public IReadOnlyList<int> TriangleIndices { get; }
-    public IReadOnlyList<Vector3> Normals { get; }
 
     /// <summary>
     /// Gets or sets the import-time placement transform that grounds raw geometry without editing vertices.
@@ -70,13 +70,12 @@ public class MeshEntity : CadEntity
     }
 
     /// <summary>
-    /// Creates an immutable mesh entity from imported vertex, index, and normal buffers.
+    /// Creates an immutable mesh entity from imported position and triangle-index buffers.
     /// </summary>
     public MeshEntity(
         string name,
         IReadOnlyList<Vector3> vertices,
         IReadOnlyList<int> triangleIndices,
-        IReadOnlyList<Vector3> normals,
         string? sourcePath = null,
         Transform3DData? importPlacementTransform = null,
         Transform3DData? userTransform = null,
@@ -93,43 +92,12 @@ public class MeshEntity : CadEntity
             throw new ArgumentNullException(nameof(triangleIndices));
         }
 
-        if (normals == null)
-        {
-            throw new ArgumentNullException(nameof(normals));
-        }
-
-        if (vertices.Count == 0)
-        {
-            throw new ArgumentException("A mesh must contain at least one vertex.", nameof(vertices));
-        }
-
-        if (triangleIndices.Count == 0 || triangleIndices.Count % 3 != 0)
-        {
-            throw new ArgumentException("A mesh must contain triangle indices in groups of three.", nameof(triangleIndices));
-        }
-
-        if (normals.Count != 0 && normals.Count != vertices.Count)
-        {
-            throw new ArgumentException("Mesh normals must either be empty or match the vertex count.", nameof(normals));
-        }
-
-        for (int i = 0; i < triangleIndices.Count; i++)
-        {
-            int triangleIndex = triangleIndices[i];
-
-            if (triangleIndex < 0 || triangleIndex >= vertices.Count)
-            {
-                throw new ArgumentException(
-                    $"Triangle index at position {i} references vertex {triangleIndex}, but the mesh has {vertices.Count} vertices.",
-                    nameof(triangleIndices));
-            }
-        }
+        IndexedMeshValidator.Validate(vertices, triangleIndices);
 
         SourcePath = sourcePath;
         OriginalFileName = CreateOriginalFileName(originalFileName, sourcePath, Name);
         Vertices = new ReadOnlyCollection<Vector3>(new List<Vector3>(vertices));
         TriangleIndices = new ReadOnlyCollection<int>(new List<int>(triangleIndices));
-        Normals = new ReadOnlyCollection<Vector3>(new List<Vector3>(normals));
         (_localBoundsMin, _localBoundsMax) = CalculateLocalBounds(Vertices);
         _importPlacementTransform = importPlacementTransform ?? Transform3DData.Identity;
         _userTransform = userTransform ?? Transform3DData.Identity;
@@ -143,13 +111,12 @@ public class MeshEntity : CadEntity
         string name,
         IReadOnlyList<Vector3> vertices,
         IReadOnlyList<int> triangleIndices,
-        IReadOnlyList<Vector3> normals,
         string? sourcePath,
         string? originalFileName,
         Transform3DData? importPlacementTransform = null,
         Transform3DData? userTransform = null)
     {
-        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, normals, sourcePath, importPlacementTransform, userTransform, originalFileName);
+        MeshEntity mesh = new MeshEntity(name, vertices, triangleIndices, sourcePath, importPlacementTransform, userTransform, originalFileName);
         mesh.Id = id;
         return mesh;
     }

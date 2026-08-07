@@ -4,6 +4,7 @@ using Clipper2Lib;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
 using Pillar.Core.Selection;
+using Pillar.Geometry.Topology;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -151,7 +152,7 @@ public static class AreaSupportPattern
     private const float DegenerateTolerance = 0.000001f;
     private const float DuplicateSpacingFactor = 0.45f;
     private const float PointInsideTolerance = 0.0001f;
-    private const float MeshEdgePointKeyScale = 10000.0f;
+    private const float BoundaryPointKeyScale = 10000.0f;
     private const float OffsetBoundarySampleSpacing = 0.5f;
 
     /// <summary>
@@ -192,7 +193,10 @@ public static class AreaSupportPattern
 
         List<Vector3> worldVertices = CreateWorldVertices(mesh, worldTransform);
         Vector3[] triangleNormals = CreateTriangleNormals(mesh, worldVertices);
-        List<int>[] adjacency = CreateSelectedTriangleAdjacency(mesh, selectedTriangleIndices);
+        IndexedMeshTopology topology = IndexedMeshTopology.CreateForTriangles(
+            mesh.Vertices,
+            mesh.TriangleIndices,
+            selectedTriangleIndices);
         List<AreaSupportBoundarySegment> boundarySegments = new List<AreaSupportBoundarySegment>();
         List<AreaSupportBoundarySegment> offsetBoundarySegments = new List<AreaSupportBoundarySegment>();
         List<AreaSupportSample> supportSamples = new List<AreaSupportSample>();
@@ -201,7 +205,7 @@ public static class AreaSupportPattern
         int duplicateCandidateCount = 0;
         int islandCount = 0;
 
-        foreach (List<int> island in CreateTriangleIslands(selectedTriangleIndices, adjacency))
+        foreach (List<int> island in CreateTriangleIslands(selectedTriangleIndices, topology))
         {
             if (supportSamples.Count >= MaximumSupportCount)
             {
@@ -310,66 +314,9 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Builds selected-triangle adjacency from shared geometric mesh edges.
-    /// </summary>
-    private static List<int>[] CreateSelectedTriangleAdjacency(MeshEntity mesh, IReadOnlyList<int> selectedTriangleIndices)
-    {
-        int triangleCount = mesh.TriangleIndices.Count / 3;
-        List<int>[] adjacency = new List<int>[triangleCount];
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge = new Dictionary<MeshEdgeKey, List<int>>();
-        HashSet<int> selectedTriangleSet = new HashSet<int>(selectedTriangleIndices);
-
-        for (int i = 0; i < triangleCount; i++)
-        {
-            adjacency[i] = new List<int>(3);
-        }
-
-        for (int i = 0; i < selectedTriangleIndices.Count; i++)
-        {
-            int triangleIndex = selectedTriangleIndices[i];
-            int baseIndex = triangleIndex * 3;
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], triangleIndex, selectedTriangleSet, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], triangleIndex, selectedTriangleSet, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], mesh.Vertices[mesh.TriangleIndices[baseIndex]], triangleIndex, selectedTriangleSet, edgeOwnersByEdge, adjacency);
-        }
-
-        return adjacency;
-    }
-
-    /// <summary>
-    /// Adds one geometric edge and links selected triangles when the edge has already been seen.
-    /// </summary>
-    private static void AddTriangleEdge(
-        Vector3 firstVertex,
-        Vector3 secondVertex,
-        int triangleIndex,
-        HashSet<int> selectedTriangleSet,
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge,
-        List<int>[] adjacency)
-    {
-        _ = selectedTriangleSet;
-        MeshEdgeKey edgeKey = new MeshEdgeKey(new PointKey(firstVertex), new PointKey(secondVertex));
-
-        if (edgeOwnersByEdge.TryGetValue(edgeKey, out List<int>? ownerTriangleIndices))
-        {
-            for (int i = 0; i < ownerTriangleIndices.Count; i++)
-            {
-                int ownerTriangleIndex = ownerTriangleIndices[i];
-                adjacency[triangleIndex].Add(ownerTriangleIndex);
-                adjacency[ownerTriangleIndex].Add(triangleIndex);
-            }
-
-            ownerTriangleIndices.Add(triangleIndex);
-            return;
-        }
-
-        edgeOwnersByEdge.Add(edgeKey, new List<int> { triangleIndex });
-    }
-
-    /// <summary>
     /// Splits selected triangles into contiguous islands.
     /// </summary>
-    private static List<List<int>> CreateTriangleIslands(IReadOnlyList<int> selectedTriangleIndices, IReadOnlyList<int>[] adjacency)
+    private static List<List<int>> CreateTriangleIslands(IReadOnlyList<int> selectedTriangleIndices, IndexedMeshTopology topology)
     {
         List<List<int>> islands = new List<List<int>>();
         HashSet<int> unvisited = new HashSet<int>(selectedTriangleIndices);
@@ -386,7 +333,7 @@ public static class AreaSupportPattern
             {
                 int currentTriangleIndex = openTriangles.Dequeue();
                 island.Add(currentTriangleIndex);
-                IReadOnlyList<int> neighbors = adjacency[currentTriangleIndex];
+                IReadOnlyList<int> neighbors = topology.GetAdjacentTriangles(currentTriangleIndex);
 
                 for (int i = 0; i < neighbors.Count; i++)
                 {
@@ -443,15 +390,18 @@ public static class AreaSupportPattern
     /// </summary>
     private static List<BoundaryEdge> CreateBoundaryEdges(MeshEntity mesh, IReadOnlyList<Vector3> worldVertices, IReadOnlyList<int> island)
     {
-        Dictionary<MeshEdgeKey, BoundaryEdgeAccumulator> edgesByKey = new Dictionary<MeshEdgeKey, BoundaryEdgeAccumulator>();
+        Dictionary<IndexedEdgeKey, BoundaryEdgeAccumulator> edgesByKey = new Dictionary<IndexedEdgeKey, BoundaryEdgeAccumulator>();
 
         for (int i = 0; i < island.Count; i++)
         {
             int triangleIndex = island[i];
             int baseIndex = triangleIndex * 3;
-            AddBoundaryCandidate(mesh.Vertices[mesh.TriangleIndices[baseIndex]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], worldVertices[mesh.TriangleIndices[baseIndex]], worldVertices[mesh.TriangleIndices[baseIndex + 1]], edgesByKey);
-            AddBoundaryCandidate(mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], worldVertices[mesh.TriangleIndices[baseIndex + 1]], worldVertices[mesh.TriangleIndices[baseIndex + 2]], edgesByKey);
-            AddBoundaryCandidate(mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], mesh.Vertices[mesh.TriangleIndices[baseIndex]], worldVertices[mesh.TriangleIndices[baseIndex + 2]], worldVertices[mesh.TriangleIndices[baseIndex]], edgesByKey);
+            int firstPositionIndex = mesh.TriangleIndices[baseIndex];
+            int secondPositionIndex = mesh.TriangleIndices[baseIndex + 1];
+            int thirdPositionIndex = mesh.TriangleIndices[baseIndex + 2];
+            AddBoundaryCandidate(firstPositionIndex, secondPositionIndex, worldVertices[firstPositionIndex], worldVertices[secondPositionIndex], edgesByKey);
+            AddBoundaryCandidate(secondPositionIndex, thirdPositionIndex, worldVertices[secondPositionIndex], worldVertices[thirdPositionIndex], edgesByKey);
+            AddBoundaryCandidate(thirdPositionIndex, firstPositionIndex, worldVertices[thirdPositionIndex], worldVertices[firstPositionIndex], edgesByKey);
         }
 
         List<BoundaryEdge> boundaryEdges = new List<BoundaryEdge>();
@@ -471,13 +421,13 @@ public static class AreaSupportPattern
     /// Adds one potential island boundary edge.
     /// </summary>
     private static void AddBoundaryCandidate(
-        Vector3 localStart,
-        Vector3 localEnd,
+        int startPositionIndex,
+        int endPositionIndex,
         Vector3 worldStart,
         Vector3 worldEnd,
-        Dictionary<MeshEdgeKey, BoundaryEdgeAccumulator> edgesByKey)
+        Dictionary<IndexedEdgeKey, BoundaryEdgeAccumulator> edgesByKey)
     {
-        MeshEdgeKey edgeKey = new MeshEdgeKey(new PointKey(localStart), new PointKey(localEnd));
+        IndexedEdgeKey edgeKey = new IndexedEdgeKey(startPositionIndex, endPositionIndex);
 
         if (edgesByKey.TryGetValue(edgeKey, out BoundaryEdgeAccumulator accumulator))
         {
@@ -2250,28 +2200,6 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Compares two quantized point keys in deterministic XYZ order.
-    /// </summary>
-    private static int ComparePointKeys(PointKey first, PointKey second)
-    {
-        int xComparison = first.X.CompareTo(second.X);
-
-        if (xComparison != 0)
-        {
-            return xComparison;
-        }
-
-        int yComparison = first.Y.CompareTo(second.Y);
-
-        if (yComparison != 0)
-        {
-            return yComparison;
-        }
-
-        return first.Z.CompareTo(second.Z);
-    }
-
-    /// <summary>
     /// Stores one closed Clipper contour and whether it contributes generated supports.
     /// </summary>
     private sealed class OffsetFillPath
@@ -2436,81 +2364,6 @@ public static class AreaSupportPattern
     }
 
     /// <summary>
-    /// Stores one mesh edge using deterministic quantized endpoint ordering.
-    /// </summary>
-    private readonly struct MeshEdgeKey : IEquatable<MeshEdgeKey>
-    {
-        public MeshEdgeKey(PointKey first, PointKey second)
-        {
-            if (ComparePointKeys(first, second) <= 0)
-            {
-                First = first;
-                Second = second;
-            }
-            else
-            {
-                First = second;
-                Second = first;
-            }
-        }
-
-        public PointKey First { get; }
-        public PointKey Second { get; }
-
-        public bool Equals(MeshEdgeKey other)
-        {
-            return First.Equals(other.First) && Second.Equals(other.Second);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is MeshEdgeKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            return System.HashCode.Combine(First, Second);
-        }
-    }
-
-    /// <summary>
-    /// Stores one quantized mesh point for geometric edge matching.
-    /// </summary>
-    private readonly struct PointKey : IEquatable<PointKey>
-    {
-        public PointKey(Vector3 point)
-        {
-            X = Quantize(point.X);
-            Y = Quantize(point.Y);
-            Z = Quantize(point.Z);
-        }
-
-        public long X { get; }
-        public long Y { get; }
-        public long Z { get; }
-
-        public bool Equals(PointKey other)
-        {
-            return X == other.X && Y == other.Y && Z == other.Z;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is PointKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            return System.HashCode.Combine(X, Y, Z);
-        }
-
-        private static long Quantize(float value)
-        {
-            return (long)MathF.Round(value * MeshEdgePointKeyScale);
-        }
-    }
-
-    /// <summary>
     /// Stores one quantized XY point for boundary-loop endpoint matching.
     /// </summary>
     private readonly struct PointKey2D : IEquatable<PointKey2D>
@@ -2542,7 +2395,7 @@ public static class AreaSupportPattern
 
         private static long Quantize(float value)
         {
-            return (long)MathF.Round(value * MeshEdgePointKeyScale);
+            return (long)MathF.Round(value * BoundaryPointKeyScale);
         }
     }
 }

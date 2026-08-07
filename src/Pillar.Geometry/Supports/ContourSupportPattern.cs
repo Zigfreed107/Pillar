@@ -2,6 +2,7 @@
 // Extracts connected horizontal contour paths from mesh faces and distributes support guide points along them.
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Geometry.Topology;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -162,7 +163,6 @@ public static class ContourSupportPattern
     private const float IntersectionTolerance = 0.0001f;
     private const float AssemblyPointTolerance = 0.001f;
     private const float MinimumSegmentLength = 0.0001f;
-    private const float MeshEdgePointKeyScale = 10000.0f;
     private const float ContourAssemblyPointKeyScale = 1000.0f;
     private const float SeedPathReplacementLengthRatio = 1.25f;
     private const float MinimumAlternatePathDistance = 0.5f;
@@ -207,13 +207,13 @@ public static class ContourSupportPattern
 
         List<Vector3> worldVertices = CreateWorldVertices(mesh, worldTransform);
         Vector3[] triangleNormals = CreateTriangleNormals(mesh, worldVertices);
-        List<int>[] adjacency = CreateTriangleAdjacency(mesh, triangleCount);
+        IndexedMeshTopology topology = IndexedMeshTopology.Create(mesh.Vertices, mesh.TriangleIndices);
         int thresholdBlockedAdjacencyCount;
         bool[] includedTriangles = CreateConnectedFacePatch(
             settings.SeedTriangleIndex,
             settings.CoplanarThresholdDegrees,
             triangleNormals,
-            adjacency,
+            topology,
             out thresholdBlockedAdjacencyCount);
         List<ContourSegment> segments = CreateContourSegments(mesh, worldVertices, triangleNormals, includedTriangles, settings.ZHeight);
 
@@ -351,71 +351,13 @@ public static class ContourSupportPattern
     }
 
     /// <summary>
-    /// Builds triangle adjacency from shared geometric mesh edges.
-    /// </summary>
-    private static List<int>[] CreateTriangleAdjacency(MeshEntity mesh, int triangleCount)
-    {
-        List<int>[] adjacency = new List<int>[triangleCount];
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge = new Dictionary<MeshEdgeKey, List<int>>();
-
-        for (int i = 0; i < triangleCount; i++)
-        {
-            adjacency[i] = new List<int>(3);
-        }
-
-        for (int triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
-        {
-            int baseIndex = triangleIndex * 3;
-            Vector3 a = mesh.Vertices[mesh.TriangleIndices[baseIndex]];
-            Vector3 b = mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]];
-            Vector3 c = mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]];
-
-            AddTriangleEdge(a, b, triangleIndex, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(b, c, triangleIndex, edgeOwnersByEdge, adjacency);
-            AddTriangleEdge(c, a, triangleIndex, edgeOwnersByEdge, adjacency);
-        }
-
-        return adjacency;
-    }
-
-    /// <summary>
-    /// Adds one geometric edge and links triangles when the edge has already been seen.
-    /// </summary>
-    private static void AddTriangleEdge(
-        Vector3 firstVertex,
-        Vector3 secondVertex,
-        int triangleIndex,
-        Dictionary<MeshEdgeKey, List<int>> edgeOwnersByEdge,
-        List<int>[] adjacency)
-    {
-        MeshEdgeKey edgeKey = new MeshEdgeKey(
-            new PointKey(firstVertex, MeshEdgePointKeyScale),
-            new PointKey(secondVertex, MeshEdgePointKeyScale));
-
-        if (edgeOwnersByEdge.TryGetValue(edgeKey, out List<int>? ownerTriangleIndices))
-        {
-            for (int i = 0; i < ownerTriangleIndices.Count; i++)
-            {
-                int ownerTriangleIndex = ownerTriangleIndices[i];
-                adjacency[triangleIndex].Add(ownerTriangleIndex);
-                adjacency[ownerTriangleIndex].Add(triangleIndex);
-            }
-
-            ownerTriangleIndices.Add(triangleIndex);
-            return;
-        }
-
-        edgeOwnersByEdge.Add(edgeKey, new List<int> { triangleIndex });
-    }
-
-    /// <summary>
     /// Flood-fills the connected face patch from the seed triangle using the normal angle threshold.
     /// </summary>
     private static bool[] CreateConnectedFacePatch(
         int seedTriangleIndex,
         float thresholdDegrees,
         IReadOnlyList<Vector3> triangleNormals,
-        IReadOnlyList<int>[] adjacency,
+        IndexedMeshTopology topology,
         out int thresholdBlockedAdjacencyCount)
     {
         bool[] includedTriangles = new bool[triangleNormals.Count];
@@ -431,7 +373,7 @@ public static class ContourSupportPattern
         {
             int currentTriangleIndex = openTriangles.Dequeue();
             Vector3 currentNormal = triangleNormals[currentTriangleIndex];
-            IReadOnlyList<int> neighbors = adjacency[currentTriangleIndex];
+            IReadOnlyList<int> neighbors = topology.GetAdjacentTriangles(currentTriangleIndex);
 
             for (int i = 0; i < neighbors.Count; i++)
             {
@@ -932,67 +874,6 @@ public static class ContourSupportPattern
 
         float t = Math.Clamp(Vector3.Dot(point - start, segment) / lengthSquared, 0.0f, 1.0f);
         return start + (segment * t);
-    }
-
-    /// <summary>
-    /// Compares two quantized point keys in deterministic XYZ order.
-    /// </summary>
-    private static int ComparePointKeys(PointKey first, PointKey second)
-    {
-        int xComparison = first.X.CompareTo(second.X);
-
-        if (xComparison != 0)
-        {
-            return xComparison;
-        }
-
-        int yComparison = first.Y.CompareTo(second.Y);
-
-        if (yComparison != 0)
-        {
-            return yComparison;
-        }
-
-        return first.Z.CompareTo(second.Z);
-    }
-
-    /// <summary>
-    /// Stores one mesh edge using deterministic quantized endpoint ordering.
-    /// </summary>
-    private readonly struct MeshEdgeKey : IEquatable<MeshEdgeKey>
-    {
-        public MeshEdgeKey(PointKey first, PointKey second)
-        {
-            if (ComparePointKeys(first, second) <= 0)
-            {
-                First = first;
-                Second = second;
-            }
-            else
-            {
-                First = second;
-                Second = first;
-            }
-        }
-
-        public PointKey First { get; }
-
-        public PointKey Second { get; }
-
-        public bool Equals(MeshEdgeKey other)
-        {
-            return First.Equals(other.First) && Second.Equals(other.Second);
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is MeshEdgeKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(First, Second);
-        }
     }
 
     /// <summary>

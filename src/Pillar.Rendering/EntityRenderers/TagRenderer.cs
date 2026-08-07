@@ -6,6 +6,7 @@ using HelixToolkit.SharpDX;
 using HelixToolkit.Wpf.SharpDX;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Rendering.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -80,45 +81,6 @@ public static class TagRenderer
         {
             throw new ArgumentNullException(nameof(triangleIndices));
         }
-
-        int indexCount = triangleIndices.Count;
-        Vector3Collection positions = new Vector3Collection(indexCount);
-        Vector3Collection normals = new Vector3Collection(indexCount);
-        IntCollection indices = new IntCollection(indexCount);
-
-        for (int i = 0; i + 2 < indexCount; i += 3)
-        {
-            Vector3 first = vertices[triangleIndices[i]];
-            Vector3 second = vertices[triangleIndices[i + 1]];
-            Vector3 third = vertices[triangleIndices[i + 2]];
-            Vector3 normal = Vector3.Cross(second - first, third - first);
-
-            if (normal.LengthSquared() > 0.00000001f)
-            {
-                normal = Vector3.Normalize(normal);
-            }
-            else
-            {
-                normal = Vector3.UnitZ;
-            }
-
-            int firstExpandedIndex = positions.Count;
-            positions.Add(first);
-            positions.Add(second);
-            positions.Add(third);
-            normals.Add(normal);
-            normals.Add(normal);
-            normals.Add(normal);
-            indices.Add(firstExpandedIndex);
-            indices.Add(firstExpandedIndex + 1);
-            indices.Add(firstExpandedIndex + 2);
-        }
-
-        return new MeshGeometry3D
-        {
-            Positions = positions,
-            Indices = indices,
-            Normals = normals
-        };
+        return FlatShadedMeshGeometryBuilder.Create(vertices, triangleIndices);
     }
 }
