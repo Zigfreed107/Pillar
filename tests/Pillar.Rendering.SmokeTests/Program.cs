@@ -38,6 +38,7 @@ public static class Program
         RunTest(failures, "Outside control point fails within", ValidateOutsideControlPointFailsWithin);
         RunTest(failures, "Edge-touching segment is accepted", ValidateEdgeTouchingSegmentIsAccepted);
         RunTest(failures, "Direct Edit arrows use solid meshes", ValidateDirectEditArrowsUseSolidMeshes);
+        RunTest(failures, "Translate arrows are solid and top-most", ValidateTranslateArrowsAreSolidAndTopMost);
         RunTest(failures, "Raft geometry includes flat lighting normals", ValidateRaftGeometryIncludesFlatLightingNormals);
         RunTest(failures, "Locked tag preview is opaque and visible", ValidateLockedTagPreviewIsOpaqueAndVisible);
         RunTest(failures, "Installed font creates solid tag text", ValidateInstalledFontCreatesSolidTagText);
@@ -271,6 +272,175 @@ public static class Program
                 throw new InvalidOperationException("Expected every Direct Edit arrow to use solid mesh geometry.");
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that model translation arrows use solid mesh hit targets in an always-on-top render group.
+    /// </summary>
+    private static void ValidateTranslateArrowsAreSolidAndTopMost()
+    {
+        GroupModel3D root = new GroupModel3D();
+        const float shaftDiameter = 0.25f;
+        const float headLength = 1.0f;
+        const float headDiameter = 0.75f;
+        Vector3 origin = new Vector3(1.0f, 2.0f, 3.0f);
+        float[] expectedLengths = { 3.0f, 6.0f, 9.0f };
+        ModelTranslatePreviewRenderer renderer = new ModelTranslatePreviewRenderer(
+            root,
+            16,
+            shaftDiameter,
+            headLength,
+            headDiameter);
+        renderer.Show(origin, new Vector3(expectedLengths[0], expectedLengths[1], expectedLengths[2]));
+
+        if (root.Children.Count != 1
+            || root.Children[0] is not TopMostGroup3D topMostRoot
+            || !topMostRoot.EnableTopMost
+            || topMostRoot.Children.Count != 3)
+        {
+            throw new InvalidOperationException("Expected three translation arrows beneath one enabled top-most render group.");
+        }
+
+        for (int i = 0; i < topMostRoot.Children.Count; i++)
+        {
+            if (topMostRoot.Children[i] is not MeshGeometryModel3D arrow
+                || arrow.Geometry is not HelixToolkit.SharpDX.MeshGeometry3D geometry
+                || arrow.Visibility != Visibility.Visible
+                || arrow.Transform is not System.Windows.Media.Media3D.TranslateTransform3D translation
+                || System.Math.Abs(translation.OffsetX - origin.X) > 0.0001
+                || System.Math.Abs(translation.OffsetY - origin.Y) > 0.0001
+                || System.Math.Abs(translation.OffsetZ - origin.Z) > 0.0001
+                || System.Math.Abs(CalculateArrowAxisMaximum(geometry, i) - expectedLengths[i]) > 0.0001f
+                || System.Math.Abs(CalculateArrowDiameterAtAxisCoordinate(geometry, i, 0.0f) - shaftDiameter) > 0.0001f
+                || System.Math.Abs(CalculateArrowMaximumDiameter(geometry, i) - headDiameter) > 0.0001f
+                || System.Math.Abs(CalculateArrowHeadBaseCoordinate(geometry, i) - (expectedLengths[i] - headLength)) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected each translation arrow to use independent absolute shaft and arrowhead dimensions.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates the furthest geometry coordinate along one translation arrow axis.
+    /// </summary>
+    private static float CalculateArrowAxisMaximum(HelixToolkit.SharpDX.MeshGeometry3D geometry, int axisIndex)
+    {
+        IList<Vector3>? positions = geometry.Positions;
+
+        if (positions == null || positions.Count == 0)
+        {
+            return 0.0f;
+        }
+
+        float maximum = GetArrowAxisCoordinate(positions[0], axisIndex);
+
+        for (int i = 1; i < positions.Count; i++)
+        {
+            maximum = MathF.Max(maximum, GetArrowAxisCoordinate(positions[i], axisIndex));
+        }
+
+        return maximum;
+    }
+
+    /// <summary>
+    /// Calculates the widest geometry diameter at one coordinate along the arrow axis.
+    /// </summary>
+    private static float CalculateArrowDiameterAtAxisCoordinate(
+        HelixToolkit.SharpDX.MeshGeometry3D geometry,
+        int axisIndex,
+        float axisCoordinate)
+    {
+        IList<Vector3>? positions = geometry.Positions;
+
+        if (positions == null)
+        {
+            return 0.0f;
+        }
+
+        float maximumRadius = 0.0f;
+
+        for (int i = 0; i < positions.Count; i++)
+        {
+            if (MathF.Abs(GetArrowAxisCoordinate(positions[i], axisIndex) - axisCoordinate) <= 0.0001f)
+            {
+                maximumRadius = MathF.Max(maximumRadius, GetArrowRadialDistance(positions[i], axisIndex));
+            }
+        }
+
+        return maximumRadius * 2.0f;
+    }
+
+    /// <summary>
+    /// Calculates the largest untransformed diameter perpendicular to one translation arrow axis.
+    /// </summary>
+    private static float CalculateArrowMaximumDiameter(HelixToolkit.SharpDX.MeshGeometry3D geometry, int axisIndex)
+    {
+        IList<Vector3>? positions = geometry.Positions;
+
+        if (positions == null)
+        {
+            return 0.0f;
+        }
+
+        float maximumRadius = 0.0f;
+
+        for (int i = 0; i < positions.Count; i++)
+        {
+            maximumRadius = MathF.Max(maximumRadius, GetArrowRadialDistance(positions[i], axisIndex));
+        }
+
+        return maximumRadius * 2.0f;
+    }
+
+    /// <summary>
+    /// Locates the arrowhead base from the axis coordinate carrying the maximum radial extent.
+    /// </summary>
+    private static float CalculateArrowHeadBaseCoordinate(HelixToolkit.SharpDX.MeshGeometry3D geometry, int axisIndex)
+    {
+        IList<Vector3>? positions = geometry.Positions;
+
+        if (positions == null || positions.Count == 0)
+        {
+            return 0.0f;
+        }
+
+        float maximumRadius = CalculateArrowMaximumDiameter(geometry, axisIndex) * 0.5f;
+
+        for (int i = 0; i < positions.Count; i++)
+        {
+            if (MathF.Abs(GetArrowRadialDistance(positions[i], axisIndex) - maximumRadius) <= 0.0001f)
+            {
+                return GetArrowAxisCoordinate(positions[i], axisIndex);
+            }
+        }
+
+        return 0.0f;
+    }
+
+    /// <summary>
+    /// Gets one point component along the selected world axis.
+    /// </summary>
+    private static float GetArrowAxisCoordinate(Vector3 position, int axisIndex)
+    {
+        return axisIndex switch
+        {
+            0 => position.X,
+            1 => position.Y,
+            _ => position.Z
+        };
+    }
+
+    /// <summary>
+    /// Calculates one point's distance from the selected arrow axis.
+    /// </summary>
+    private static float GetArrowRadialDistance(Vector3 position, int axisIndex)
+    {
+        return axisIndex switch
+        {
+            0 => MathF.Sqrt((position.Y * position.Y) + (position.Z * position.Z)),
+            1 => MathF.Sqrt((position.X * position.X) + (position.Z * position.Z)),
+            _ => MathF.Sqrt((position.X * position.X) + (position.Y * position.Y))
+        };
     }
 
     /// <summary>

@@ -4,7 +4,8 @@
 -->
 <UserControl x:Class="Pillar.UI.Modes.TranslateToolOptionsControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls">
     <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
@@ -13,9 +14,78 @@
             <TextBlock Margin="0,10,0,0"
                        Style="{StaticResource ModeOverlayBodyTextStyle}"
                        TextWrapping="Wrap"
-                       Text="Move the selected model relative to the build plate." />
+                       Text="Edit the model origin's absolute build-plate position, or drag an axis arrow in the viewer." />
+
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Grid.Column="1"
+                           Margin="0,0,0,4"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Text="Origin Position" />
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Margin="0,4,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Foreground="Red"
+                           Text="X" />
+                <controls:NumericUpDown x:Name="PositionXNumericUpDown"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        MinWidth="100"
+                                        Increment="1"
+                                        DecimalPlaces="3"
+                                        ValueChanged="PositionNumericUpDown_ValueChanged" />
+
+                <TextBlock Grid.Row="2"
+                           Grid.Column="0"
+                           Margin="0,8,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Foreground="Lime"
+                           Text="Y" />
+                <controls:NumericUpDown x:Name="PositionYNumericUpDown"
+                                        Grid.Row="2"
+                                        Grid.Column="1"
+                                        Margin="0,4,0,0"
+                                        MinWidth="100"
+                                        Increment="1"
+                                        DecimalPlaces="3"
+                                        ValueChanged="PositionNumericUpDown_ValueChanged" />
+
+                <TextBlock Grid.Row="3"
+                           Grid.Column="0"
+                           Margin="0,8,8,0"
+                           Style="{StaticResource ModeOverlayLabelTextStyle}"
+                           Foreground="Blue"
+                           Text="Z" />
+                <controls:NumericUpDown x:Name="PositionZNumericUpDown"
+                                        Grid.Row="3"
+                                        Grid.Column="1"
+                                        Margin="0,4,0,0"
+                                        MinWidth="100"
+                                        Increment="1"
+                                        DecimalPlaces="3"
+                                        ValueChanged="PositionNumericUpDown_ValueChanged" />
+            </Grid>
 
             <Button Margin="0,16,0,0"
+                    MinHeight="30"
+                    HorizontalAlignment="Stretch"
+                    Click="MoveToOriginButton_Click"
+                    Content="Move to Origin" />
+
+            <Button Margin="0,8,0,0"
                     MinHeight="30"
                     HorizontalAlignment="Stretch"
                     Click="MoveToPlateButton_Click"

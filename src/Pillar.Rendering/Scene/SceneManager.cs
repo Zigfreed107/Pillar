@@ -63,6 +63,7 @@ public class SceneManager
     private readonly ContourSupportPreviewRenderer _contourSupportPreviewRenderer;
     private readonly AreaSupportPreviewRenderer _areaSupportPreviewRenderer;
     private readonly DirectEditPreviewRenderer _directEditPreviewRenderer;
+    private readonly ModelTranslatePreviewRenderer _modelTranslatePreviewRenderer;
     private readonly TagPreviewRenderer _tagPreviewRenderer;
     private readonly RaftTextPreviewRenderer _raftTextPreviewRenderer;
     private readonly SupportAngleHighlightRenderer _supportAngleHighlightRenderer;
@@ -175,7 +176,10 @@ public class SceneManager
         MediaColor selectionOutlineColor,
         float selectionOutlineSize,
         BackgroundGridDefinition backgroundGridDefinition,
-        PhongMaterial defaultMeshMaterial)
+        PhongMaterial defaultMeshMaterial,
+        float modelTranslateArrowDiameter = ModelTranslatePreviewRenderer.DefaultShaftDiameter,
+        float modelTranslateArrowHeadLength = ModelTranslatePreviewRenderer.DefaultHeadLength,
+        float modelTranslateArrowHeadDiameter = ModelTranslatePreviewRenderer.DefaultHeadDiameter)
     {
         _viewport = viewport;
         _document = document;
@@ -207,6 +211,12 @@ public class SceneManager
         _contourSupportPreviewRenderer = new ContourSupportPreviewRenderer(_previewRoot);
         _areaSupportPreviewRenderer = new AreaSupportPreviewRenderer(_previewRoot);
         _directEditPreviewRenderer = new DirectEditPreviewRenderer(_previewRoot, _supportSides);
+        _modelTranslatePreviewRenderer = new ModelTranslatePreviewRenderer(
+            _previewRoot,
+            _supportSides,
+            modelTranslateArrowDiameter,
+            modelTranslateArrowHeadLength,
+            modelTranslateArrowHeadDiameter);
         _tagPreviewRenderer = new TagPreviewRenderer(_previewRoot);
         _raftTextPreviewRenderer = new RaftTextPreviewRenderer(_previewRoot);
         _supportAngleHighlightRenderer = new SupportAngleHighlightRenderer(_previewRoot, _supportSides);
@@ -643,6 +653,42 @@ public class SceneManager
     public void HideDirectEditPreview()
     {
         _directEditPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Hit-tests only the transient model translation arrow handles.
+    /// </summary>
+    public bool TryHitModelTranslateGizmo(Vector2 screenPosition, out ModelTranslateGizmoHandleKind handleKind)
+    {
+        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i].ModelHit is Element3D hitModel
+                && _modelTranslatePreviewRenderer.TryGetHandleKind(hitModel, out handleKind))
+            {
+                return true;
+            }
+        }
+
+        handleKind = ModelTranslateGizmoHandleKind.None;
+        return false;
+    }
+
+    /// <summary>
+    /// Shows the always-on-top model translation arrows at one absolute model origin.
+    /// </summary>
+    public void ShowModelTranslateGizmo(Vector3 worldOrigin, Vector3 arrowLengths)
+    {
+        _modelTranslatePreviewRenderer.Show(worldOrigin, arrowLengths);
+    }
+
+    /// <summary>
+    /// Hides all model translation arrow handles.
+    /// </summary>
+    public void HideModelTranslateGizmo()
+    {
+        _modelTranslatePreviewRenderer.Hide();
     }
 
     /// <summary>

@@ -29,6 +29,15 @@
     <Setting Name="DirectEditZGizmoScale" Type="System.Double" Scope="Application">
       <Value Profile="(Default)">3</Value>
     </Setting>
+    <Setting Name="TranslateArrowDiameter" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">1.5</Value>
+    </Setting>
+    <Setting Name="TranslateArrowHeadLength" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">3</Value>
+    </Setting>
+    <Setting Name="TranslateArrowHeadDiameter" Type="System.Double" Scope="Application">
+      <Value Profile="(Default)">4.5</Value>
+    </Setting>
     <Setting Name="SupportPresetsJson" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>

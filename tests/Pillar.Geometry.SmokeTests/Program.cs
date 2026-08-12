@@ -110,6 +110,9 @@ public static class Program
         RunTest(failures, "Zero rotation restores exact session transform", ValidateZeroRotationRestoresExactSessionTransform);
         RunTest(failures, "Reset rotation restores imported orientation", ValidateResetRotationRestoresImportedOrientation);
         RunTest(failures, "Move to Plate grounds the lowest transformed vertex", ValidateMoveToPlateGroundsLowestTransformedVertex);
+        RunTest(failures, "Translate uses absolute model-origin coordinates", ValidateTranslationUsesAbsoluteModelOriginCoordinates);
+        RunTest(failures, "Translate clamps to the plate boundary", ValidateTranslationClampsToPrintableBoundary);
+        RunTest(failures, "Translate rejects an oversized footprint", ValidateTranslationRejectsOversizedFootprint);
         RunTest(failures, "X rotation follows the world X axis", ValidateRotationTransformUsesWorldXAxis);
         RunTest(failures, "X rotation follows the model local X axis", ValidateRotationTransformUsesLocalXAxis);
         RunTest(failures, "Combined local rotation follows the changing model axes", ValidateCombinedLocalRotationUsesChangingModelAxes);
@@ -3008,6 +3011,137 @@ public static class Program
             || groundedTransform.Scale != originalTransform.Scale)
         {
             throw new InvalidOperationException("Expected Move to Plate to preserve X/Y translation, rotation, and scale.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that requested positions target the stable post-import model origin rather than user-translation deltas.
+    /// </summary>
+    private static void ValidateTranslationUsesAbsoluteModelOriginCoordinates()
+    {
+        MeshEntity mesh = new MeshEntity(
+            "Absolute Translate",
+            new[]
+            {
+                new Vector3(-2.0f, -1.0f, 0.0f),
+                new Vector3(2.0f, -1.0f, 0.0f),
+                new Vector3(-2.0f, 1.0f, 0.0f),
+                new Vector3(2.0f, 1.0f, 3.0f)
+            },
+            new[] { 0, 1, 2 },
+            importPlacementTransform: Transform3DData.CreateTranslation(new Vector3(10.0f, 20.0f, 5.0f)),
+            userTransform: new Transform3DData(
+                new Vector3(3.0f, 4.0f, 2.0f),
+                Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 5.0f),
+                new Vector3(1.5f, 0.75f, 2.0f)));
+        Vector3 importSpaceOrigin = MeshTranslationTransform.CalculateImportSpaceOrigin(mesh);
+        Vector3 originalWorldOrigin = MeshTranslationTransform.CalculateWorldOrigin(mesh, importSpaceOrigin);
+        MeshTranslationLimits limits = MeshTranslationTransform.CreateLimits(mesh, importSpaceOrigin, 100.0f, 100.0f);
+        Vector3 requestedWorldOrigin = new Vector3(-1.0f, 2.0f, 8.0f);
+        Transform3DData originalTransform = mesh.UserTransform;
+
+        if (!MeshTranslationTransform.TryCreateUserTransformForWorldOrigin(
+                originalTransform,
+                originalWorldOrigin,
+                requestedWorldOrigin,
+                limits,
+                out Transform3DData translatedTransform,
+                out Vector3 constrainedWorldOrigin))
+        {
+            throw new InvalidOperationException("Expected the translated model to fit the printable area.");
+        }
+
+        mesh.UserTransform = translatedTransform;
+        Vector3 actualWorldOrigin = MeshTranslationTransform.CalculateWorldOrigin(mesh, importSpaceOrigin);
+
+        ValidateVectorNear(requestedWorldOrigin, constrainedWorldOrigin, 0.0001f, "Expected the absolute origin request to remain unchanged.");
+        ValidateVectorNear(requestedWorldOrigin, actualWorldOrigin, 0.0001f, "Expected the model origin to reach the requested absolute coordinates.");
+
+        if (translatedTransform.Rotation != originalTransform.Rotation
+            || translatedTransform.Scale != originalTransform.Scale)
+        {
+            throw new InvalidOperationException("Expected translation to preserve the model rotation and scale.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that all three translated axes stop at the centered printable rectangle and Z-zero floor.
+    /// </summary>
+    private static void ValidateTranslationClampsToPrintableBoundary()
+    {
+        MeshEntity mesh = new MeshEntity(
+            "Bounded Translate",
+            new[]
+            {
+                new Vector3(-2.0f, -1.0f, 0.0f),
+                new Vector3(2.0f, -1.0f, 0.0f),
+                new Vector3(-2.0f, 1.0f, 0.0f),
+                new Vector3(2.0f, 1.0f, 3.0f)
+            },
+            new[] { 0, 1, 2 },
+            userTransform: Transform3DData.CreateTranslation(new Vector3(0.0f, 0.0f, 2.0f)));
+        Vector3 importSpaceOrigin = MeshTranslationTransform.CalculateImportSpaceOrigin(mesh);
+        Vector3 originalWorldOrigin = MeshTranslationTransform.CalculateWorldOrigin(mesh, importSpaceOrigin);
+        MeshTranslationLimits limits = MeshTranslationTransform.CreateLimits(mesh, importSpaceOrigin, 10.0f, 8.0f);
+
+        if (!MeshTranslationTransform.TryCreateUserTransformForWorldOrigin(
+                mesh.UserTransform,
+                originalWorldOrigin,
+                new Vector3(100.0f, -100.0f, -100.0f),
+                limits,
+                out Transform3DData translatedTransform,
+                out Vector3 constrainedWorldOrigin))
+        {
+            throw new InvalidOperationException("Expected the bounded model to fit the printable area.");
+        }
+
+        mesh.UserTransform = translatedTransform;
+        ValidateVectorNear(new Vector3(3.0f, -3.0f, 0.0f), constrainedWorldOrigin, 0.0001f, "Expected the origin to stop at each movement limit.");
+
+        Matrix4x4 worldTransform = mesh.WorldTransform;
+
+        for (int i = 0; i < mesh.Vertices.Count; i++)
+        {
+            Vector3 worldVertex = Vector3.Transform(mesh.Vertices[i], worldTransform);
+
+            if (worldVertex.X < -5.0001f || worldVertex.X > 5.0001f
+                || worldVertex.Y < -4.0001f || worldVertex.Y > 4.0001f
+                || worldVertex.Z < -0.0001f)
+            {
+                throw new InvalidOperationException("Expected every translated vertex to remain inside the printable XY area and above Z zero.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that no translation is produced when the model cannot fit the printable footprint.
+    /// </summary>
+    private static void ValidateTranslationRejectsOversizedFootprint()
+    {
+        MeshEntity mesh = new MeshEntity(
+            "Oversized Translate",
+            new[]
+            {
+                new Vector3(-6.0f, -1.0f, 0.0f),
+                new Vector3(6.0f, -1.0f, 0.0f),
+                new Vector3(-6.0f, 1.0f, 0.0f)
+            },
+            new[] { 0, 1, 2 });
+        Vector3 importSpaceOrigin = MeshTranslationTransform.CalculateImportSpaceOrigin(mesh);
+        Vector3 worldOrigin = MeshTranslationTransform.CalculateWorldOrigin(mesh, importSpaceOrigin);
+        MeshTranslationLimits limits = MeshTranslationTransform.CreateLimits(mesh, importSpaceOrigin, 10.0f, 10.0f);
+        bool createdTransform = MeshTranslationTransform.TryCreateUserTransformForWorldOrigin(
+            mesh.UserTransform,
+            worldOrigin,
+            Vector3.Zero,
+            limits,
+            out Transform3DData translatedTransform,
+            out Vector3 ignoredOrigin);
+        _ = ignoredOrigin;
+
+        if (limits.CanFitPrintableArea || createdTransform || translatedTransform != mesh.UserTransform)
+        {
+            throw new InvalidOperationException("Expected an oversized model footprint to reject translation.");
         }
     }
 

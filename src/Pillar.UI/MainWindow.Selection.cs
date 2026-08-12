@@ -35,6 +35,7 @@ public partial class MainWindow
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
             UpdateToolOptionsHostVisibilityForWorkflowContext();
+            RefreshTransformTranslateToolForSelection();
             RefreshTransformScaleToolForSelection();
             RefreshTransformRotationToolForSelection();
             return;
@@ -48,6 +49,7 @@ public partial class MainWindow
                 SynchronizeLayerPanelSelectionFromViewportSelection();
             }
             UpdateToolOptionsHostVisibilityForWorkflowContext();
+            RefreshTransformTranslateToolForSelection();
             RefreshTransformScaleToolForSelection();
             RefreshTransformRotationToolForSelection();
             return;
@@ -59,6 +61,7 @@ public partial class MainWindow
             SynchronizeLayerPanelSelectionFromViewportSelection();
         }
         UpdateToolOptionsHostVisibilityForWorkflowContext();
+        RefreshTransformTranslateToolForSelection();
         RefreshTransformScaleToolForSelection();
         RefreshTransformRotationToolForSelection();
     }

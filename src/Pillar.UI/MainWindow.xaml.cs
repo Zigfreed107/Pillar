@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private readonly LineTool _lineTool;
     private readonly ManualSupportTool _manualSupportTool;
     private readonly DirectEditTool _directEditTool;
+    private readonly ModelTranslateTool _modelTranslateTool;
     private readonly IModelImporter _stlImporter;
     private readonly SnapManager _snapManager;
     private readonly SelectionWindowOverlayController _selectionWindowOverlay;
@@ -129,7 +130,10 @@ public partial class MainWindow : Window
             ReadSelectionOutlineColor(),
             ReadSelectionOutlineSize(),
             backgroundGridDefinition,
-            ReadDefaultModelMaterial());
+            ReadDefaultModelMaterial(),
+            (float)Properties.Settings.Default.TranslateArrowDiameter,
+            (float)Properties.Settings.Default.TranslateArrowHeadLength,
+            (float)Properties.Settings.Default.TranslateArrowHeadDiameter);
         _viewportCameraService = new ViewportCameraService(Viewport, _document, GetViewportFallbackBounds);
         _snapManager = new SnapManager(_document.SpatialGrid);
         _projection = new ProjectionService(Viewport);
@@ -173,6 +177,7 @@ public partial class MainWindow : Window
             StartAreaSupportFaceSelectionSession,
             GetSelectedSupportProfile);
         _directEditTool = new DirectEditTool(Viewport, _document, _scene, _projection, _selectTool);
+        _modelTranslateTool = new ModelTranslateTool(Viewport, _scene);
         _tagTool = new TagTool(_projection, _scene);
         _raftTextTool = new RaftTextTool(_projection, _scene);
         _stlImporter = new StlImporter();
@@ -382,6 +387,9 @@ public partial class MainWindow : Window
         _directEditToolOptionsControl.CloseRequested += DirectEditToolOptionsControl_CloseRequested;
         _directEditTool.EditCommitted += DirectEditTool_EditCommitted;
         _directEditTool.StatusMessageRequested += DirectEditTool_StatusMessageRequested;
+        _modelTranslateTool.PreviewTransformRequested += ModelTranslateTool_PreviewTransformRequested;
+        _translateToolOptionsControl.PositionChanged += TranslateToolOptionsControl_PositionChanged;
+        _translateToolOptionsControl.MoveToOriginRequested += TranslateToolOptionsControl_MoveToOriginRequested;
         _translateToolOptionsControl.MoveToPlateRequested += TranslateToolOptionsControl_MoveToPlateRequested;
         _translateToolOptionsControl.FinishRequested += TranslateToolOptionsControl_FinishRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;

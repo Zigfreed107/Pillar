@@ -590,6 +590,7 @@ public partial class MainWindow
 
         if (string.Equals(selectedToolName, TransformRotationToolName, StringComparison.Ordinal))
         {
+            ClearTransformTranslateToolState();
             ClearTransformScaleToolState();
             ShowTransformRotationTool();
             return;
@@ -597,11 +598,13 @@ public partial class MainWindow
 
         if (string.Equals(selectedToolName, TransformScaleToolName, StringComparison.Ordinal))
         {
+            ClearTransformTranslateToolState();
             ClearTransformRotationToolState();
             ShowTransformScaleTool();
             return;
         }
 
+        ClearTransformTranslateToolState();
         ClearTransformScaleToolState();
         ClearTransformRotationToolState();
         if (string.Equals(selectedToolName, "Raft", StringComparison.Ordinal))
@@ -687,6 +690,7 @@ public partial class MainWindow
             ClearDirectEditSessionState();
         }
         _selectTool.ResetSelectionFilter();
+        ClearTransformTranslateToolState();
         ClearTransformScaleToolState();
         ClearTransformRotationToolState();
         _activePlaceholderToolFinishAction = null;
