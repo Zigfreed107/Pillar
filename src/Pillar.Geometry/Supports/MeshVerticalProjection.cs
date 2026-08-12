@@ -1,8 +1,9 @@
-﻿// MeshVerticalProjection.cs
+// MeshVerticalProjection.cs
 // Projects guide points onto mesh triangles along the build Z axis without depending on rendering objects.
 using Pillar.Core.Entities;
 using Pillar.Core.Supports;
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Pillar.Geometry.Supports;
@@ -140,6 +141,154 @@ public static class MeshVerticalProjection
 
         hit = new MeshProjectionHit(bestPoint, bestNormal);
         return hasHit;
+    }
+
+    /// <summary>
+    /// Finds the mesh target nearest to a 3D guide point before support reachability is considered.
+    /// </summary>
+    public static bool TryFindNearestTarget(
+        MeshEntity mesh,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        out MeshProjectionHit hit)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        return TryFindNearestTarget(mesh, mesh.WorldTransform, guidePoint, fallbackRadius, out hit);
+    }
+
+    /// <summary>
+    /// Finds the nearest target using an explicit mesh transform for previews and transform regeneration.
+    /// </summary>
+    public static bool TryFindNearestTarget(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        out MeshProjectionHit hit)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        if (TryProjectToMesh(mesh, worldTransform, guidePoint, out hit))
+        {
+            return true;
+        }
+
+        if (!float.IsFinite(fallbackRadius) || fallbackRadius <= ProjectionTolerance)
+        {
+            hit = default;
+            return false;
+        }
+
+        return TryFindNearestSurfacePoint(mesh, worldTransform, guidePoint, fallbackRadius, out hit);
+    }
+
+    /// <summary>
+    /// Finds the nearest target using only the supplied zero-based mesh triangle numbers.
+    /// </summary>
+    public static bool TryFindNearestTargetOnTriangles(
+        MeshEntity mesh,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        IReadOnlyList<int> selectedTriangleIndices,
+        out MeshProjectionHit hit)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        return TryFindNearestTargetOnTriangles(
+            mesh,
+            mesh.WorldTransform,
+            guidePoint,
+            fallbackRadius,
+            selectedTriangleIndices,
+            out hit);
+    }
+
+    /// <summary>
+    /// Finds the nearest selected-triangle target using an explicit transform for regeneration.
+    /// </summary>
+    public static bool TryFindNearestTargetOnTriangles(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        IReadOnlyList<int> selectedTriangleIndices,
+        out MeshProjectionHit hit)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        if (selectedTriangleIndices == null)
+        {
+            throw new ArgumentNullException(nameof(selectedTriangleIndices));
+        }
+
+        float bestDistance = float.MaxValue;
+        MeshProjectionHit bestHit = default;
+        bool hasHit = false;
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+
+        for (int i = 0; i < selectedTriangleIndices.Count; i++)
+        {
+            int triangleIndex = selectedTriangleIndices[i];
+
+            if (triangleIndex < 0 || triangleIndex >= triangleCount)
+            {
+                continue;
+            }
+
+            int baseIndex = triangleIndex * 3;
+            Vector3 a = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex]], worldTransform);
+            Vector3 b = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], worldTransform);
+            Vector3 c = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], worldTransform);
+
+            if (!TryIntersectVerticalLineWithTriangle(guidePoint, a, b, c, out float z))
+            {
+                continue;
+            }
+
+            float distance = MathF.Abs(z - guidePoint.Z);
+
+            if (distance >= bestDistance)
+            {
+                continue;
+            }
+
+            bestDistance = distance;
+            bestHit = new MeshProjectionHit(new Vector3(guidePoint.X, guidePoint.Y, z), CalculateTriangleNormal(a, b, c));
+            hasHit = true;
+        }
+
+        if (hasHit)
+        {
+            hit = bestHit;
+            return true;
+        }
+
+        if (!float.IsFinite(fallbackRadius) || fallbackRadius <= ProjectionTolerance)
+        {
+            hit = default;
+            return false;
+        }
+
+        return TryFindNearestSurfacePointOnTriangles(
+            mesh,
+            worldTransform,
+            guidePoint,
+            fallbackRadius,
+            selectedTriangleIndices,
+            out hit);
     }
 
     /// <summary>
@@ -337,6 +486,102 @@ public static class MeshVerticalProjection
 
         hit = bestHit;
         placementPlan = bestPlacementPlan;
+        return hasHit;
+    }
+
+    /// <summary>
+    /// Finds the closest mesh point inside a bounded radius without filtering it by support reachability.
+    /// </summary>
+    private static bool TryFindNearestSurfacePoint(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        out MeshProjectionHit hit)
+    {
+        float fallbackRadiusSquared = fallbackRadius * fallbackRadius;
+        float bestDistanceSquared = float.MaxValue;
+        MeshProjectionHit bestHit = default;
+        bool hasHit = false;
+
+        for (int i = 0; i < mesh.TriangleIndices.Count; i += 3)
+        {
+            Vector3 a = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[i]], worldTransform);
+            Vector3 b = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[i + 1]], worldTransform);
+            Vector3 c = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[i + 2]], worldTransform);
+
+            if (CanSkipTriangleByNearestBounds(guidePoint, fallbackRadius, a, b, c))
+            {
+                continue;
+            }
+
+            Vector3 closestPoint = GetClosestPointOnTriangle(guidePoint, a, b, c);
+            float distanceSquared = Vector3.DistanceSquared(guidePoint, closestPoint);
+
+            if (distanceSquared > fallbackRadiusSquared || distanceSquared >= bestDistanceSquared)
+            {
+                continue;
+            }
+
+            bestDistanceSquared = distanceSquared;
+            bestHit = new MeshProjectionHit(closestPoint, CalculateTriangleNormal(a, b, c));
+            hasHit = true;
+        }
+
+        hit = bestHit;
+        return hasHit;
+    }
+
+    /// <summary>
+    /// Finds the closest point on the selected mesh triangles inside a bounded fallback radius.
+    /// </summary>
+    private static bool TryFindNearestSurfacePointOnTriangles(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 guidePoint,
+        float fallbackRadius,
+        IReadOnlyList<int> selectedTriangleIndices,
+        out MeshProjectionHit hit)
+    {
+        float fallbackRadiusSquared = fallbackRadius * fallbackRadius;
+        float bestDistanceSquared = float.MaxValue;
+        MeshProjectionHit bestHit = default;
+        bool hasHit = false;
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+
+        for (int i = 0; i < selectedTriangleIndices.Count; i++)
+        {
+            int triangleIndex = selectedTriangleIndices[i];
+
+            if (triangleIndex < 0 || triangleIndex >= triangleCount)
+            {
+                continue;
+            }
+
+            int baseIndex = triangleIndex * 3;
+            Vector3 a = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex]], worldTransform);
+            Vector3 b = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex + 1]], worldTransform);
+            Vector3 c = Vector3.Transform(mesh.Vertices[mesh.TriangleIndices[baseIndex + 2]], worldTransform);
+
+            if (CanSkipTriangleByNearestBounds(guidePoint, fallbackRadius, a, b, c))
+            {
+                continue;
+            }
+
+            Vector3 closestPoint = GetClosestPointOnTriangle(guidePoint, a, b, c);
+            float distanceSquared = Vector3.DistanceSquared(guidePoint, closestPoint);
+
+            if (distanceSquared > fallbackRadiusSquared || distanceSquared >= bestDistanceSquared)
+            {
+                continue;
+            }
+
+            bestDistanceSquared = distanceSquared;
+            bestHit = new MeshProjectionHit(closestPoint, CalculateTriangleNormal(a, b, c));
+            hasHit = true;
+        }
+
+        hit = bestHit;
         return hasHit;
     }
 

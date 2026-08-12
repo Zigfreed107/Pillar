@@ -123,6 +123,68 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Starts face selection for Ring Support and restores the Ring Support operation after acceptance.
+    /// </summary>
+    private void StartRingSupportFaceSelectionSession(
+        IReadOnlyCollection<FaceSelectionKey> initialSelection,
+        Action<IReadOnlyCollection<FaceSelectionKey>> acceptedCallback)
+    {
+        if (acceptedCallback == null)
+        {
+            throw new ArgumentNullException(nameof(acceptedCallback));
+        }
+
+        List<FaceSelectionKey> initialSelectionSnapshot = new List<FaceSelectionKey>(initialSelection);
+
+        StartFaceSetSelectionSession(
+            initialSelectionSnapshot,
+            acceptedSelection =>
+            {
+                acceptedCallback(acceptedSelection);
+                SetActiveMode(WorkspaceModeId.ManualSupport);
+                _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring);
+                ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+                SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
+            },
+            false);
+    }
+
+    /// <summary>
+    /// Starts face selection for Line Support and restores the Line Support operation after acceptance.
+    /// </summary>
+    private void StartLineSupportFaceSelectionSession(
+        IReadOnlyCollection<FaceSelectionKey> initialSelection,
+        Action<IReadOnlyCollection<FaceSelectionKey>> acceptedCallback)
+    {
+        if (acceptedCallback == null)
+        {
+            throw new ArgumentNullException(nameof(acceptedCallback));
+        }
+
+        List<FaceSelectionKey> initialSelectionSnapshot = new List<FaceSelectionKey>(initialSelection);
+
+        StartFaceSetSelectionSession(
+            initialSelectionSnapshot,
+            acceptedSelection =>
+            {
+                acceptedCallback(acceptedSelection);
+                SetActiveMode(WorkspaceModeId.ManualSupport);
+                _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Line);
+                ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
+                SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
+            },
+            false);
+    }
+
+    /// <summary>
+    /// Creates a defensive snapshot of the toolbar's last accepted face selection for client tools.
+    /// </summary>
+    private IReadOnlyCollection<FaceSelectionKey> CreateToolbarFaceSelectionSnapshot()
+    {
+        return new List<FaceSelectionKey>(_lastAcceptedFaceSelectionForToolbarTest);
+    }
+
+    /// <summary>
     /// Stores the toolbar-launched test result until a real client tool owns face selections.
     /// </summary>
     private void AcceptToolbarTestFaceSelection(IReadOnlyCollection<FaceSelectionKey> acceptedSelection)

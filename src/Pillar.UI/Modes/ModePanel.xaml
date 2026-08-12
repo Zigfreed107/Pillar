@@ -183,6 +183,16 @@
                                                Text="Resize the imported model uniformly" />
                                 </StackPanel>
                             </Button>
+
+                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                    Click="MoveToPlateButton_Click">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
+                                               Text="Move to Plate" />
+                                    <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
+                                               Text="Place the lowest model vertex at Z 0" />
+                                </StackPanel>
+                            </Button>
                         </primitives:UniformGrid>
                     </StackPanel>
                 </TabItem>

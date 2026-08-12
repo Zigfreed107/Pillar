@@ -3,6 +3,7 @@
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Geometry.Primitives;
 using System;
@@ -259,6 +260,7 @@ public static class SupportGroupTransformRegenerator
         List<Vector3> guidePoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
         List<SupportEntity> newSupportEntities = new List<SupportEntity>();
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(mesh, settings.SelectedFaces);
 
         LineSupportPattern.FillGuidePoints(settings.Points, settings.Spacing, settings.PlaceSupportsAtBends, guidePoints);
 
@@ -268,7 +270,44 @@ public static class SupportGroupTransformRegenerator
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
 
-            if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, newWorldTransform, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (settings.SurfaceTargetMode != LineSupportSurfaceTargetMode.FirstReachable)
+            {
+                bool targetFound = settings.SurfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly
+                    ? MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+                        mesh,
+                        newWorldTransform,
+                        guidePoint,
+                        fallbackRadius,
+                        selectedTriangleIndices,
+                        out projectionHit)
+                    : MeshVerticalProjection.TryFindNearestTarget(
+                        mesh,
+                        newWorldTransform,
+                        guidePoint,
+                        fallbackRadius,
+                        out projectionHit);
+
+                if (!targetFound
+                    || projectionHit.Point.Z < 0.0f
+                    || !SupportPlacementPlanner.TryCreatePlacement(
+                        mesh,
+                        newWorldTransform,
+                        projectionHit.Point,
+                        projectionHit.Normal,
+                        supportProfile,
+                        out placementPlan))
+                {
+                    continue;
+                }
+            }
+            else if (!MeshVerticalProjection.TryProjectSupportToMesh(
+                mesh,
+                newWorldTransform,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                out projectionHit,
+                out placementPlan))
             {
                 continue;
             }
@@ -308,6 +347,7 @@ public static class SupportGroupTransformRegenerator
         List<Vector3> guidePoints = new List<Vector3>(requestedSupportCount);
         List<SupportEntity> newSupportEntities = new List<SupportEntity>(requestedSupportCount);
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(mesh, settings.SelectedFaces);
 
         RingSupportPattern.FillGuidePoints(circle, settings.Spacing, guidePoints);
 
@@ -317,7 +357,35 @@ public static class SupportGroupTransformRegenerator
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
 
-            if (!MeshVerticalProjection.TryProjectSupportToMesh(mesh, newWorldTransform, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (settings.SurfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
+            {
+                if (!MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+                    mesh,
+                    newWorldTransform,
+                    guidePoint,
+                    fallbackRadius,
+                    selectedTriangleIndices,
+                    out projectionHit)
+                    || projectionHit.Point.Z < 0.0f
+                    || !SupportPlacementPlanner.TryCreatePlacement(
+                        mesh,
+                        newWorldTransform,
+                        projectionHit.Point,
+                        projectionHit.Normal,
+                        supportProfile,
+                        out placementPlan))
+                {
+                    continue;
+                }
+            }
+            else if (!MeshVerticalProjection.TryProjectSupportToMesh(
+                mesh,
+                newWorldTransform,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                out projectionHit,
+                out placementPlan))
             {
                 continue;
             }
@@ -447,7 +515,9 @@ public static class SupportGroupTransformRegenerator
             transformedFirstPoint,
             NormalizePointToRingPlane(transformedFirstPoint, transformedSecondPoint),
             NormalizePointToRingPlane(transformedFirstPoint, transformedThirdPoint),
-            oldSettings.Spacing);
+            oldSettings.Spacing,
+            oldSettings.SurfaceTargetMode,
+            oldSettings.SelectedFaces);
     }
 
     /// <summary>
@@ -468,7 +538,37 @@ public static class SupportGroupTransformRegenerator
                 newWorldTransform));
         }
 
-        return new LineSupportSettings(transformedPoints, oldSettings.Spacing, oldSettings.PlaceSupportsAtBends);
+        return new LineSupportSettings(
+            transformedPoints,
+            oldSettings.Spacing,
+            oldSettings.PlaceSupportsAtBends,
+            oldSettings.SurfaceTargetMode,
+            oldSettings.SelectedFaces);
+    }
+
+    /// <summary>
+    /// Filters persisted selected faces to valid, sorted triangle numbers for one mesh.
+    /// </summary>
+    private static List<int> CreateSelectedTriangleIndexList(
+        MeshEntity mesh,
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+    {
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+        HashSet<int> uniqueTriangleIndices = new HashSet<int>();
+
+        foreach (FaceSelectionKey selectedFace in selectedFaces)
+        {
+            if (selectedFace.MeshEntityId == mesh.Id
+                && selectedFace.TriangleIndex >= 0
+                && selectedFace.TriangleIndex < triangleCount)
+            {
+                uniqueTriangleIndices.Add(selectedFace.TriangleIndex);
+            }
+        }
+
+        List<int> selectedTriangleIndices = new List<int>(uniqueTriangleIndices);
+        selectedTriangleIndices.Sort();
+        return selectedTriangleIndices;
     }
 
     /// <summary>

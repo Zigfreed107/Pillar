@@ -190,6 +190,24 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Launches reusable face selection for the active Ring Support operation.
+    /// </summary>
+    private void RingSupportToolOptionsControl_SelectFacesRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Ring)
+        {
+            _viewModel.SetStatusText("Choose the Ring Support tool before selecting faces.");
+            return;
+        }
+
+        _manualSupportTool.BeginRingSupportFaceSelection();
+    }
+
+    /// <summary>
     /// Refreshes the Line Support preview when its spacing option changes.
     /// </summary>
     private void LineSupportToolOptionsControl_OptionsChanged(object? sender, System.EventArgs e)
@@ -204,6 +222,24 @@ public partial class MainWindow
         }
 
         _manualSupportTool.RefreshActiveOperationPreview();
+    }
+
+    /// <summary>
+    /// Launches reusable face selection for the active Line Support operation.
+    /// </summary>
+    private void LineSupportToolOptionsControl_SelectFacesRequested(object? sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (_activeModeId != WorkspaceModeId.ManualSupport
+            || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Line)
+        {
+            _viewModel.SetStatusText("Choose the Line Support tool before selecting faces.");
+            return;
+        }
+
+        _manualSupportTool.BeginLineSupportFaceSelection();
     }
 
     /// <summary>
@@ -291,6 +327,15 @@ public partial class MainWindow
             return;
         }
 
+        if (_ringSupportToolOptionsControl.GetSurfaceTargetMode() == RingSupportSurfaceTargetMode.SelectedFacesOnly
+            && !_manualSupportTool.HasActiveRingSupportFaceSelection())
+        {
+            const string WarningMessage = "No faces are selected for Ring Support. Select some faces, then try Apply again.";
+            _viewModel.SetStatusText(WarningMessage);
+            MessageBox.Show(this, WarningMessage, "Ring Support Faces Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         bool didApply = false;
         didApply = _manualSupportTool.ApplyActiveOperation();
 
@@ -314,6 +359,15 @@ public partial class MainWindow
             || _manualSupportTool.ActiveOperationKind != ManualSupportOperationKind.Line)
         {
             _viewModel.SetStatusText("Choose the Line Support tool before applying line supports.");
+            return;
+        }
+
+        if (_lineSupportToolOptionsControl.GetSurfaceTargetMode() == LineSupportSurfaceTargetMode.SelectedFacesOnly
+            && !_manualSupportTool.HasActiveLineSupportFaceSelection())
+        {
+            const string WarningMessage = "No faces are selected for Line Support. Select some faces, then try Apply again.";
+            _viewModel.SetStatusText(WarningMessage);
+            MessageBox.Show(this, WarningMessage, "Line Support Faces Required", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -519,15 +573,18 @@ public partial class MainWindow
 
         _selectTool.ResetSelectionFilter();
 
-        if (string.Equals(selectedToolName, "Translate", StringComparison.Ordinal))
+        if (string.Equals(selectedToolName, TransformMoveToPlateActionName, StringComparison.Ordinal))
+        {
+            HideToolOptionsOverlay();
+            MoveSelectedTransformMeshToPlate();
+            return;
+        }
+
+        if (string.Equals(selectedToolName, TransformTranslateToolName, StringComparison.Ordinal))
         {
             ClearTransformScaleToolState();
             ClearTransformRotationToolState();
-            ShowPlaceholderToolOptions(
-                "Translate Options",
-                "Translate tool is active. Dedicated movement controls will be added here.",
-                ToolSessionPanelSet.None,
-                () => FinishPlaceholderToolSession("Finished translate tool"));
+            ShowTransformTranslateTool();
             return;
         }
 
@@ -904,6 +961,7 @@ public partial class MainWindow
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _lineSupportToolOptionsControl.SetLineSupportSpacing(settings.Spacing);
             _lineSupportToolOptionsControl.SetPlaceSupportsAtBends(settings.PlaceSupportsAtBends);
+            _lineSupportToolOptionsControl.SetSurfaceTargetMode(settings.SurfaceTargetMode);
             ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditLineSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
@@ -929,6 +987,7 @@ public partial class MainWindow
 
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
+            _ringSupportToolOptionsControl.SetSurfaceTargetMode(settings.SurfaceTargetMode);
             ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);

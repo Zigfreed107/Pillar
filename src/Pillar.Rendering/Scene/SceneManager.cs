@@ -69,6 +69,7 @@ public class SceneManager
     private readonly ScaleOriginPreviewRenderer _scaleOriginPreviewRenderer;
     private readonly RotationOriginPreviewRenderer _rotationOriginPreviewRenderer;
     private readonly ScaledCursorPreviewRenderer _scaledCursorPreviewRenderer;
+    private readonly IslandDetectionPreviewRenderer _islandDetectionPreviewRenderer;
     private readonly SelectionManager _selectionManager;
     private readonly int _supportSides;
     private readonly PrintableVolumeDefinition _printableVolumeDefinition;
@@ -212,6 +213,7 @@ public class SceneManager
         _scaleOriginPreviewRenderer = new ScaleOriginPreviewRenderer(_previewRoot);
         _rotationOriginPreviewRenderer = new RotationOriginPreviewRenderer(_previewRoot);
         _scaledCursorPreviewRenderer = new ScaledCursorPreviewRenderer(_previewRoot);
+        _islandDetectionPreviewRenderer = new IslandDetectionPreviewRenderer(_previewRoot);
         _snapMarkerRenderer = new SnapMarkerRenderer(_previewRoot);
         _viewport.Items.Add(_previewRoot);
 
@@ -764,6 +766,26 @@ public class SceneManager
     public void HideScaledCursorPreview()
     {
         _scaledCursorPreviewRenderer.Hide();
+    }
+
+    /// <summary>
+    /// Shows filtered island markers and the currently selected birth region.
+    /// </summary>
+    public void ShowIslandDetectionPreview(
+        MeshEntity mesh,
+        IReadOnlyList<IslandCandidate> visibleCandidates,
+        int selectedIndex,
+        float markerRadius)
+    {
+        _islandDetectionPreviewRenderer.Show(mesh, visibleCandidates, selectedIndex, markerRadius);
+    }
+
+    /// <summary>
+    /// Clears every transient island marker and highlight.
+    /// </summary>
+    public void HideIslandDetectionPreview()
+    {
+        _islandDetectionPreviewRenderer.Hide();
     }
 
     /// <summary>

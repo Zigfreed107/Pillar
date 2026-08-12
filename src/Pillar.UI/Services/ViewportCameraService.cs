@@ -83,6 +83,25 @@ public sealed class ViewportCameraService : IDisposable
     }
 
     /// <summary>
+    /// Frames renderer-independent world bounds and immediately refreshes clip-plane configuration.
+    /// </summary>
+    public void FrameBounds(Rect3D bounds)
+    {
+        if (_isDisposed)
+        {
+            throw new ObjectDisposedException(nameof(ViewportCameraService));
+        }
+
+        if (!IsUsableBounds(bounds))
+        {
+            return;
+        }
+
+        _viewport.ZoomExtents(bounds, 0.0);
+        UpdateCameraConfiguration(true);
+    }
+
+    /// <summary>
     /// Releases event subscriptions held by the service.
     /// </summary>
     public void Dispose()

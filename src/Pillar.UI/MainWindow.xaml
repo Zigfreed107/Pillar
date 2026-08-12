@@ -163,6 +163,16 @@
                             Click="FaceSetSelectionLaunchButton_Click"
                             ToolTip="Open the temporary face set selection helper." />
 
+                    <Button x:Name="IslandDetectionLaunchButton"
+                            MinHeight="28"
+                            Margin="0,0,12,0"
+                            Padding="8,2"
+                            VerticalAlignment="Center"
+                            IsEnabled="False"
+                            Content="Detect Islands"
+                            Click="IslandDetectionLaunchButton_Click"
+                            ToolTip="Analyze the selected model for above-plate island candidates." />
+
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -388,6 +398,13 @@
                                                       Visibility="Collapsed"
                                                       IsHitTestVisible="True" />
                         </StackPanel>
+
+                        <ContentControl x:Name="IslandDetectionHostOverlay"
+                                        Width="340"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"
+                                        Visibility="Collapsed"
+                                        IsHitTestVisible="True" />
 
                         <ContentControl x:Name="FaceSetSelectionToolHostOverlay"
                                         Width="420"

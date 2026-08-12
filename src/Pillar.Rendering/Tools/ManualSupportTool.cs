@@ -26,8 +26,11 @@ public class ManualSupportTool : ITool
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getRingSupportSpacing;
+    private readonly Func<RingSupportSurfaceTargetMode> _getRingSupportSurfaceTargetMode;
     private readonly Func<float> _getLineSupportSpacing;
     private readonly Func<bool> _getLineSupportPlaceSupportsAtBends;
+    private readonly Func<LineSupportSurfaceTargetMode> _getLineSupportSurfaceTargetMode;
+    private readonly Func<IReadOnlyCollection<FaceSelectionKey>> _getSharedFaceSelection;
     private readonly Func<float> _getContourSupportZHeight;
     private readonly Func<float> _getContourSupportCoplanarThresholdDegrees;
     private readonly Func<float> _getContourSupportSpacing;
@@ -46,7 +49,9 @@ public class ManualSupportTool : ITool
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<float> _contourSupportZHeightSelectedReporter;
     private readonly Action<bool> _contourSupportClosedStateReporter;
-    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _ringFaceSelectionSessionStarter;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _lineFaceSelectionSessionStarter;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _areaFaceSelectionSessionStarter;
     private IToolOperation? _activeOperation;
 
     /// <summary>
@@ -59,8 +64,11 @@ public class ManualSupportTool : ITool
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getRingSupportSpacing,
+        Func<RingSupportSurfaceTargetMode> getRingSupportSurfaceTargetMode,
         Func<float> getLineSupportSpacing,
         Func<bool> getLineSupportPlaceSupportsAtBends,
+        Func<LineSupportSurfaceTargetMode> getLineSupportSurfaceTargetMode,
+        Func<IReadOnlyCollection<FaceSelectionKey>> getSharedFaceSelection,
         Func<float> getContourSupportZHeight,
         Func<float> getContourSupportCoplanarThresholdDegrees,
         Func<float> getContourSupportSpacing,
@@ -78,7 +86,9 @@ public class ManualSupportTool : ITool
         Func<bool> getAreaSupportShowSpacing,
         Action<float> contourSupportZHeightSelectedReporter,
         Action<bool> contourSupportClosedStateReporter,
-        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> ringFaceSelectionSessionStarter,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> lineFaceSelectionSessionStarter,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> areaFaceSelectionSessionStarter,
         Func<SupportProfile> createSupportProfile)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
@@ -87,8 +97,11 @@ public class ManualSupportTool : ITool
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
+        _getRingSupportSurfaceTargetMode = getRingSupportSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getRingSupportSurfaceTargetMode));
         _getLineSupportSpacing = getLineSupportSpacing ?? throw new ArgumentNullException(nameof(getLineSupportSpacing));
         _getLineSupportPlaceSupportsAtBends = getLineSupportPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getLineSupportPlaceSupportsAtBends));
+        _getLineSupportSurfaceTargetMode = getLineSupportSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getLineSupportSurfaceTargetMode));
+        _getSharedFaceSelection = getSharedFaceSelection ?? throw new ArgumentNullException(nameof(getSharedFaceSelection));
         _getContourSupportZHeight = getContourSupportZHeight ?? throw new ArgumentNullException(nameof(getContourSupportZHeight));
         _getContourSupportCoplanarThresholdDegrees = getContourSupportCoplanarThresholdDegrees ?? throw new ArgumentNullException(nameof(getContourSupportCoplanarThresholdDegrees));
         _getContourSupportSpacing = getContourSupportSpacing ?? throw new ArgumentNullException(nameof(getContourSupportSpacing));
@@ -106,7 +119,9 @@ public class ManualSupportTool : ITool
         _getAreaSupportShowSpacing = getAreaSupportShowSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportShowSpacing));
         _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
         _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
-        _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
+        _ringFaceSelectionSessionStarter = ringFaceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(ringFaceSelectionSessionStarter));
+        _lineFaceSelectionSessionStarter = lineFaceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(lineFaceSelectionSessionStarter));
+        _areaFaceSelectionSessionStarter = areaFaceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(areaFaceSelectionSessionStarter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
     }
 
@@ -188,6 +203,9 @@ public class ManualSupportTool : ITool
                 _getSelectedModelEntityId,
                 _getLineSupportSpacing,
                 _getLineSupportPlaceSupportsAtBends,
+                _getLineSupportSurfaceTargetMode,
+                _getSharedFaceSelection,
+                _lineFaceSelectionSessionStarter,
                 _createSupportProfile,
                 RaiseStatusMessageRequested,
                 RaisePrecisionSelectCursorRequested,
@@ -208,6 +226,9 @@ public class ManualSupportTool : ITool
                 _commandRunner,
                 _getSelectedModelEntityId,
                 _getRingSupportSpacing,
+                _getRingSupportSurfaceTargetMode,
+                _getSharedFaceSelection,
+                _ringFaceSelectionSessionStarter,
                 _createSupportProfile,
                 RaiseStatusMessageRequested,
                 RaisePrecisionSelectCursorRequested,
@@ -263,7 +284,7 @@ public class ManualSupportTool : ITool
                 _getAreaSupportOffsetSpacing,
                 _getAreaSupportShowSpacing,
                 _createSupportProfile,
-                _faceSelectionSessionStarter,
+                _areaFaceSelectionSessionStarter,
                 RaiseStatusMessageRequested,
                 RaisePreviewCalculationStateChanged);
 
@@ -392,6 +413,52 @@ public class ManualSupportTool : ITool
         }
 
         RaiseStatusMessageRequested("Choose the Area Support tool before selecting faces.");
+    }
+
+    /// <summary>
+    /// Requests that the active Ring Support operation launch the reusable face-selection helper.
+    /// </summary>
+    public void BeginRingSupportFaceSelection()
+    {
+        if (_activeOperation is RingSupportOperation ringSupportOperation)
+        {
+            ringSupportOperation.BeginFaceSelection();
+            return;
+        }
+
+        RaiseStatusMessageRequested("Choose the Ring Support tool before selecting faces.");
+    }
+
+    /// <summary>
+    /// Gets whether the active Ring Support operation has an accepted face on its current model.
+    /// </summary>
+    public bool HasActiveRingSupportFaceSelection()
+    {
+        return _activeOperation is RingSupportOperation ringSupportOperation
+            && ringSupportOperation.HasSelectedFacesForCurrentModel();
+    }
+
+    /// <summary>
+    /// Requests that the active Line Support operation launch the reusable face-selection helper.
+    /// </summary>
+    public void BeginLineSupportFaceSelection()
+    {
+        if (_activeOperation is LineSupportOperation lineSupportOperation)
+        {
+            lineSupportOperation.BeginFaceSelection();
+            return;
+        }
+
+        RaiseStatusMessageRequested("Choose the Line Support tool before selecting faces.");
+    }
+
+    /// <summary>
+    /// Gets whether the active Line Support operation has an accepted face on its current model.
+    /// </summary>
+    public bool HasActiveLineSupportFaceSelection()
+    {
+        return _activeOperation is LineSupportOperation lineSupportOperation
+            && lineSupportOperation.HasSelectedFacesForCurrentModel();
     }
 
     /// <summary>

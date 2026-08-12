@@ -48,6 +48,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common Tools", "Common Tools", "{B362E5DD-7B52-47A5-BCF3-EB2ED501F458}"
 	ProjectSection(SolutionItems) = preProject
 		Documentation\Common Tools\Face-Set-Selection.md = Documentation\Common Tools\Face-Set-Selection.md
+		Documentation\Common Tools\Island-Detection.md = Documentation\Common Tools\Island-Detection.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Support Genreation Tools", "Support Genreation Tools", "{0695FCCA-0834-403E-8E53-A6B7B6D6C756}"

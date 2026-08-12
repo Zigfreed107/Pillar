@@ -4,6 +4,7 @@ using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Geometry.Primitives;
@@ -50,6 +51,9 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
+    private readonly Func<RingSupportSurfaceTargetMode> _getSurfaceTargetMode;
+    private readonly Func<IReadOnlyCollection<FaceSelectionKey>> _getSharedFaceSelection;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private readonly Action<bool> _precisionSelectCursorRequester;
@@ -57,6 +61,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly List<Vector3> _guidePreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
     private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(RingSupportPattern.MaximumSupportCount);
     private readonly List<CadEntity> _windowSelectionBuffer = new List<CadEntity>(64);
+    private readonly HashSet<FaceSelectionKey> _selectedFaces = new HashSet<FaceSelectionKey>();
 
     private Guid? _targetModelEntityId;
     private Guid? _editingSupportLayerGroupId;
@@ -79,6 +84,9 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
+        Func<RingSupportSurfaceTargetMode> getSurfaceTargetMode,
+        Func<IReadOnlyCollection<FaceSelectionKey>> getSharedFaceSelection,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
         Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter,
         Action<bool> precisionSelectCursorRequester,
@@ -90,6 +98,9 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
+        _getSurfaceTargetMode = getSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getSurfaceTargetMode));
+        _getSharedFaceSelection = getSharedFaceSelection ?? throw new ArgumentNullException(nameof(getSharedFaceSelection));
+        _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
         _precisionSelectCursorRequester = precisionSelectCursorRequester ?? throw new ArgumentNullException(nameof(precisionSelectCursorRequester));
@@ -252,6 +263,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _firstPoint = null;
         _secondPoint = null;
         _thirdPoint = null;
+        _selectedFaces.Clear();
         _currentPreviewPoint = null;
         _activePointHandle = RingSupportPointHandleKind.None;
         ResetSupportSelectionGesture();
@@ -260,6 +272,29 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _projectedPreviewPoints.Clear();
         _scene.HideRingSupportPreview();
         _precisionSelectCursorRequester(false);
+    }
+
+    /// <summary>
+    /// Launches reusable face selection for Selected Faces Only targeting.
+    /// </summary>
+    public void BeginFaceSelection()
+    {
+        IReadOnlyCollection<FaceSelectionKey> initialSelection = _selectedFaces.Count > 0
+            ? _selectedFaces
+            : _getSharedFaceSelection();
+
+        _faceSelectionSessionStarter(initialSelection, AcceptFaceSelection);
+        _statusReporter("Select model faces for Ring Support, then accept the face selection.");
+    }
+
+    /// <summary>
+    /// Gets whether Selected Faces Only targeting has at least one valid face on the active model.
+    /// </summary>
+    public bool HasSelectedFacesForCurrentModel()
+    {
+        AdoptSharedFaceSelectionIfNeeded();
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
+        return selectedMesh != null && CreateSelectedFacesForMesh(selectedMesh).Count > 0;
     }
 
     /// <summary>
@@ -290,6 +325,13 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _firstPoint = settings.FirstPoint;
         _secondPoint = NormalizePointToRingPlane(settings.FirstPoint, settings.SecondPoint);
         _thirdPoint = NormalizePointToRingPlane(settings.FirstPoint, settings.ThirdPoint);
+        _selectedFaces.Clear();
+
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            _selectedFaces.Add(settings.SelectedFaces[i]);
+        }
+
         _currentPreviewPoint = _thirdPoint;
         _activePointHandle = RingSupportPointHandleKind.None;
         _precisionSelectCursorRequester(false);
@@ -380,11 +422,28 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             return false;
         }
 
+        RingSupportSurfaceTargetMode surfaceTargetMode = _getSurfaceTargetMode();
+
+        if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            AdoptSharedFaceSelectionIfNeeded();
+        }
+
+        List<FaceSelectionKey> selectedFaces = CreateSelectedFacesForMesh(selectedMesh);
+
+        if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
+        {
+            _statusReporter("No faces are selected for Ring Support. Select some faces, then try Apply again.");
+            return false;
+        }
+
         RingSupportSettings settings = new RingSupportSettings(
             _firstPoint.Value,
             _secondPoint.Value,
             _thirdPoint.Value,
-            _getSpacing());
+            _getSpacing(),
+            surfaceTargetMode,
+            selectedFaces);
 
         if (_editingSupportLayerGroupId.HasValue)
         {
@@ -598,6 +657,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _firstPoint = newSettings.FirstPoint;
         _secondPoint = newSettings.SecondPoint;
         _thirdPoint = newSettings.ThirdPoint;
+        CopySelectedFaces(newSettings.SelectedFaces);
         _currentPreviewPoint = newSettings.ThirdPoint;
         _activePointHandle = RingSupportPointHandleKind.None;
         _precisionSelectCursorRequester(false);
@@ -615,6 +675,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _firstPoint = settings.FirstPoint;
         _secondPoint = settings.SecondPoint;
         _thirdPoint = settings.ThirdPoint;
+        CopySelectedFaces(settings.SelectedFaces);
         _currentPreviewPoint = settings.ThirdPoint;
         _activePointHandle = RingSupportPointHandleKind.None;
         _precisionSelectCursorRequester(false);
@@ -877,6 +938,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
         int requestedSupportCount = RingSupportPattern.CalculateSupportCount(circle, settings.Spacing);
         List<SupportEntity> supportEntities = new List<SupportEntity>(requestedSupportCount);
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(selectedMesh, settings.SelectedFaces);
         missedProjectionCount = 0;
         invalidSupportCount = 0;
 
@@ -887,18 +949,42 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             Vector3 guidePoint = _guidePreviewPoints[i];
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
+            bool targetFound;
 
-            if (!MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (!TryCreateSupportPlacement(
+                selectedMesh,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                settings.SurfaceTargetMode,
+                selectedTriangleIndices,
+                out projectionHit,
+                out placementPlan,
+                out targetFound))
             {
-                Vector3 ignoredProjectedPoint;
-
-                if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out ignoredProjectedPoint))
+                if (settings.SurfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
                 {
-                    invalidSupportCount++;
+                    if (targetFound)
+                    {
+                        invalidSupportCount++;
+                    }
+                    else
+                    {
+                        missedProjectionCount++;
+                    }
                 }
                 else
                 {
-                    missedProjectionCount++;
+                    Vector3 ignoredProjectedPoint;
+
+                    if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out ignoredProjectedPoint))
+                    {
+                        invalidSupportCount++;
+                    }
+                    else
+                    {
+                        missedProjectionCount++;
+                    }
                 }
 
                 continue;
@@ -945,14 +1031,33 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         RingSupportPattern.FillGuidePoints(circle, _getSpacing(), _guidePreviewPoints);
         SupportProfile supportProfile = _createSupportProfile();
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(_getSpacing(), supportProfile);
+        RingSupportSurfaceTargetMode surfaceTargetMode = _getSurfaceTargetMode();
+
+        if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            AdoptSharedFaceSelectionIfNeeded();
+        }
+
+        List<FaceSelectionKey> selectedFaces = CreateSelectedFacesForMesh(selectedMesh);
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(selectedMesh, selectedFaces);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
             Vector3 guidePoint = _guidePreviewPoints[i];
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
+            bool targetFound;
 
-            if (MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (TryCreateSupportPlacement(
+                selectedMesh,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                surfaceTargetMode,
+                selectedTriangleIndices,
+                out projectionHit,
+                out placementPlan,
+                out targetFound))
             {
                 _projectedPreviewPoints.Add(projectionHit.Point);
             }
@@ -1108,6 +1213,136 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             _statusReporter("Ring support points must be distinct and not collinear.");
             return;
         }
+    }
+
+    /// <summary>
+    /// Accepts a reusable face-selection result and refreshes the active Ring Support preview.
+    /// </summary>
+    private void AcceptFaceSelection(IReadOnlyCollection<FaceSelectionKey> acceptedSelection)
+    {
+        CopySelectedFaces(acceptedSelection);
+        RefreshPreview();
+        _statusReporter($"Accepted {_selectedFaces.Count} faces for Ring Support.");
+    }
+
+    /// <summary>
+    /// Replaces the operation-local selected face set with a defensive copy.
+    /// </summary>
+    private void CopySelectedFaces(IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+    {
+        _selectedFaces.Clear();
+
+        foreach (FaceSelectionKey selectedFace in selectedFaces)
+        {
+            _selectedFaces.Add(selectedFace);
+        }
+    }
+
+    /// <summary>
+    /// Resolves one guide point using the Ring Support targeting policy, then validates its support route.
+    /// </summary>
+    private static bool TryCreateSupportPlacement(
+        MeshEntity mesh,
+        Vector3 guidePoint,
+        SupportProfile supportProfile,
+        float fallbackRadius,
+        RingSupportSurfaceTargetMode surfaceTargetMode,
+        IReadOnlyList<int> selectedTriangleIndices,
+        out MeshProjectionHit projectionHit,
+        out SupportPlacementPlan placementPlan,
+        out bool targetFound)
+    {
+        if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            targetFound = MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+                mesh,
+                guidePoint,
+                fallbackRadius,
+                selectedTriangleIndices,
+                out projectionHit);
+
+            if (!targetFound || projectionHit.Point.Z < 0.0f)
+            {
+                placementPlan = default;
+                return false;
+            }
+
+            return SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                projectionHit.Point,
+                projectionHit.Normal,
+                supportProfile,
+                out placementPlan);
+        }
+
+        bool didProject = MeshVerticalProjection.TryProjectSupportToMesh(
+            mesh,
+            guidePoint,
+            supportProfile,
+            fallbackRadius,
+            out projectionHit,
+            out placementPlan);
+        targetFound = didProject;
+        return didProject;
+    }
+
+    /// <summary>
+    /// Imports the toolbar's last accepted face set when this Ring Support operation has no local selection.
+    /// </summary>
+    private void AdoptSharedFaceSelectionIfNeeded()
+    {
+        if (_selectedFaces.Count > 0)
+        {
+            return;
+        }
+
+        IReadOnlyCollection<FaceSelectionKey> sharedFaces = _getSharedFaceSelection();
+
+        foreach (FaceSelectionKey selectedFace in sharedFaces)
+        {
+            _selectedFaces.Add(selectedFace);
+        }
+    }
+
+    /// <summary>
+    /// Creates a stable selected-face list containing only faces owned by the active model.
+    /// </summary>
+    private List<FaceSelectionKey> CreateSelectedFacesForMesh(MeshEntity mesh)
+    {
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(mesh, _selectedFaces);
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(selectedTriangleIndices.Count);
+
+        for (int i = 0; i < selectedTriangleIndices.Count; i++)
+        {
+            selectedFaces.Add(new FaceSelectionKey(mesh.Id, selectedTriangleIndices[i]));
+        }
+
+        return selectedFaces;
+    }
+
+    /// <summary>
+    /// Filters selected-face identities to valid, sorted triangle numbers for one mesh.
+    /// </summary>
+    private static List<int> CreateSelectedTriangleIndexList(
+        MeshEntity mesh,
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+    {
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+        HashSet<int> uniqueTriangleIndices = new HashSet<int>();
+
+        foreach (FaceSelectionKey selectedFace in selectedFaces)
+        {
+            if (selectedFace.MeshEntityId == mesh.Id
+                && selectedFace.TriangleIndex >= 0
+                && selectedFace.TriangleIndex < triangleCount)
+            {
+                uniqueTriangleIndices.Add(selectedFace.TriangleIndex);
+            }
+        }
+
+        List<int> selectedTriangleIndices = new List<int>(uniqueTriangleIndices);
+        selectedTriangleIndices.Sort();
+        return selectedTriangleIndices;
     }
 
     /// <summary>

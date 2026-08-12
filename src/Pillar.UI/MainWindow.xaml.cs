@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private readonly SupportClusterToolOptionsControl _supportClusterToolOptionsControl;
     private readonly SupportBracingToolOptionsControl _supportBracingToolOptionsControl;
     private readonly DirectEditToolOptionsControl _directEditToolOptionsControl;
+    private readonly TranslateToolOptionsControl _translateToolOptionsControl;
     private readonly ScaleToolOptionsControl _scaleToolOptionsControl;
     private readonly RotationToolOptionsControl _rotationToolOptionsControl;
     private readonly RaftToolOptionsControl _raftToolOptionsControl;
@@ -99,6 +100,7 @@ public partial class MainWindow : Window
         _supportClusterToolOptionsControl = new SupportClusterToolOptionsControl();
         _supportBracingToolOptionsControl = new SupportBracingToolOptionsControl();
         _directEditToolOptionsControl = new DirectEditToolOptionsControl();
+        _translateToolOptionsControl = new TranslateToolOptionsControl();
         _scaleToolOptionsControl = new ScaleToolOptionsControl();
         _rotationToolOptionsControl = new RotationToolOptionsControl();
         _raftToolOptionsControl = new RaftToolOptionsControl();
@@ -144,8 +146,11 @@ public partial class MainWindow : Window
             _commandRunner,
             _layerPanelViewModel.GetSelectedModelEntityId,
             GetRingSupportSpacingOrDefault,
+            GetRingSupportSurfaceTargetMode,
             GetLineSupportSpacingOrDefault,
             GetLineSupportPlaceSupportsAtBendsOrDefault,
+            GetLineSupportSurfaceTargetMode,
+            CreateToolbarFaceSelectionSnapshot,
             GetContourSupportZHeightOrDefault,
             GetContourSupportCoplanarThresholdOrDefault,
             GetContourSupportSpacingOrDefault,
@@ -163,6 +168,8 @@ public partial class MainWindow : Window
             GetAreaSupportShowSpacing,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
+            StartRingSupportFaceSelectionSession,
+            StartLineSupportFaceSelectionSession,
             StartAreaSupportFaceSelectionSession,
             GetSelectedSupportProfile);
         _directEditTool = new DirectEditTool(Viewport, _document, _scene, _projection, _selectTool);
@@ -184,6 +191,7 @@ public partial class MainWindow : Window
         RegisterWorkspaceModes();
         InitializeFaceAngleHighlightControls();
         InitializeScaledCursorControls();
+        InitializeIslandDetectionControls();
         _selectTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.SelectionWindowChanged += _selectionWindowOverlay.Update;
         _manualSupportTool.StatusMessageRequested += ManualSupportTool_StatusMessageRequested;
@@ -243,6 +251,7 @@ public partial class MainWindow : Window
         _ = sender;
         _ = e;
         CloseFaceSetSelectionSession(false);
+        DisposeIslandDetectionControls();
         SetPrecisionSelectCursor(false);
         _scene.HideScaledCursorPreview();
         _manualSupportTool.SelectionWindowChanged -= _selectionWindowOverlay.Update;
@@ -334,10 +343,12 @@ public partial class MainWindow : Window
         WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
         _ringSupportToolOptionsControl.OptionsChanged += RingSupportToolOptionsControl_OptionsChanged;
+        _ringSupportToolOptionsControl.SelectFacesRequested += RingSupportToolOptionsControl_SelectFacesRequested;
         _ringSupportToolOptionsControl.ApplyRequested += RingSupportToolOptionsControl_ApplyRequested;
         _ringSupportToolOptionsControl.CloseRequested += RingSupportToolOptionsControl_CloseRequested;
         _ringSupportToolOptionsControl.DeleteRequested += RingSupportToolOptionsControl_DeleteRequested;
         _lineSupportToolOptionsControl.OptionsChanged += LineSupportToolOptionsControl_OptionsChanged;
+        _lineSupportToolOptionsControl.SelectFacesRequested += LineSupportToolOptionsControl_SelectFacesRequested;
         _lineSupportToolOptionsControl.ApplyRequested += LineSupportToolOptionsControl_ApplyRequested;
         _lineSupportToolOptionsControl.CloseRequested += LineSupportToolOptionsControl_CloseRequested;
         _lineSupportToolOptionsControl.DeleteRequested += LineSupportToolOptionsControl_DeleteRequested;
@@ -371,6 +382,8 @@ public partial class MainWindow : Window
         _directEditToolOptionsControl.CloseRequested += DirectEditToolOptionsControl_CloseRequested;
         _directEditTool.EditCommitted += DirectEditTool_EditCommitted;
         _directEditTool.StatusMessageRequested += DirectEditTool_StatusMessageRequested;
+        _translateToolOptionsControl.MoveToPlateRequested += TranslateToolOptionsControl_MoveToPlateRequested;
+        _translateToolOptionsControl.FinishRequested += TranslateToolOptionsControl_FinishRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
         _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;
@@ -463,6 +476,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Reads the Ring Support surface-targeting policy while keeping WPF controls out of rendering tools.
+    /// </summary>
+    private RingSupportSurfaceTargetMode GetRingSupportSurfaceTargetMode()
+    {
+        return _ringSupportToolOptionsControl.GetSurfaceTargetMode();
+    }
+
+    /// <summary>
     /// Reads Line Support spacing from the active Line Support options panel while keeping WPF controls out of rendering tools.
     /// </summary>
     private float GetLineSupportSpacingOrDefault()
@@ -482,6 +503,14 @@ public partial class MainWindow : Window
     private bool GetLineSupportPlaceSupportsAtBendsOrDefault()
     {
         return _lineSupportToolOptionsControl.GetPlaceSupportsAtBends();
+    }
+
+    /// <summary>
+    /// Reads the Line Support surface-targeting policy while keeping WPF controls out of rendering tools.
+    /// </summary>
+    private LineSupportSurfaceTargetMode GetLineSupportSurfaceTargetMode()
+    {
+        return _lineSupportToolOptionsControl.GetSurfaceTargetMode();
     }
 
     /// <summary>

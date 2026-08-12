@@ -20,6 +20,7 @@ public partial class MainWindow
         _ = removedIds;
         _layerPanelViewModel.SetSelectedModelCount(GetSelectedMeshEntityCount());
         _layerPanelViewModel.SetSelectedSupportLayerGroupCount(GetSelectedSupportLayerGroupCount());
+        HandleIslandDetectionSelectionChanged();
         UpdateSelectedModelBoundsClipIndicator();
         UpdateGeneratedSupportDeleteButtonState();
         RefreshSupportClusterPreviewStatusForSelectionChange();

@@ -124,7 +124,7 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
-    /// Shows mock options for the planned translate tool.
+    /// Shows options for the Transform Translate tool.
     /// </summary>
     private void TranslateButton_Click(object sender, RoutedEventArgs e)
     {
@@ -151,6 +151,16 @@ public partial class ModePanel : UserControl
         _ = sender;
         _ = e;
         RaiseToolSelected("Scale");
+    }
+
+    /// <summary>
+    /// Requests that the selected model be placed on the build plate immediately.
+    /// </summary>
+    private void MoveToPlateButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        RaiseToolSelected("Move to Plate");
     }
 
     /// <summary>

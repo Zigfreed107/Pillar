@@ -99,10 +99,16 @@ public static class Program
         RunTest(failures, "Support projection fallback handles neighboring vertical face points", ValidateSupportProjectionFallbackHandlesNeighboringVerticalFacePoints);
         RunTest(failures, "Support projection fallback rejects distant vertical face", ValidateSupportProjectionFallbackRejectsDistantVerticalFace);
         RunTest(failures, "Vertical support projection chooses first exterior hit", ValidateVerticalSupportProjectionChoosesFirstExteriorHit);
+        RunTest(failures, "Nearest line target chooses closest surface before placement", ValidateNearestLineTargetChoosesClosestSurfaceBeforePlacement);
+        RunTest(failures, "Selected-face line target tests only selected triangles", ValidateSelectedFaceLineTargetTestsOnlySelectedTriangles);
         RunTest(failures, "Transform regeneration uses supportable projection", ValidateTransformRegenerationUsesSupportableProjection);
+        RunTest(failures, "Transform regeneration preserves nearest line targeting", ValidateTransformRegenerationPreservesNearestLineTargeting);
+        RunTest(failures, "Transform regeneration preserves selected-face line targeting", ValidateTransformRegenerationPreservesSelectedFaceLineTargeting);
+        RunTest(failures, "Transform regeneration preserves selected-face ring targeting", ValidateTransformRegenerationPreservesSelectedFaceRingTargeting);
         RunTest(failures, "Rotation transform preserves its pivot and scale", ValidateRotationTransformPreservesPivotAndScale);
         RunTest(failures, "Zero rotation restores exact session transform", ValidateZeroRotationRestoresExactSessionTransform);
         RunTest(failures, "Reset rotation restores imported orientation", ValidateResetRotationRestoresImportedOrientation);
+        RunTest(failures, "Move to Plate grounds the lowest transformed vertex", ValidateMoveToPlateGroundsLowestTransformedVertex);
         RunTest(failures, "X rotation follows the world X axis", ValidateRotationTransformUsesWorldXAxis);
         RunTest(failures, "X rotation follows the model local X axis", ValidateRotationTransformUsesLocalXAxis);
         RunTest(failures, "Combined local rotation follows the changing model axes", ValidateCombinedLocalRotationUsesChangingModelAxes);
@@ -132,6 +138,7 @@ public static class Program
         RunTest(failures, "Area support boundary offset fill draws holes without supporting them", ValidateAreaSupportBoundaryOffsetFillDrawsHolesWithoutSupportingThem);
         RunTest(failures, "Area support boundary offset fill supports concave corners on each ring", ValidateAreaSupportBoundaryOffsetFillSupportsConcaveCornersOnEachRing);
         RunTest(failures, "Area support boundary offset fill handles collapsed rings", ValidateAreaSupportBoundaryOffsetFillHandlesCollapsedRings);
+        RunTest(failures, "Ring support settings survive save and load", ValidateRingSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Line support settings survive save and load", ValidateLineSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Contour support settings survive save and load", ValidateContourSupportSettingsSurviveSaveAndLoad);
         RunTest(failures, "Area support settings survive save and load", ValidateAreaSupportSettingsSurviveSaveAndLoad);
@@ -149,6 +156,7 @@ public static class Program
         RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
         IndexedMeshSmokeTests.Run(failures);
+        IslandDetectionSmokeTests.Run(failures);
         SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);
         TagSmokeTests.Run(failures);
@@ -2585,6 +2593,76 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that nearest-line targeting chooses user intent before rejecting an unreachable support route.
+    /// </summary>
+    private static void ValidateNearestLineTargetChoosesClosestSurfaceBeforePlacement()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        Vector3 guidePoint = new Vector3(0.25f, 0.25f, 13.0f);
+        float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(5.0f, profile);
+        MeshProjectionHit hit;
+
+        if (!MeshVerticalProjection.TryFindNearestTarget(mesh, guidePoint, fallbackRadius, out hit))
+        {
+            throw new InvalidOperationException("Expected nearest-line targeting to find the upper stacked surface.");
+        }
+
+        ValidateVectorNear(new Vector3(0.25f, 0.25f, 14.0f), hit.Point, 0.0001f, "Expected nearest-line targeting to choose the surface closest to the 3D guide point.");
+
+        SupportPlacementPlan placementPlan;
+
+        if (SupportPlacementPlanner.TryCreatePlacement(mesh, hit.Point, hit.Normal, profile, out placementPlan))
+        {
+            throw new InvalidOperationException("Expected the chosen upper target to remain invalid instead of falling back to the lower surface.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that selected-face targeting excludes every mesh triangle outside the accepted face set.
+    /// </summary>
+    private static void ValidateSelectedFaceLineTargetTestsOnlySelectedTriangles()
+    {
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        Vector3 guidePoint = new Vector3(0.25f, 0.25f, 13.0f);
+        MeshProjectionHit hit;
+
+        if (!MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+            mesh,
+            guidePoint,
+            0.0f,
+            new List<int> { 0 },
+            out hit))
+        {
+            throw new InvalidOperationException("Expected the selected lower face to produce a target.");
+        }
+
+        ValidateVectorNear(new Vector3(0.25f, 0.25f, 10.0f), hit.Point, 0.0001f, "Expected unselected upper geometry to be ignored.");
+
+        if (!MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+            mesh,
+            guidePoint,
+            0.0f,
+            new List<int> { 1 },
+            out hit))
+        {
+            throw new InvalidOperationException("Expected the selected upper face to produce a target.");
+        }
+
+        ValidateVectorNear(new Vector3(0.25f, 0.25f, 14.0f), hit.Point, 0.0001f, "Expected unselected lower geometry to be ignored during target selection.");
+
+        if (MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+            mesh,
+            guidePoint,
+            0.0f,
+            Array.Empty<int>(),
+            out hit))
+        {
+            throw new InvalidOperationException("Expected an empty selected-face set to produce no target.");
+        }
+    }
+
+    /// <summary>
     /// Validates that transform regeneration uses the same supportable projection as initial support generation.
     /// </summary>
     private static void ValidateTransformRegenerationUsesSupportableProjection()
@@ -2619,6 +2697,152 @@ public static class Program
             if (MathF.Abs(regenerations[0].NewSupportEntities[i].TipPosition.Z - 10.0f) > 0.0001f)
             {
                 throw new InvalidOperationException("Expected regenerated supports to use the lower exterior projection hit.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that regeneration retains strict nearest-line targeting instead of reverting to the first reachable surface.
+    /// </summary>
+    private static void ValidateTransformRegenerationPreservesNearestLineTargeting()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Nearest Line Supports");
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(
+            new List<Vector3>
+            {
+                new Vector3(0.25f, 0.25f, 13.0f),
+                new Vector3(0.75f, 0.25f, 13.0f)
+            },
+            10.0f,
+            true,
+            LineSupportSurfaceTargetMode.NearestToLine));
+
+        document.AddEntity(mesh);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        IReadOnlyList<SupportGroupRegeneration> regenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            document,
+            mesh,
+            Transform3DData.Identity,
+            Transform3DData.Identity);
+
+        if (regenerations.Count != 1
+            || regenerations[0].NewLineSupportSettings?.SurfaceTargetMode != LineSupportSurfaceTargetMode.NearestToLine)
+        {
+            throw new InvalidOperationException("Expected transform regeneration to preserve nearest-line targeting metadata.");
+        }
+
+        if (regenerations[0].NewSupportEntities.Count != 0)
+        {
+            throw new InvalidOperationException("Expected unreachable nearest-line targets to be skipped instead of regenerated on the lower surface.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that transform regeneration retains selected faces and tests only those triangles.
+    /// </summary>
+    private static void ValidateTransformRegenerationPreservesSelectedFaceLineTargeting()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Selected Face Line Supports");
+        FaceSelectionKey selectedFace = new FaceSelectionKey(mesh.Id, 0);
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(
+            new List<Vector3>
+            {
+                new Vector3(0.25f, 0.25f, 13.0f),
+                new Vector3(0.75f, 0.25f, 13.0f)
+            },
+            10.0f,
+            true,
+            LineSupportSurfaceTargetMode.SelectedFacesOnly,
+            new List<FaceSelectionKey> { selectedFace }));
+
+        document.AddEntity(mesh);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        IReadOnlyList<SupportGroupRegeneration> regenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            document,
+            mesh,
+            Transform3DData.Identity,
+            Transform3DData.Identity);
+
+        LineSupportSettings? regeneratedSettings = regenerations.Count == 1
+            ? regenerations[0].NewLineSupportSettings
+            : null;
+
+        if (regeneratedSettings == null
+            || regeneratedSettings.SurfaceTargetMode != LineSupportSurfaceTargetMode.SelectedFacesOnly
+            || regeneratedSettings.SelectedFaces.Count != 1
+            || !regeneratedSettings.SelectedFaces[0].Equals(selectedFace))
+        {
+            throw new InvalidOperationException("Expected transform regeneration to preserve selected-face targeting metadata.");
+        }
+
+        if (regenerations[0].NewSupportEntities.Count == 0)
+        {
+            throw new InvalidOperationException("Expected the selected lower face to regenerate line supports.");
+        }
+
+        for (int i = 0; i < regenerations[0].NewSupportEntities.Count; i++)
+        {
+            if (MathF.Abs(regenerations[0].NewSupportEntities[i].TipPosition.Z - 10.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected regenerated selected-face supports to remain on the selected lower face.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates that Ring Support regeneration retains selected faces and tests only those triangles.
+    /// </summary>
+    private static void ValidateTransformRegenerationPreservesSelectedFaceRingTargeting()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Selected Face Ring Supports");
+        FaceSelectionKey selectedFace = new FaceSelectionKey(mesh.Id, 0);
+        supportLayerGroup.SetRingSupportSettings(new RingSupportSettings(
+            new Vector3(0.45f, 0.30f, 13.0f),
+            new Vector3(0.30f, 0.45f, 13.0f),
+            new Vector3(0.15f, 0.30f, 13.0f),
+            1.0f,
+            RingSupportSurfaceTargetMode.SelectedFacesOnly,
+            new List<FaceSelectionKey> { selectedFace }));
+
+        document.AddEntity(mesh);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        IReadOnlyList<SupportGroupRegeneration> regenerations = SupportGroupTransformRegenerator.CreateRegenerations(
+            document,
+            mesh,
+            Transform3DData.Identity,
+            Transform3DData.Identity);
+
+        RingSupportSettings? regeneratedSettings = regenerations.Count == 1
+            ? regenerations[0].NewRingSupportSettings
+            : null;
+
+        if (regeneratedSettings == null
+            || regeneratedSettings.SurfaceTargetMode != RingSupportSurfaceTargetMode.SelectedFacesOnly
+            || regeneratedSettings.SelectedFaces.Count != 1
+            || !regeneratedSettings.SelectedFaces[0].Equals(selectedFace))
+        {
+            throw new InvalidOperationException("Expected Ring Support regeneration to preserve selected-face targeting metadata.");
+        }
+
+        if (regenerations[0].NewSupportEntities.Count == 0)
+        {
+            throw new InvalidOperationException("Expected the selected lower face to regenerate ring supports.");
+        }
+
+        for (int i = 0; i < regenerations[0].NewSupportEntities.Count; i++)
+        {
+            if (MathF.Abs(regenerations[0].NewSupportEntities[i].TipPosition.Z - 10.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected regenerated Ring Supports to remain on the selected lower face.");
             }
         }
     }
@@ -2694,6 +2918,51 @@ public static class Program
 
         ValidateVectorNear(rotatedTransform.Scale, resetTransform.Scale, 0.0001f, "Expected Reset to preserve user scale.");
         ValidateVectorNear(originalWorldOrigin, resetWorldOrigin, 0.0001f, "Expected Reset to keep the model pivot fixed.");
+    }
+
+    /// <summary>
+    /// Validates that Move to Plate tests real rotated vertices and preserves every transform component except Z translation.
+    /// </summary>
+    private static void ValidateMoveToPlateGroundsLowestTransformedVertex()
+    {
+        List<Vector3> vertices = new List<Vector3>
+        {
+            new Vector3(0.0f, 0.0f, 0.0f),
+            new Vector3(2.0f, 0.0f, 1.0f),
+            new Vector3(0.0f, 2.0f, 1.0f)
+        };
+        MeshEntity mesh = new MeshEntity(
+            "Move to Plate",
+            vertices,
+            new List<int> { 0, 1, 2 },
+            userTransform: new Transform3DData(
+                new Vector3(3.0f, -2.0f, 4.0f),
+                Quaternion.CreateFromAxisAngle(Vector3.UnitX, -MathF.PI / 4.0f),
+                Vector3.One));
+        Transform3DData originalTransform = mesh.UserTransform;
+        Transform3DData groundedTransform = MeshPlatePlacementTransform.CreateUserTransformForMoveToPlate(mesh);
+
+        mesh.UserTransform = groundedTransform;
+        Matrix4x4 groundedWorldTransform = mesh.WorldTransform;
+        float lowestWorldZ = float.PositiveInfinity;
+
+        for (int i = 0; i < mesh.Vertices.Count; i++)
+        {
+            lowestWorldZ = MathF.Min(lowestWorldZ, Vector3.Transform(mesh.Vertices[i], groundedWorldTransform).Z);
+        }
+
+        if (MathF.Abs(lowestWorldZ) > 0.0001f)
+        {
+            throw new InvalidOperationException($"Expected the lowest transformed vertex at Z zero, but found {lowestWorldZ}.");
+        }
+
+        if (groundedTransform.Translation.X != originalTransform.Translation.X
+            || groundedTransform.Translation.Y != originalTransform.Translation.Y
+            || groundedTransform.Rotation != originalTransform.Rotation
+            || groundedTransform.Scale != originalTransform.Scale)
+        {
+            throw new InvalidOperationException("Expected Move to Plate to preserve X/Y translation, rotation, and scale.");
+        }
     }
 
     /// <summary>
@@ -3697,6 +3966,72 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that Ring Support surface targeting and selected faces survive project persistence.
+    /// </summary>
+    private static void ValidateRingSupportSettingsSurviveSaveAndLoad()
+    {
+        CadDocument document = new CadDocument();
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(0.0f, 0.0f, 2.0f),
+            new Vector3(10.0f, 0.0f, 2.0f),
+            new Vector3(0.0f, 10.0f, 2.0f),
+            Transform3DData.Identity);
+        document.AddEntity(mesh);
+
+        FaceSelectionKey selectedFace = new FaceSelectionKey(mesh.Id, 0);
+        RingSupportSettings settings = new RingSupportSettings(
+            new Vector3(3.0f, 2.0f, 4.0f),
+            new Vector3(2.0f, 3.0f, 4.0f),
+            new Vector3(1.0f, 2.0f, 4.0f),
+            2.5f,
+            RingSupportSurfaceTargetMode.SelectedFacesOnly,
+            new List<FaceSelectionKey> { selectedFace });
+        SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Ring Supports");
+        supportLayerGroup.SetRingSupportSettings(settings);
+        document.AddSupportLayerGroup(supportLayerGroup);
+
+        GphDocumentSerializer serializer = new GphDocumentSerializer();
+        string filePath = Path.Combine(Environment.CurrentDirectory, "RingSupportSettingsSmoke.gph");
+
+        try
+        {
+            serializer.Save(document, filePath);
+            GphDocumentData loadedDocument = serializer.LoadDocument(filePath);
+
+            if (loadedDocument.SupportLayerGroups.Count != 1)
+            {
+                throw new InvalidOperationException("Expected one loaded Ring Support layer group.");
+            }
+
+            RingSupportSettings? loadedSettings = loadedDocument.SupportLayerGroups[0].RingSupportSettings;
+
+            if (loadedSettings == null
+                || loadedSettings.SurfaceTargetMode != RingSupportSurfaceTargetMode.SelectedFacesOnly
+                || loadedSettings.SelectedFaces.Count != 1
+                || !loadedSettings.SelectedFaces[0].Equals(selectedFace))
+            {
+                throw new InvalidOperationException("Expected loaded Ring Support settings to preserve selected-face targeting.");
+            }
+
+            ValidateVectorNear(settings.FirstPoint, loadedSettings.FirstPoint, 0.0001f, "Expected the first Ring Support point to survive persistence.");
+            ValidateVectorNear(settings.SecondPoint, loadedSettings.SecondPoint, 0.0001f, "Expected the second Ring Support point to survive persistence.");
+            ValidateVectorNear(settings.ThirdPoint, loadedSettings.ThirdPoint, 0.0001f, "Expected the third Ring Support point to survive persistence.");
+
+            if (MathF.Abs(loadedSettings.Spacing - settings.Spacing) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected Ring Support spacing to survive persistence.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    /// <summary>
     /// Validates that Line Support generator metadata is saved and loaded with the project.
     /// </summary>
     private static void ValidateLineSupportSettingsSurviveSaveAndLoad()
@@ -3716,7 +4051,13 @@ public static class Program
             new Vector3(6.0f, 4.0f, 2.0f)
         };
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Line Supports");
-        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(points, 2.5f, false));
+        FaceSelectionKey selectedFace = new FaceSelectionKey(mesh.Id, 0);
+        supportLayerGroup.SetLineSupportSettings(new LineSupportSettings(
+            points,
+            2.5f,
+            false,
+            LineSupportSurfaceTargetMode.SelectedFacesOnly,
+            new List<FaceSelectionKey> { selectedFace }));
         document.AddSupportLayerGroup(supportLayerGroup);
 
         GphDocumentSerializer serializer = new GphDocumentSerializer();
@@ -3755,6 +4096,16 @@ public static class Program
             if (loadedSettings.PlaceSupportsAtBends)
             {
                 throw new InvalidOperationException("Expected the loaded Line Support settings to preserve bend placement behavior.");
+            }
+
+            if (loadedSettings.SurfaceTargetMode != LineSupportSurfaceTargetMode.SelectedFacesOnly)
+            {
+                throw new InvalidOperationException("Expected the loaded Line Support settings to preserve surface targeting behavior.");
+            }
+
+            if (loadedSettings.SelectedFaces.Count != 1 || !loadedSettings.SelectedFaces[0].Equals(selectedFace))
+            {
+                throw new InvalidOperationException("Expected the loaded Line Support settings to preserve selected faces.");
             }
 
             for (int i = 0; i < points.Count; i++)

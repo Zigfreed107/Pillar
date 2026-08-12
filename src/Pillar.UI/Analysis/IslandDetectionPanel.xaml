@@ -1,0 +1,137 @@
+<!--
+    IslandDetectionPanel.xaml
+    Defines the compact transient analysis panel for progress, filtering, and island candidate navigation.
+-->
+<UserControl x:Class="Pillar.UI.Analysis.IslandDetectionPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Pillar.UI.Controls">
+    <Border Padding="12"
+            Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+            BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+            BorderThickness="1"
+            CornerRadius="3"
+            SnapsToDevicePixels="True">
+        <StackPanel>
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right"
+                        Width="26"
+                        Height="24"
+                        Margin="8,0,0,0"
+                        Content="&#xE711;"
+                        FontFamily="Segoe Fluent Icons"
+                        Click="CloseButton_Click"
+                        ToolTip="Close island detection" />
+                <TextBlock FontSize="15"
+                           FontWeight="SemiBold"
+                           Text="Island Detection" />
+            </DockPanel>
+
+            <StackPanel x:Name="ProgressPanel"
+                        Margin="0,10,0,0"
+                        Visibility="Collapsed">
+                <TextBlock x:Name="ProgressMessageTextBlock"
+                           Text="Analyzing mesh..." />
+                <ProgressBar x:Name="AnalysisProgressBar"
+                             Height="8"
+                             Margin="0,6,0,8"
+                             Minimum="0"
+                             Maximum="100" />
+                <Button Width="72"
+                        HorizontalAlignment="Right"
+                        Content="Cancel"
+                        Click="CancelButton_Click" />
+            </StackPanel>
+
+            <StackPanel x:Name="ResultPanel"
+                        Margin="0,10,0,0">
+                <TextBlock x:Name="SummaryTextBlock"
+                           Text="Select one model and run the analysis."
+                           TextWrapping="Wrap" />
+                <TextBlock x:Name="CandidateIndexTextBlock"
+                           Margin="0,8,0,0"
+                           FontWeight="SemiBold"
+                           Visibility="Collapsed" />
+                <TextBlock x:Name="CandidateMetricsTextBlock"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed" />
+                <TextBlock x:Name="DiagnosticsTextBlock"
+                           Margin="0,6,0,0"
+                           Foreground="DarkOrange"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed" />
+
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="PreviousButton"
+                            Grid.Column="0"
+                            Content="Previous"
+                            Click="PreviousButton_Click" />
+                    <Button x:Name="NextButton"
+                            Grid.Column="2"
+                            Content="Next"
+                            Click="NextButton_Click" />
+                </Grid>
+
+                <Expander Margin="0,10,0,0"
+                          Header="Filters">
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="100" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   VerticalAlignment="Center"
+                                   Text="Min persistence (mm)" />
+                        <controls:NumericUpDown x:Name="MinimumPersistenceControl"
+                                                Grid.Row="0"
+                                                Grid.Column="1"
+                                                Margin="8,2,0,2"
+                                                Minimum="0"
+                                                Maximum="10000"
+                                                Increment="0.1"
+                                                DecimalPlaces="2"
+                                                ValueChanged="NumericFilter_ValueChanged" />
+                        <TextBlock Grid.Row="1"
+                                   VerticalAlignment="Center"
+                                   Text="Min branch area (mm²)" />
+                        <controls:NumericUpDown x:Name="MinimumAreaControl"
+                                                Grid.Row="1"
+                                                Grid.Column="1"
+                                                Margin="8,2,0,2"
+                                                Minimum="0"
+                                                Maximum="1000000"
+                                                Increment="1"
+                                                DecimalPlaces="2"
+                                                ValueChanged="NumericFilter_ValueChanged" />
+                        <CheckBox x:Name="ShowLowConfidenceCheckBox"
+                                  Grid.Row="2"
+                                  Grid.ColumnSpan="2"
+                                  Margin="0,4,0,0"
+                                  IsChecked="True"
+                                  Content="Show low-confidence candidates"
+                                  Checked="FilterCheckBox_Changed"
+                                  Unchecked="FilterCheckBox_Changed" />
+                    </Grid>
+                </Expander>
+
+                <Button x:Name="RefreshButton"
+                        Margin="0,10,0,0"
+                        HorizontalAlignment="Right"
+                        Padding="12,3"
+                        Content="Refresh"
+                        Click="RefreshButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

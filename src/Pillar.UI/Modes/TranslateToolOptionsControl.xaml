@@ -1,0 +1,31 @@
+<!--
+    TranslateToolOptionsControl.xaml
+    Defines the current Transform Translate actions without coupling the panel to document mutation logic.
+-->
+<UserControl x:Class="Pillar.UI.Modes.TranslateToolOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+                       Text="Translate Options" />
+
+            <TextBlock Margin="0,10,0,0"
+                       Style="{StaticResource ModeOverlayBodyTextStyle}"
+                       TextWrapping="Wrap"
+                       Text="Move the selected model relative to the build plate." />
+
+            <Button Margin="0,16,0,0"
+                    MinHeight="30"
+                    HorizontalAlignment="Stretch"
+                    Click="MoveToPlateButton_Click"
+                    Content="Move to Plate" />
+
+            <Button Margin="0,8,0,0"
+                    MinHeight="30"
+                    HorizontalAlignment="Stretch"
+                    Click="FinishButton_Click"
+                    Content="Finish" />
+        </StackPanel>
+    </Border>
+</UserControl>

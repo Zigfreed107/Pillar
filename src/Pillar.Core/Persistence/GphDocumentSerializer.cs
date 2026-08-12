@@ -33,6 +33,11 @@ public sealed class GphDocumentSerializer
     private const string LineSupportGeneratorName = "lineSupport";
     private const string ContourSupportGeneratorName = "contourSupport";
     private const string AreaSupportGeneratorName = "areaSupport";
+    private const string FirstReachableRingSurfaceTargetName = "firstReachable";
+    private const string SelectedFacesOnlyRingSurfaceTargetName = "selectedFacesOnly";
+    private const string FirstReachableLineSurfaceTargetName = "firstReachable";
+    private const string NearestToLineSurfaceTargetName = "nearestToLine";
+    private const string SelectedFacesOnlyLineSurfaceTargetName = "selectedFacesOnly";
     private const string ClusterModifierName = "cluster";
     private const string BraceModifierName = "brace";
     private const string ButtressModifierName = "buttress";
@@ -1023,12 +1028,38 @@ public sealed class GphDocumentSerializer
             return null;
         }
 
-        return new GphRingSupportSettingsDto
+        GphRingSupportSettingsDto dto = new GphRingSupportSettingsDto
         {
             FirstPoint = CreateVectorDto(settings.FirstPoint),
             SecondPoint = CreateVectorDto(settings.SecondPoint),
             ThirdPoint = CreateVectorDto(settings.ThirdPoint),
-            Spacing = settings.Spacing
+            Spacing = settings.Spacing,
+            SurfaceTarget = CreateRingSupportSurfaceTargetName(settings.SurfaceTargetMode)
+        };
+
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            FaceSelectionKey selectedFace = settings.SelectedFaces[i];
+            dto.SelectedFaces.Add(new GphFaceSelectionDto
+            {
+                MeshEntityId = selectedFace.MeshEntityId,
+                TriangleIndex = selectedFace.TriangleIndex
+            });
+        }
+
+        return dto;
+    }
+
+    /// <summary>
+    /// Converts one Ring Support surface-targeting policy into a stable persisted name.
+    /// </summary>
+    private static string CreateRingSupportSurfaceTargetName(RingSupportSurfaceTargetMode surfaceTargetMode)
+    {
+        return surfaceTargetMode switch
+        {
+            RingSupportSurfaceTargetMode.FirstReachable => FirstReachableRingSurfaceTargetName,
+            RingSupportSurfaceTargetMode.SelectedFacesOnly => SelectedFacesOnlyRingSurfaceTargetName,
+            _ => throw new InvalidDataException($"Ring Support surface target mode '{surfaceTargetMode}' is not supported.")
         };
     }
 
@@ -1045,7 +1076,8 @@ public sealed class GphDocumentSerializer
         GphLineSupportSettingsDto dto = new GphLineSupportSettingsDto
         {
             Spacing = settings.Spacing,
-            PlaceSupportsAtBends = settings.PlaceSupportsAtBends
+            PlaceSupportsAtBends = settings.PlaceSupportsAtBends,
+            SurfaceTarget = CreateLineSupportSurfaceTargetName(settings.SurfaceTargetMode)
         };
 
         for (int i = 0; i < settings.Points.Count; i++)
@@ -1053,7 +1085,31 @@ public sealed class GphDocumentSerializer
             dto.Points.Add(CreateVectorDto(settings.Points[i]));
         }
 
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            FaceSelectionKey selectedFace = settings.SelectedFaces[i];
+            dto.SelectedFaces.Add(new GphFaceSelectionDto
+            {
+                MeshEntityId = selectedFace.MeshEntityId,
+                TriangleIndex = selectedFace.TriangleIndex
+            });
+        }
+
         return dto;
+    }
+
+    /// <summary>
+    /// Converts one Line Support surface-targeting policy into a stable persisted name.
+    /// </summary>
+    private static string CreateLineSupportSurfaceTargetName(LineSupportSurfaceTargetMode surfaceTargetMode)
+    {
+        return surfaceTargetMode switch
+        {
+            LineSupportSurfaceTargetMode.FirstReachable => FirstReachableLineSurfaceTargetName,
+            LineSupportSurfaceTargetMode.NearestToLine => NearestToLineSurfaceTargetName,
+            LineSupportSurfaceTargetMode.SelectedFacesOnly => SelectedFacesOnlyLineSurfaceTargetName,
+            _ => throw new InvalidDataException($"Line Support surface target mode '{surfaceTargetMode}' is not supported.")
+        };
     }
 
     /// <summary>
@@ -1448,11 +1504,56 @@ public sealed class GphDocumentSerializer
             throw new InvalidDataException("A Ring Support group is missing one or more ring points.");
         }
 
+        RingSupportSurfaceTargetMode surfaceTargetMode = CreateRingSupportSurfaceTargetModeOrDefault(
+            supportLayerGroupDto.RingSupport.SurfaceTarget);
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>();
+
+        if (supportLayerGroupDto.RingSupport.SelectedFaces != null)
+        {
+            for (int i = 0; i < supportLayerGroupDto.RingSupport.SelectedFaces.Count; i++)
+            {
+                GphFaceSelectionDto? selectedFace = supportLayerGroupDto.RingSupport.SelectedFaces[i];
+
+                if (selectedFace == null)
+                {
+                    throw new InvalidDataException($"A Ring Support group has a null selected face at index {i}.");
+                }
+
+                selectedFaces.Add(new FaceSelectionKey(selectedFace.MeshEntityId, selectedFace.TriangleIndex));
+            }
+        }
+
+        if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
+        {
+            throw new InvalidDataException("A Selected Faces Only Ring Support group is missing its selected faces.");
+        }
+
         return new RingSupportSettings(
             CreateVector(supportLayerGroupDto.RingSupport.FirstPoint),
             CreateVector(supportLayerGroupDto.RingSupport.SecondPoint),
             CreateVector(supportLayerGroupDto.RingSupport.ThirdPoint),
-            supportLayerGroupDto.RingSupport.Spacing);
+            supportLayerGroupDto.RingSupport.Spacing,
+            surfaceTargetMode,
+            selectedFaces);
+    }
+
+    /// <summary>
+    /// Converts a saved Ring Support surface-target name while preserving legacy first-reachable behaviour.
+    /// </summary>
+    private static RingSupportSurfaceTargetMode CreateRingSupportSurfaceTargetModeOrDefault(string? surfaceTargetName)
+    {
+        if (string.IsNullOrWhiteSpace(surfaceTargetName)
+            || string.Equals(surfaceTargetName, FirstReachableRingSurfaceTargetName, StringComparison.OrdinalIgnoreCase))
+        {
+            return RingSupportSettings.DefaultSurfaceTargetMode;
+        }
+
+        if (string.Equals(surfaceTargetName, SelectedFacesOnlyRingSurfaceTargetName, StringComparison.OrdinalIgnoreCase))
+        {
+            return RingSupportSurfaceTargetMode.SelectedFacesOnly;
+        }
+
+        throw new InvalidDataException($"Ring Support surface target '{surfaceTargetName}' is not supported.");
     }
 
     /// <summary>
@@ -1503,8 +1604,60 @@ public sealed class GphDocumentSerializer
 
         bool placeSupportsAtBends = supportLayerGroupDto.LineSupport.PlaceSupportsAtBends
             ?? LineSupportSettings.DefaultPlaceSupportsAtBends;
+        LineSupportSurfaceTargetMode surfaceTargetMode = CreateLineSupportSurfaceTargetModeOrDefault(
+            supportLayerGroupDto.LineSupport.SurfaceTarget);
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>();
 
-        return new LineSupportSettings(points, supportLayerGroupDto.LineSupport.Spacing, placeSupportsAtBends);
+        if (supportLayerGroupDto.LineSupport.SelectedFaces != null)
+        {
+            for (int i = 0; i < supportLayerGroupDto.LineSupport.SelectedFaces.Count; i++)
+            {
+                GphFaceSelectionDto? selectedFace = supportLayerGroupDto.LineSupport.SelectedFaces[i];
+
+                if (selectedFace == null)
+                {
+                    throw new InvalidDataException($"A Line Support group has a null selected face at index {i}.");
+                }
+
+                selectedFaces.Add(new FaceSelectionKey(selectedFace.MeshEntityId, selectedFace.TriangleIndex));
+            }
+        }
+
+        if (surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
+        {
+            throw new InvalidDataException("A Selected Faces Only Line Support group is missing its selected faces.");
+        }
+
+        return new LineSupportSettings(
+            points,
+            supportLayerGroupDto.LineSupport.Spacing,
+            placeSupportsAtBends,
+            surfaceTargetMode,
+            selectedFaces);
+    }
+
+    /// <summary>
+    /// Converts a saved Line Support surface-target name while preserving legacy first-reachable behaviour.
+    /// </summary>
+    private static LineSupportSurfaceTargetMode CreateLineSupportSurfaceTargetModeOrDefault(string? surfaceTargetName)
+    {
+        if (string.IsNullOrWhiteSpace(surfaceTargetName)
+            || string.Equals(surfaceTargetName, FirstReachableLineSurfaceTargetName, StringComparison.OrdinalIgnoreCase))
+        {
+            return LineSupportSettings.DefaultSurfaceTargetMode;
+        }
+
+        if (string.Equals(surfaceTargetName, NearestToLineSurfaceTargetName, StringComparison.OrdinalIgnoreCase))
+        {
+            return LineSupportSurfaceTargetMode.NearestToLine;
+        }
+
+        if (string.Equals(surfaceTargetName, SelectedFacesOnlyLineSurfaceTargetName, StringComparison.OrdinalIgnoreCase))
+        {
+            return LineSupportSurfaceTargetMode.SelectedFacesOnly;
+        }
+
+        throw new InvalidDataException($"Line Support surface target '{surfaceTargetName}' is not supported.");
     }
 
     /// <summary>
@@ -2206,6 +2359,8 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? SecondPoint { get; set; }
         public GphVector3Dto? ThirdPoint { get; set; }
         public float Spacing { get; set; }
+        public string? SurfaceTarget { get; set; }
+        public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
     }
 
     /// <summary>
@@ -2216,6 +2371,8 @@ public sealed class GphDocumentSerializer
         public List<GphVector3Dto?> Points { get; set; } = new List<GphVector3Dto?>();
         public float Spacing { get; set; }
         public bool? PlaceSupportsAtBends { get; set; }
+        public string? SurfaceTarget { get; set; }
+        public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
     }
 
     /// <summary>

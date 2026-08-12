@@ -1,7 +1,10 @@
 // RingSupportSettings.cs
 // Stores the editable parametric definition used to regenerate a Ring Support group.
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Numerics;
+using Pillar.Core.Selection;
 
 namespace Pillar.Core.Layers;
 
@@ -10,15 +13,52 @@ namespace Pillar.Core.Layers;
 /// </summary>
 public sealed class RingSupportSettings
 {
+    public const RingSupportSurfaceTargetMode DefaultSurfaceTargetMode = RingSupportSurfaceTargetMode.FirstReachable;
+
+    private readonly ReadOnlyCollection<FaceSelectionKey> _selectedFaces;
+
     /// <summary>
     /// Creates validated Ring Support generator settings.
     /// </summary>
     public RingSupportSettings(Vector3 firstPoint, Vector3 secondPoint, Vector3 thirdPoint, float spacing)
+        : this(
+            firstPoint,
+            secondPoint,
+            thirdPoint,
+            spacing,
+            DefaultSurfaceTargetMode,
+            Array.Empty<FaceSelectionKey>())
     {
+    }
+
+    /// <summary>
+    /// Creates validated Ring Support generator settings with explicit surface targeting and selected faces.
+    /// </summary>
+    public RingSupportSettings(
+        Vector3 firstPoint,
+        Vector3 secondPoint,
+        Vector3 thirdPoint,
+        float spacing,
+        RingSupportSurfaceTargetMode surfaceTargetMode,
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+    {
+        if (selectedFaces == null)
+        {
+            throw new ArgumentNullException(nameof(selectedFaces));
+        }
+
         FirstPoint = firstPoint;
         SecondPoint = secondPoint;
         ThirdPoint = thirdPoint;
         Spacing = ValidateSpacing(spacing);
+        SurfaceTargetMode = ValidateSurfaceTargetMode(surfaceTargetMode);
+
+        if (SurfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
+        {
+            throw new ArgumentException("Selected Faces Only targeting requires at least one selected face.", nameof(selectedFaces));
+        }
+
+        _selectedFaces = new ReadOnlyCollection<FaceSelectionKey>(new List<FaceSelectionKey>(selectedFaces));
     }
 
     /// <summary>
@@ -42,11 +82,43 @@ public sealed class RingSupportSettings
     public float Spacing { get; }
 
     /// <summary>
+    /// Gets how sampled ring points choose among mesh surfaces that overlap in XY.
+    /// </summary>
+    public RingSupportSurfaceTargetMode SurfaceTargetMode { get; }
+
+    /// <summary>
+    /// Gets the source mesh faces allowed by Selected Faces Only targeting.
+    /// </summary>
+    public IReadOnlyList<FaceSelectionKey> SelectedFaces
+    {
+        get { return _selectedFaces; }
+    }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public RingSupportSettings Clone()
     {
-        return new RingSupportSettings(FirstPoint, SecondPoint, ThirdPoint, Spacing);
+        return new RingSupportSettings(
+            FirstPoint,
+            SecondPoint,
+            ThirdPoint,
+            Spacing,
+            SurfaceTargetMode,
+            _selectedFaces);
+    }
+
+    /// <summary>
+    /// Rejects unknown surface-targeting policies before they enter document state.
+    /// </summary>
+    private static RingSupportSurfaceTargetMode ValidateSurfaceTargetMode(RingSupportSurfaceTargetMode surfaceTargetMode)
+    {
+        if (!Enum.IsDefined(surfaceTargetMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(surfaceTargetMode), "Ring Support surface target mode is not supported.");
+        }
+
+        return surfaceTargetMode;
     }
 
     /// <summary>

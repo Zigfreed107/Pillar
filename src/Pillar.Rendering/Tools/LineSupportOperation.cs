@@ -4,6 +4,7 @@ using Pillar.Commands;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
+using Pillar.Core.Selection;
 using Pillar.Core.Supports;
 using Pillar.Core.Tools;
 using Pillar.Geometry.Supports;
@@ -51,6 +52,9 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
     private readonly Func<bool> _getPlaceSupportsAtBends;
+    private readonly Func<LineSupportSurfaceTargetMode> _getSurfaceTargetMode;
+    private readonly Func<IReadOnlyCollection<FaceSelectionKey>> _getSharedFaceSelection;
+    private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private readonly Action<bool> _precisionSelectCursorRequester;
@@ -59,6 +63,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly List<Vector3> _guidePreviewPoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
     private readonly List<Vector3> _projectedPreviewPoints = new List<Vector3>(LineSupportPattern.MaximumSupportCount);
     private readonly List<CadEntity> _windowSelectionBuffer = new List<CadEntity>(64);
+    private readonly HashSet<FaceSelectionKey> _selectedFaces = new HashSet<FaceSelectionKey>();
 
     private Guid? _targetModelEntityId;
     private Guid? _editingSupportLayerGroupId;
@@ -80,6 +85,9 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
         Func<bool> getPlaceSupportsAtBends,
+        Func<LineSupportSurfaceTargetMode> getSurfaceTargetMode,
+        Func<IReadOnlyCollection<FaceSelectionKey>> getSharedFaceSelection,
+        Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
         Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter,
         Action<bool> precisionSelectCursorRequester,
@@ -92,6 +100,9 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
         _getPlaceSupportsAtBends = getPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getPlaceSupportsAtBends));
+        _getSurfaceTargetMode = getSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getSurfaceTargetMode));
+        _getSharedFaceSelection = getSharedFaceSelection ?? throw new ArgumentNullException(nameof(getSharedFaceSelection));
+        _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
         _precisionSelectCursorRequester = precisionSelectCursorRequester ?? throw new ArgumentNullException(nameof(precisionSelectCursorRequester));
@@ -240,6 +251,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _targetModelEntityId = null;
         _editingSupportLayerGroupId = null;
         _points.Clear();
+        _selectedFaces.Clear();
         _currentPreviewPoint = null;
         _activePointHandleIndex = -1;
         _isFinalized = false;
@@ -249,6 +261,29 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _projectedPreviewPoints.Clear();
         _scene.HideLineSupportPreview();
         _precisionSelectCursorRequester(false);
+    }
+
+    /// <summary>
+    /// Launches reusable face selection for Selected Faces Only targeting.
+    /// </summary>
+    public void BeginFaceSelection()
+    {
+        IReadOnlyCollection<FaceSelectionKey> initialSelection = _selectedFaces.Count > 0
+            ? _selectedFaces
+            : _getSharedFaceSelection();
+
+        _faceSelectionSessionStarter(initialSelection, AcceptFaceSelection);
+        _statusReporter("Select model faces for Line Support, then accept the face selection.");
+    }
+
+    /// <summary>
+    /// Gets whether Selected Faces Only targeting has at least one valid face on the active model.
+    /// </summary>
+    public bool HasSelectedFacesForCurrentModel()
+    {
+        AdoptSharedFaceSelectionIfNeeded();
+        MeshEntity? selectedMesh = ResolvePlacementMesh();
+        return selectedMesh != null && CreateSelectedFacesForMesh(selectedMesh).Count > 0;
     }
 
     /// <summary>
@@ -303,12 +338,35 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _targetModelEntityId = supportLayerGroup.ModelEntityId;
         _points.Clear();
         _points.AddRange(settings.Points);
+        _selectedFaces.Clear();
+
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            _selectedFaces.Add(settings.SelectedFaces[i]);
+        }
+
         _currentPreviewPoint = null;
         _isFinalized = true;
         _precisionSelectCursorRequester(false);
         _scene.SetSupportLayerGroupOpacity(supportLayerGroup.Id, EditingSupportGroupOpacity);
         RefreshPreview();
         _statusReporter("Line support group loaded. Adjust spacing or click Apply.");
+    }
+
+    /// <summary>
+    /// Accepts faces returned by the reusable Face Set Selection helper.
+    /// </summary>
+    private void AcceptFaceSelection(IReadOnlyCollection<FaceSelectionKey> acceptedSelection)
+    {
+        _selectedFaces.Clear();
+
+        foreach (FaceSelectionKey selectedFace in acceptedSelection)
+        {
+            _selectedFaces.Add(selectedFace);
+        }
+
+        RefreshPreview();
+        _statusReporter($"Line Support selected {_selectedFaces.Count} faces. Finish the line or click Apply.");
     }
 
     /// <summary>
@@ -389,7 +447,27 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
             return false;
         }
 
-        LineSupportSettings settings = new LineSupportSettings(_points, _getSpacing(), _getPlaceSupportsAtBends());
+        LineSupportSurfaceTargetMode surfaceTargetMode = _getSurfaceTargetMode();
+
+        if (surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            AdoptSharedFaceSelectionIfNeeded();
+        }
+
+        List<FaceSelectionKey> selectedFaces = CreateSelectedFacesForMesh(selectedMesh);
+
+        if (surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
+        {
+            _statusReporter("No faces are selected for Line Support. Select some faces, then try Apply again.");
+            return false;
+        }
+
+        LineSupportSettings settings = new LineSupportSettings(
+            _points,
+            _getSpacing(),
+            _getPlaceSupportsAtBends(),
+            surfaceTargetMode,
+            selectedFaces);
 
         if (_editingSupportLayerGroupId.HasValue)
         {
@@ -550,6 +628,13 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         _targetModelEntityId = supportLayerGroup.ModelEntityId;
         _points.Clear();
         _points.AddRange(settings.Points);
+        _selectedFaces.Clear();
+
+        for (int i = 0; i < settings.SelectedFaces.Count; i++)
+        {
+            _selectedFaces.Add(settings.SelectedFaces[i]);
+        }
+
         _currentPreviewPoint = null;
         _isFinalized = true;
         _precisionSelectCursorRequester(false);
@@ -818,6 +903,7 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         SupportProfile supportProfile = _createSupportProfile();
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(settings.Spacing, supportProfile);
         List<SupportEntity> supportEntities = new List<SupportEntity>();
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(selectedMesh, settings.SelectedFaces);
         missedProjectionCount = 0;
         invalidSupportCount = 0;
 
@@ -832,18 +918,42 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
             Vector3 guidePoint = _guidePreviewPoints[i];
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
+            bool targetFound;
 
-            if (!MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (!TryCreateSupportPlacement(
+                selectedMesh,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                settings.SurfaceTargetMode,
+                selectedTriangleIndices,
+                out projectionHit,
+                out placementPlan,
+                out targetFound))
             {
-                Vector3 ignoredProjectedPoint;
-
-                if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out ignoredProjectedPoint))
+                if (settings.SurfaceTargetMode != LineSupportSurfaceTargetMode.FirstReachable)
                 {
-                    invalidSupportCount++;
+                    if (targetFound)
+                    {
+                        invalidSupportCount++;
+                    }
+                    else
+                    {
+                        missedProjectionCount++;
+                    }
                 }
                 else
                 {
-                    missedProjectionCount++;
+                    Vector3 ignoredProjectedPoint;
+
+                    if (MeshVerticalProjection.TryProjectToMesh(selectedMesh, guidePoint, out ignoredProjectedPoint))
+                    {
+                        invalidSupportCount++;
+                    }
+                    else
+                    {
+                        missedProjectionCount++;
+                    }
                 }
 
                 continue;
@@ -890,20 +1000,149 @@ public sealed class LineSupportOperation : IToolOperation, IEditableSupportGroup
         LineSupportPattern.FillGuidePoints(_points, _getSpacing(), _getPlaceSupportsAtBends(), _guidePreviewPoints);
         SupportProfile supportProfile = _createSupportProfile();
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(_getSpacing(), supportProfile);
+        LineSupportSurfaceTargetMode surfaceTargetMode = _getSurfaceTargetMode();
+
+        if (surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            AdoptSharedFaceSelectionIfNeeded();
+        }
+
+        List<FaceSelectionKey> selectedFaces = CreateSelectedFacesForMesh(selectedMesh);
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(selectedMesh, selectedFaces);
 
         for (int i = 0; i < _guidePreviewPoints.Count; i++)
         {
             Vector3 guidePoint = _guidePreviewPoints[i];
             MeshProjectionHit projectionHit;
             SupportPlacementPlan placementPlan;
+            bool targetFound;
 
-            if (MeshVerticalProjection.TryProjectSupportToMesh(selectedMesh, guidePoint, supportProfile, fallbackRadius, out projectionHit, out placementPlan))
+            if (TryCreateSupportPlacement(
+                selectedMesh,
+                guidePoint,
+                supportProfile,
+                fallbackRadius,
+                surfaceTargetMode,
+                selectedTriangleIndices,
+                out projectionHit,
+                out placementPlan,
+                out targetFound))
             {
                 _projectedPreviewPoints.Add(projectionHit.Point);
             }
         }
 
         _scene.ShowLineSupportMarkers(_projectedPreviewPoints);
+    }
+
+    /// <summary>
+    /// Resolves one guide point using the selected targeting policy, then validates its support route.
+    /// </summary>
+    private static bool TryCreateSupportPlacement(
+        MeshEntity mesh,
+        Vector3 guidePoint,
+        SupportProfile supportProfile,
+        float fallbackRadius,
+        LineSupportSurfaceTargetMode surfaceTargetMode,
+        IReadOnlyList<int> selectedTriangleIndices,
+        out MeshProjectionHit projectionHit,
+        out SupportPlacementPlan placementPlan,
+        out bool targetFound)
+    {
+        if (surfaceTargetMode == LineSupportSurfaceTargetMode.NearestToLine
+            || surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly)
+        {
+            targetFound = surfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly
+                ? MeshVerticalProjection.TryFindNearestTargetOnTriangles(
+                    mesh,
+                    guidePoint,
+                    fallbackRadius,
+                    selectedTriangleIndices,
+                    out projectionHit)
+                : MeshVerticalProjection.TryFindNearestTarget(mesh, guidePoint, fallbackRadius, out projectionHit);
+
+            if (!targetFound || projectionHit.Point.Z < 0.0f)
+            {
+                placementPlan = default;
+                return false;
+            }
+
+            return SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                projectionHit.Point,
+                projectionHit.Normal,
+                supportProfile,
+                out placementPlan);
+        }
+
+        bool didProject = MeshVerticalProjection.TryProjectSupportToMesh(
+            mesh,
+            guidePoint,
+            supportProfile,
+            fallbackRadius,
+            out projectionHit,
+            out placementPlan);
+        targetFound = didProject;
+        return didProject;
+    }
+
+    /// <summary>
+    /// Imports the toolbar's last accepted face set when this Line Support operation has no local selection.
+    /// </summary>
+    private void AdoptSharedFaceSelectionIfNeeded()
+    {
+        if (_selectedFaces.Count > 0)
+        {
+            return;
+        }
+
+        IReadOnlyCollection<FaceSelectionKey> sharedFaces = _getSharedFaceSelection();
+
+        foreach (FaceSelectionKey selectedFace in sharedFaces)
+        {
+            _selectedFaces.Add(selectedFace);
+        }
+    }
+
+    /// <summary>
+    /// Creates a stable selected-face list containing only faces owned by the active model.
+    /// </summary>
+    private List<FaceSelectionKey> CreateSelectedFacesForMesh(MeshEntity mesh)
+    {
+        List<int> selectedTriangleIndices = CreateSelectedTriangleIndexList(mesh, _selectedFaces);
+        List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(selectedTriangleIndices.Count);
+
+        for (int i = 0; i < selectedTriangleIndices.Count; i++)
+        {
+            selectedFaces.Add(new FaceSelectionKey(mesh.Id, selectedTriangleIndices[i]));
+        }
+
+        return selectedFaces;
+    }
+
+    /// <summary>
+    /// Filters selected-face identities to valid, sorted triangle numbers for one mesh.
+    /// </summary>
+    private static List<int> CreateSelectedTriangleIndexList(
+        MeshEntity mesh,
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+    {
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+        HashSet<int> uniqueTriangleIndices = new HashSet<int>();
+
+        foreach (FaceSelectionKey selectedFace in selectedFaces)
+        {
+            if (selectedFace.MeshEntityId == mesh.Id
+                && selectedFace.TriangleIndex >= 0
+                && selectedFace.TriangleIndex < triangleCount)
+            {
+                uniqueTriangleIndices.Add(selectedFace.TriangleIndex);
+            }
+        }
+
+        List<int> selectedTriangleIndices = new List<int>(uniqueTriangleIndices);
+        selectedTriangleIndices.Sort();
+        return selectedTriangleIndices;
     }
 
     /// <summary>

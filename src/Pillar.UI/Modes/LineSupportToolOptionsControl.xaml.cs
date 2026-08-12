@@ -4,6 +4,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using Pillar.Core.Layers;
 
 namespace Pillar.UI.Modes;
 
@@ -23,6 +24,11 @@ public partial class LineSupportToolOptionsControl : UserControl
     /// Raised when an option changes and the active Line Support preview should be rebuilt.
     /// </summary>
     public event EventHandler? OptionsChanged;
+
+    /// <summary>
+    /// Raised when the user asks to launch reusable face selection.
+    /// </summary>
+    public event EventHandler? SelectFacesRequested;
 
     /// <summary>
     /// Raised when the user accepts the current Line Support preview.
@@ -51,6 +57,7 @@ public partial class LineSupportToolOptionsControl : UserControl
         };
         _optionsChangedTimer.Tick += OptionsChangedTimer_Tick;
         InitializeComponent();
+        UpdateSurfaceTargetControls();
         _isSynchronizingOptions = false;
     }
 
@@ -124,6 +131,48 @@ public partial class LineSupportToolOptionsControl : UserControl
     }
 
     /// <summary>
+    /// Gets how generated Line Support points choose between surfaces that overlap in XY.
+    /// </summary>
+    public LineSupportSurfaceTargetMode GetSurfaceTargetMode()
+    {
+        if (SurfaceTargetComboBox.SelectedIndex == 2)
+        {
+            return LineSupportSurfaceTargetMode.SelectedFacesOnly;
+        }
+
+        if (SurfaceTargetComboBox.SelectedIndex == 1)
+        {
+            return LineSupportSurfaceTargetMode.NearestToLine;
+        }
+
+        return LineSupportSurfaceTargetMode.FirstReachable;
+    }
+
+    /// <summary>
+    /// Sets the surface-targeting option without raising live-preview refresh events.
+    /// </summary>
+    public void SetSurfaceTargetMode(LineSupportSurfaceTargetMode surfaceTargetMode)
+    {
+        _optionsChangedTimer.Stop();
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            SurfaceTargetComboBox.SelectedIndex = surfaceTargetMode switch
+            {
+                LineSupportSurfaceTargetMode.NearestToLine => 1,
+                LineSupportSurfaceTargetMode.SelectedFacesOnly => 2,
+                _ => 0
+            };
+            UpdateSurfaceTargetControls();
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
+        }
+    }
+
+    /// <summary>
     /// Enables or disables the Delete button based on active support selection.
     /// </summary>
     public void SetDeleteSelectedSupportsEnabled(bool isEnabled)
@@ -161,6 +210,46 @@ public partial class LineSupportToolOptionsControl : UserControl
         }
 
         RestartOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Schedules a preview refresh when the surface-targeting policy changes.
+    /// </summary>
+    private void SurfaceTargetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (SelectFacesButton != null)
+        {
+            UpdateSurfaceTargetControls();
+        }
+
+        if (_isSynchronizingOptions)
+        {
+            return;
+        }
+
+        RestartOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Requests a reusable face-selection session for Selected Faces Only targeting.
+    /// </summary>
+    private void SelectFacesButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _optionsChangedTimer.Stop();
+        SelectFacesRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Enables face selection only while the selected-faces targeting policy is active.
+    /// </summary>
+    private void UpdateSurfaceTargetControls()
+    {
+        SelectFacesButton.IsEnabled = GetSurfaceTargetMode() == LineSupportSurfaceTargetMode.SelectedFacesOnly;
     }
 
     /// <summary>
