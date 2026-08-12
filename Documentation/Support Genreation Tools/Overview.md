@@ -64,11 +64,11 @@ Point supports are ordinary support entities. During model transform regeneratio
 
 ### Ring Supports
 
-Ring support groups should store circumference points, spacing, the selected surface-targeting policy, and any face set required by that policy. Regeneration should transform the stored anchor points, rebuild the circle, project new guide points using that policy, and regenerate supports. Selected Faces Only targeting uses the accepted Ring Support face set, or the toolbar's last accepted face set when the operation has no local selection, and Apply prompts the user when no valid faces are available.
+Ring support groups should store circumference points, spacing, the selected surface-targeting policy, and any face set required by that policy. Regeneration should transform the stored anchor points, rebuild the circle, project new guide points using that policy, and regenerate supports. Lowest Reachable ranks valid vertical intersections from the build plate rather than from the drawn ring height. Selected Faces Only targeting uses the accepted Ring Support face set, or the toolbar's last accepted face set when the operation has no local selection, and Apply prompts the user when no valid faces are available.
 
 ### Line Supports
 
-Line support groups should store polyline points, spacing, bend-placement behavior, the selected surface-targeting policy, and any face set required by that policy. Regeneration should transform the stored polyline, redistribute guide points, reproject onto the model using that policy, and regenerate concrete supports.
+Line support groups should store polyline points, spacing, bend-placement behavior, the selected surface-targeting policy, and any face set required by that policy. Regeneration should transform the stored polyline, redistribute guide points, reproject onto the model using that policy, and regenerate concrete supports. Lowest Reachable ranks valid vertical intersections from the build plate, while Nearest to Line ranks targets from each drawn 3D guide point.
 
 ### Contour Supports
 

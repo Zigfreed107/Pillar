@@ -99,6 +99,7 @@ public static class Program
         RunTest(failures, "Support projection fallback handles neighboring vertical face points", ValidateSupportProjectionFallbackHandlesNeighboringVerticalFacePoints);
         RunTest(failures, "Support projection fallback rejects distant vertical face", ValidateSupportProjectionFallbackRejectsDistantVerticalFace);
         RunTest(failures, "Vertical support projection chooses first exterior hit", ValidateVerticalSupportProjectionChoosesFirstExteriorHit);
+        RunTest(failures, "Lowest reachable projection ignores guide-point Z proximity", ValidateLowestReachableProjectionIgnoresGuidePointZProximity);
         RunTest(failures, "Nearest line target chooses closest surface before placement", ValidateNearestLineTargetChoosesClosestSurfaceBeforePlacement);
         RunTest(failures, "Selected-face line target tests only selected triangles", ValidateSelectedFaceLineTargetTestsOnlySelectedTriangles);
         RunTest(failures, "Transform regeneration uses supportable projection", ValidateTransformRegenerationUsesSupportableProjection);
@@ -2590,6 +2591,51 @@ public static class Program
         }
 
         ValidateVectorNear(new Vector3(0.25f, 0.25f, 10.0f), hit.Point, 0.0001f, "Expected support projection to choose the first exterior hit above the build plate.");
+    }
+
+    /// <summary>
+    /// Validates that Lowest Reachable ranks valid intersections from the build plate rather than from the drawn guide height.
+    /// </summary>
+    private static void ValidateLowestReachableProjectionIgnoresGuidePointZProximity()
+    {
+        SupportProfile profile = new SupportProfile(
+            baseBottomRadius: 0.01f,
+            baseHeight: 0.01f,
+            stemBottomDiameter: 0.01f,
+            stemTopDiameter: 0.01f,
+            maximumBranchLength: 20.0f,
+            modelClearance: 0.0f,
+            branchAngleFromVerticalDegrees: 45.0f,
+            headHeight: 1.0f,
+            headPenetrationDepth: 0.01f,
+            headTopDiameter: 0.01f,
+            maxHeadAngleFromVerticalDegrees: 0.0f);
+        MeshEntity mesh = CreateStackedDownwardHorizontalFaces();
+        Vector3 lowerPoint = new Vector3(0.25f, 0.25f, 10.0f);
+        Vector3 upperPoint = new Vector3(0.25f, 0.25f, 14.0f);
+        SupportPlacementPlan lowerPlan;
+        SupportPlacementPlan upperPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(mesh, lowerPoint, -Vector3.UnitZ, profile, out lowerPlan)
+            || !SupportPlacementPlanner.TryCreatePlacement(mesh, upperPoint, -Vector3.UnitZ, profile, out upperPlan))
+        {
+            throw new InvalidOperationException("Expected both stacked targets to be independently reachable for ordering validation.");
+        }
+
+        MeshProjectionHit hit;
+        SupportPlacementPlan placementPlan;
+
+        if (!MeshVerticalProjection.TryProjectSupportToMesh(
+            mesh,
+            new Vector3(0.25f, 0.25f, 13.9f),
+            profile,
+            out hit,
+            out placementPlan))
+        {
+            throw new InvalidOperationException("Expected Lowest Reachable projection to find a stacked target.");
+        }
+
+        ValidateVectorNear(lowerPoint, hit.Point, 0.0001f, "Expected Lowest Reachable projection to ignore the nearer upper hit and choose the lowest reachable intersection.");
     }
 
     /// <summary>

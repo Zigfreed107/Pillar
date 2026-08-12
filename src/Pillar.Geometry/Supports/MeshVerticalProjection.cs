@@ -375,7 +375,7 @@ public static class MeshVerticalProjection
     }
 
     /// <summary>
-    /// Finds the nearest supportable vertical projection before any nearest-surface fallback is considered.
+    /// Finds the lowest supportable vertical projection before any nearest-surface fallback is considered.
     /// </summary>
     private static bool TryProjectSupportVertically(
         MeshEntity mesh,
@@ -385,7 +385,7 @@ public static class MeshVerticalProjection
         out MeshProjectionHit hit,
         out SupportPlacementPlan placementPlan)
     {
-        float bestDistance = float.MaxValue;
+        float lowestZ = float.MaxValue;
         MeshProjectionHit bestHit = default;
         SupportPlacementPlan bestPlacementPlan = default;
         bool hasHit = false;
@@ -415,14 +415,12 @@ public static class MeshVerticalProjection
                 continue;
             }
 
-            float distance = MathF.Abs(z - guidePoint.Z);
-
-            if (distance >= bestDistance)
+            if (z >= lowestZ)
             {
                 continue;
             }
 
-            bestDistance = distance;
+            lowestZ = z;
             bestHit = new MeshProjectionHit(point, normal);
             bestPlacementPlan = candidatePlacementPlan;
             hasHit = true;
