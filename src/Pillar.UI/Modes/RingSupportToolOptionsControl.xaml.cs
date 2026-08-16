@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 
 namespace Pillar.UI.Modes;
 
@@ -78,6 +79,32 @@ public partial class RingSupportToolOptionsControl : UserControl
 
         spacing = DefaultRingSupportSpacing;
         return false;
+    }
+
+    /// <summary>
+    /// Gets the selected support-base surface preference.
+    /// </summary>
+    public SupportBaseGenerationMode GetSupportBaseGenerationMode()
+    {
+        return SupportBaseGenerationOptions.GetGenerationMode();
+    }
+
+    /// <summary>
+    /// Sets the support-base surface preference without raising a preview refresh.
+    /// </summary>
+    public void SetSupportBaseGenerationMode(SupportBaseGenerationMode generationMode)
+    {
+        _optionsChangedTimer.Stop();
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            SupportBaseGenerationOptions.SetGenerationMode(generationMode);
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
+        }
     }
 
     /// <summary>
@@ -177,6 +204,20 @@ public partial class RingSupportToolOptionsControl : UserControl
         }
 
         RestartOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Refreshes the preview when the support-base generation preference changes.
+    /// </summary>
+    private void SupportBaseGenerationOptions_Changed(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (!_isSynchronizingOptions)
+        {
+            RestartOptionsChangedTimer();
+        }
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 // AreaSupportToolOptionsControl.xaml.cs
 // Owns Area Support tool option input, validation, and debounce timing for preview updates.
 using Pillar.Core.Layers;
+using Pillar.Core.Supports;
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -81,6 +82,32 @@ public partial class AreaSupportToolOptionsControl : UserControl
 
         spacing = DefaultAreaSupportSpacing;
         return false;
+    }
+
+    /// <summary>
+    /// Gets the selected support-base surface preference.
+    /// </summary>
+    public SupportBaseGenerationMode GetSupportBaseGenerationMode()
+    {
+        return SupportBaseGenerationOptions.GetGenerationMode();
+    }
+
+    /// <summary>
+    /// Sets the support-base surface preference without raising a preview refresh.
+    /// </summary>
+    public void SetSupportBaseGenerationMode(SupportBaseGenerationMode generationMode)
+    {
+        _optionsChangedTimer.Stop();
+        _isSynchronizingOptions = true;
+
+        try
+        {
+            SupportBaseGenerationOptions.SetGenerationMode(generationMode);
+        }
+        finally
+        {
+            _isSynchronizingOptions = false;
+        }
     }
 
     /// <summary>
@@ -256,6 +283,20 @@ public partial class AreaSupportToolOptionsControl : UserControl
         }
 
         RestartOptionsChangedTimer();
+    }
+
+    /// <summary>
+    /// Refreshes the preview when the support-base generation preference changes.
+    /// </summary>
+    private void SupportBaseGenerationOptions_Changed(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+
+        if (!_isSynchronizingOptions)
+        {
+            RestartOptionsChangedTimer();
+        }
     }
 
     /// <summary>

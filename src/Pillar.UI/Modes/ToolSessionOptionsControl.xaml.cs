@@ -3,6 +3,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using Pillar.Core.Supports;
 
 namespace Pillar.UI.Modes;
 
@@ -36,6 +37,22 @@ public partial class ToolSessionOptionsControl : UserControl
         SessionDescriptionTextBlock.Text = string.IsNullOrWhiteSpace(description)
             ? "This tool is active."
             : description.Trim();
+    }
+
+    /// <summary>
+    /// Shows or hides the support-base preference for the active placeholder tool.
+    /// </summary>
+    public void SetSupportBaseGenerationOptionsVisible(bool isVisible)
+    {
+        SupportBaseGenerationOptions.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Gets the support-base surface preference when this panel is used by Point Support.
+    /// </summary>
+    public SupportBaseGenerationMode GetSupportBaseGenerationMode()
+    {
+        return SupportBaseGenerationOptions.GetGenerationMode();
     }
 
     /// <summary>

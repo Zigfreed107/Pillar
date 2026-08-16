@@ -53,6 +53,7 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
     private readonly Func<float> _getSpacing;
     private readonly Func<float> _getStartOffset;
     private readonly Func<float> _getFinalOffset;
+    private readonly Func<SupportBaseGenerationMode> _getBaseGenerationMode;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<float> _zHeightSelectedReporter;
     private readonly Action<bool> _contourClosedStateReporter;
@@ -84,6 +85,7 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
         Func<float> getSpacing,
         Func<float> getStartOffset,
         Func<float> getFinalOffset,
+        Func<SupportBaseGenerationMode> getBaseGenerationMode,
         Func<SupportProfile> createSupportProfile,
         Action<float> zHeightSelectedReporter,
         Action<bool> contourClosedStateReporter,
@@ -101,6 +103,7 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
         _getStartOffset = getStartOffset ?? throw new ArgumentNullException(nameof(getStartOffset));
         _getFinalOffset = getFinalOffset ?? throw new ArgumentNullException(nameof(getFinalOffset));
+        _getBaseGenerationMode = getBaseGenerationMode ?? throw new ArgumentNullException(nameof(getBaseGenerationMode));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _zHeightSelectedReporter = zHeightSelectedReporter ?? throw new ArgumentNullException(nameof(zHeightSelectedReporter));
         _contourClosedStateReporter = contourClosedStateReporter ?? throw new ArgumentNullException(nameof(contourClosedStateReporter));
@@ -474,7 +477,13 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
             ContourSupportSample sample = contourResult.SupportSamples[i];
             SupportPlacementPlan placementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(selectedMesh, sample.Position, sample.Normal, supportProfile, out placementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                selectedMesh,
+                sample.Position,
+                sample.Normal,
+                supportProfile,
+                settings.BaseGenerationMode,
+                out placementPlan))
             {
                 invalidSupportCount++;
                 continue;
@@ -489,7 +498,9 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
                     placementPlan.HeadDirection,
                     placementPlan.BranchLength,
                     placementPlan.BranchDirection,
-                    supportProfile));
+                    supportProfile,
+                    baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                    baseDirection: placementPlan.BaseDirection));
             }
             catch (ArgumentException)
             {
@@ -512,7 +523,8 @@ public sealed class ContourSupportOperation : IToolOperation, IEditableSupportGr
             _getCoplanarThresholdDegrees(),
             _getSpacing(),
             _getStartOffset(),
-            _getFinalOffset());
+            _getFinalOffset(),
+            _getBaseGenerationMode());
     }
 
     /// <summary>

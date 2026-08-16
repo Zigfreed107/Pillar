@@ -329,6 +329,8 @@ public sealed class GphDocumentSerializer
                 SupportLayerGroupId = support.SupportLayerGroupId,
                 TipPosition = CreateVectorDto(support.TipPosition),
                 BasePosition = CreateVectorDto(support.BasePosition),
+                BaseAttachmentKind = (int)support.BaseAttachmentKind,
+                BaseDirection = CreateVectorDto(support.BaseDirection),
                 HeadDirection = CreateVectorDto(support.HeadDirection),
                 BranchLength = support.BranchLength,
                 BranchDirection = CreateVectorDto(support.BranchDirection),
@@ -880,7 +882,29 @@ public sealed class GphDocumentSerializer
             entityDto.BranchLength,
             CreateVector(entityDto.BranchDirection),
             CreateSupportProfile(entityDto.SupportProfile),
-            CreateSupportStyleOrDefault(entityDto.SupportStyle));
+            CreateSupportStyleOrDefault(entityDto.SupportStyle),
+            CreateBaseAttachmentKindOrDefault(entityDto.BaseAttachmentKind),
+            entityDto.BaseDirection == null ? Vector3.UnitZ : CreateVector(entityDto.BaseDirection));
+    }
+
+    /// <summary>
+    /// Converts an optional saved attachment value while preserving build-plate behavior for older projects.
+    /// </summary>
+    private static SupportBaseAttachmentKind CreateBaseAttachmentKindOrDefault(int? savedValue)
+    {
+        if (!savedValue.HasValue)
+        {
+            return SupportBaseAttachmentKind.BuildPlate;
+        }
+
+        SupportBaseAttachmentKind attachmentKind = (SupportBaseAttachmentKind)savedValue.Value;
+
+        if (!Enum.IsDefined(attachmentKind))
+        {
+            throw new InvalidDataException("A saved support entity contains an unsupported base attachment kind.");
+        }
+
+        return attachmentKind;
     }
 
     /// <summary>
@@ -925,6 +949,10 @@ public sealed class GphDocumentSerializer
         {
             BaseBottomRadius = profile.BaseBottomRadius,
             BaseHeight = profile.BaseHeight,
+            ModelBaseHeight = profile.ModelBaseHeight,
+            ModelBasePenetrationDepth = profile.ModelBasePenetrationDepth,
+            ModelBaseBottomDiameter = profile.ModelBaseBottomDiameter,
+            MaxModelBaseAngleFromVerticalDegrees = profile.MaxModelBaseAngleFromVerticalDegrees,
             StemBottomDiameter = profile.StemBottomDiameter,
             StemTopDiameter = profile.StemTopDiameter,
             MaximumBranchLength = profile.MaximumBranchLength,
@@ -1034,7 +1062,8 @@ public sealed class GphDocumentSerializer
             SecondPoint = CreateVectorDto(settings.SecondPoint),
             ThirdPoint = CreateVectorDto(settings.ThirdPoint),
             Spacing = settings.Spacing,
-            SurfaceTarget = CreateRingSupportSurfaceTargetName(settings.SurfaceTargetMode)
+            SurfaceTarget = CreateRingSupportSurfaceTargetName(settings.SurfaceTargetMode),
+            BaseGenerationMode = (int)settings.BaseGenerationMode
         };
 
         for (int i = 0; i < settings.SelectedFaces.Count; i++)
@@ -1077,7 +1106,8 @@ public sealed class GphDocumentSerializer
         {
             Spacing = settings.Spacing,
             PlaceSupportsAtBends = settings.PlaceSupportsAtBends,
-            SurfaceTarget = CreateLineSupportSurfaceTargetName(settings.SurfaceTargetMode)
+            SurfaceTarget = CreateLineSupportSurfaceTargetName(settings.SurfaceTargetMode),
+            BaseGenerationMode = (int)settings.BaseGenerationMode
         };
 
         for (int i = 0; i < settings.Points.Count; i++)
@@ -1130,7 +1160,8 @@ public sealed class GphDocumentSerializer
             CoplanarThresholdDegrees = settings.CoplanarThresholdDegrees,
             Spacing = settings.Spacing,
             StartOffset = settings.StartOffset,
-            FinalOffset = settings.FinalOffset
+            FinalOffset = settings.FinalOffset,
+            BaseGenerationMode = (int)settings.BaseGenerationMode
         };
     }
 
@@ -1154,7 +1185,8 @@ public sealed class GphDocumentSerializer
             MinimumThinRegionThickness = settings.MinimumThinRegionThickness,
             FillMode = settings.FillMode,
             AdditionalOffsetCount = settings.AdditionalOffsetCount,
-            OffsetSpacing = settings.OffsetSpacing
+            OffsetSpacing = settings.OffsetSpacing,
+            BaseGenerationMode = (int)settings.BaseGenerationMode
         };
 
         for (int i = 0; i < settings.SelectedFaces.Count; i++)
@@ -1278,8 +1310,22 @@ public sealed class GphDocumentSerializer
         {
             BasePosition = CreateVectorDto(settings.BasePosition),
             StemTopZ = settings.StemTopZ,
+            BaseAttachmentKind = settings.BaseAttachmentKind.HasValue
+                ? (int)settings.BaseAttachmentKind.Value
+                : null,
+            BaseDirection = settings.BaseDirection.HasValue
+                ? CreateVectorDto(settings.BaseDirection.Value)
+                : null,
+            ModelBaseLength = settings.ModelBaseLength,
             OriginalBasePosition = CreateVectorDto(settings.OriginalBasePosition),
-            OriginalStemTopZ = settings.OriginalStemTopZ
+            OriginalStemTopZ = settings.OriginalStemTopZ,
+            OriginalBaseAttachmentKind = settings.OriginalBaseAttachmentKind.HasValue
+                ? (int)settings.OriginalBaseAttachmentKind.Value
+                : null,
+            OriginalBaseDirection = settings.OriginalBaseDirection.HasValue
+                ? CreateVectorDto(settings.OriginalBaseDirection.Value)
+                : null,
+            OriginalModelBaseLength = settings.OriginalModelBaseLength
         };
     }
 
@@ -1390,7 +1436,11 @@ public sealed class GphDocumentSerializer
             supportProfileDto.HeadHeight,
             supportProfileDto.HeadPenetrationDepth,
             supportProfileDto.HeadTopDiameter,
-            supportProfileDto.MaxHeadAngleFromVerticalDegrees);
+            supportProfileDto.MaxHeadAngleFromVerticalDegrees,
+            supportProfileDto.ModelBaseHeight ?? SupportDefaults.DefaultModelBaseHeight,
+            supportProfileDto.ModelBasePenetrationDepth ?? SupportDefaults.DefaultModelBasePenetrationDepth,
+            supportProfileDto.ModelBaseBottomDiameter ?? SupportDefaults.DefaultModelBaseBottomDiameter,
+            supportProfileDto.MaxModelBaseAngleFromVerticalDegrees ?? SupportDefaults.DefaultMaxModelBaseAngleFromVerticalDegrees);
     }
 
     /// <summary>
@@ -1534,7 +1584,8 @@ public sealed class GphDocumentSerializer
             CreateVector(supportLayerGroupDto.RingSupport.ThirdPoint),
             supportLayerGroupDto.RingSupport.Spacing,
             surfaceTargetMode,
-            selectedFaces);
+            selectedFaces,
+            CreateBaseGenerationModeOrDefault(supportLayerGroupDto.RingSupport.BaseGenerationMode));
     }
 
     /// <summary>
@@ -1633,7 +1684,8 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.LineSupport.Spacing,
             placeSupportsAtBends,
             surfaceTargetMode,
-            selectedFaces);
+            selectedFaces,
+            CreateBaseGenerationModeOrDefault(supportLayerGroupDto.LineSupport.BaseGenerationMode));
     }
 
     /// <summary>
@@ -1699,7 +1751,8 @@ public sealed class GphDocumentSerializer
             supportLayerGroupDto.ContourSupport.CoplanarThresholdDegrees,
             supportLayerGroupDto.ContourSupport.Spacing,
             supportLayerGroupDto.ContourSupport.StartOffset,
-            supportLayerGroupDto.ContourSupport.FinalOffset);
+            supportLayerGroupDto.ContourSupport.FinalOffset,
+            CreateBaseGenerationModeOrDefault(supportLayerGroupDto.ContourSupport.BaseGenerationMode));
     }
 
     /// <summary>
@@ -1769,7 +1822,28 @@ public sealed class GphDocumentSerializer
             minimumThinRegionThickness,
             supportLayerGroupDto.AreaSupport.FillMode,
             supportLayerGroupDto.AreaSupport.AdditionalOffsetCount,
-            offsetSpacing);
+            offsetSpacing,
+            CreateBaseGenerationModeOrDefault(supportLayerGroupDto.AreaSupport.BaseGenerationMode));
+    }
+
+    /// <summary>
+    /// Converts an optional saved base-generation mode while preserving legacy build-plate-only behavior.
+    /// </summary>
+    private static SupportBaseGenerationMode CreateBaseGenerationModeOrDefault(int? savedValue)
+    {
+        if (!savedValue.HasValue)
+        {
+            return SupportBaseGenerationMode.BuildPlateOnly;
+        }
+
+        SupportBaseGenerationMode generationMode = (SupportBaseGenerationMode)savedValue.Value;
+
+        if (!Enum.IsDefined(generationMode))
+        {
+            throw new InvalidDataException("A support generator contains an unsupported base generation mode.");
+        }
+
+        return generationMode;
     }
 
     /// <summary>
@@ -1946,11 +2020,45 @@ public sealed class GphDocumentSerializer
             : CreateVector(modifierDto.DirectEditSettings.OriginalBasePosition);
         float originalStemTopZ = modifierDto.DirectEditSettings.OriginalStemTopZ
             ?? modifierDto.DirectEditSettings.StemTopZ;
+        SupportBaseAttachmentKind? baseAttachmentKind = CreateBaseAttachmentKindOrNull(
+            modifierDto.DirectEditSettings.BaseAttachmentKind);
+        SupportBaseAttachmentKind? originalBaseAttachmentKind = CreateBaseAttachmentKindOrNull(
+            modifierDto.DirectEditSettings.OriginalBaseAttachmentKind);
         return new SupportDirectEditSettings(
             basePosition,
             modifierDto.DirectEditSettings.StemTopZ,
+            baseAttachmentKind,
+            modifierDto.DirectEditSettings.BaseDirection == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.BaseDirection),
             originalBasePosition,
-            originalStemTopZ);
+            originalStemTopZ,
+            originalBaseAttachmentKind,
+            modifierDto.DirectEditSettings.OriginalBaseDirection == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.OriginalBaseDirection),
+            modifierDto.DirectEditSettings.ModelBaseLength,
+            modifierDto.DirectEditSettings.OriginalModelBaseLength);
+    }
+
+    /// <summary>
+    /// Converts an optional saved Direct Edit attachment while preserving legacy geometry-only edits.
+    /// </summary>
+    private static SupportBaseAttachmentKind? CreateBaseAttachmentKindOrNull(int? savedValue)
+    {
+        if (!savedValue.HasValue)
+        {
+            return null;
+        }
+
+        SupportBaseAttachmentKind attachmentKind = (SupportBaseAttachmentKind)savedValue.Value;
+
+        if (!Enum.IsDefined(attachmentKind))
+        {
+            throw new InvalidDataException("A Direct Edit modifier contains an unsupported base attachment kind.");
+        }
+
+        return attachmentKind;
     }
 
     /// <summary>
@@ -2125,6 +2233,8 @@ public sealed class GphDocumentSerializer
         public Guid? SupportLayerGroupId { get; set; }
         public GphVector3Dto? TipPosition { get; set; }
         public GphVector3Dto? BasePosition { get; set; }
+        public int? BaseAttachmentKind { get; set; }
+        public GphVector3Dto? BaseDirection { get; set; }
         public GphVector3Dto? HeadDirection { get; set; }
         public float BranchLength { get; set; }
         public GphVector3Dto? BranchDirection { get; set; }
@@ -2244,6 +2354,10 @@ public sealed class GphDocumentSerializer
     {
         public float BaseBottomRadius { get; set; }
         public float BaseHeight { get; set; }
+        public float? ModelBaseHeight { get; set; }
+        public float? ModelBasePenetrationDepth { get; set; }
+        public float? ModelBaseBottomDiameter { get; set; }
+        public float? MaxModelBaseAngleFromVerticalDegrees { get; set; }
         public float StemBottomDiameter { get; set; }
         public float StemTopDiameter { get; set; }
         public float MaximumBranchLength { get; set; }
@@ -2310,8 +2424,14 @@ public sealed class GphDocumentSerializer
     {
         public GphVector3Dto? BasePosition { get; set; }
         public float StemTopZ { get; set; }
+        public int? BaseAttachmentKind { get; set; }
+        public GphVector3Dto? BaseDirection { get; set; }
+        public float? ModelBaseLength { get; set; }
         public GphVector3Dto? OriginalBasePosition { get; set; }
         public float? OriginalStemTopZ { get; set; }
+        public int? OriginalBaseAttachmentKind { get; set; }
+        public GphVector3Dto? OriginalBaseDirection { get; set; }
+        public float? OriginalModelBaseLength { get; set; }
     }
 
     /// <summary>
@@ -2360,6 +2480,7 @@ public sealed class GphDocumentSerializer
         public GphVector3Dto? ThirdPoint { get; set; }
         public float Spacing { get; set; }
         public string? SurfaceTarget { get; set; }
+        public int? BaseGenerationMode { get; set; }
         public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
     }
 
@@ -2372,6 +2493,7 @@ public sealed class GphDocumentSerializer
         public float Spacing { get; set; }
         public bool? PlaceSupportsAtBends { get; set; }
         public string? SurfaceTarget { get; set; }
+        public int? BaseGenerationMode { get; set; }
         public List<GphFaceSelectionDto?> SelectedFaces { get; set; } = new List<GphFaceSelectionDto?>();
     }
 
@@ -2387,6 +2509,7 @@ public sealed class GphDocumentSerializer
         public float Spacing { get; set; }
         public float StartOffset { get; set; }
         public float FinalOffset { get; set; }
+        public int? BaseGenerationMode { get; set; }
     }
 
     /// <summary>
@@ -2404,6 +2527,7 @@ public sealed class GphDocumentSerializer
         public AreaSupportFillMode FillMode { get; set; } = AreaSupportSettings.DefaultFillMode;
         public int AdditionalOffsetCount { get; set; } = AreaSupportSettings.DefaultAdditionalOffsetCount;
         public float? OffsetSpacing { get; set; }
+        public int? BaseGenerationMode { get; set; }
     }
 
     /// <summary>

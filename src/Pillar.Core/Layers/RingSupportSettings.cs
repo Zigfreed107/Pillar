@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Numerics;
 using Pillar.Core.Selection;
+using Pillar.Core.Supports;
 
 namespace Pillar.Core.Layers;
 
@@ -14,6 +15,7 @@ namespace Pillar.Core.Layers;
 public sealed class RingSupportSettings
 {
     public const RingSupportSurfaceTargetMode DefaultSurfaceTargetMode = RingSupportSurfaceTargetMode.FirstReachable;
+    public const SupportBaseGenerationMode DefaultBaseGenerationMode = SupportBaseGenerationMode.BuildPlateOnly;
 
     private readonly ReadOnlyCollection<FaceSelectionKey> _selectedFaces;
 
@@ -40,7 +42,8 @@ public sealed class RingSupportSettings
         Vector3 thirdPoint,
         float spacing,
         RingSupportSurfaceTargetMode surfaceTargetMode,
-        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces,
+        SupportBaseGenerationMode baseGenerationMode = DefaultBaseGenerationMode)
     {
         if (selectedFaces == null)
         {
@@ -52,6 +55,7 @@ public sealed class RingSupportSettings
         ThirdPoint = thirdPoint;
         Spacing = ValidateSpacing(spacing);
         SurfaceTargetMode = ValidateSurfaceTargetMode(surfaceTargetMode);
+        BaseGenerationMode = ValidateBaseGenerationMode(baseGenerationMode);
 
         if (SurfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
         {
@@ -87,6 +91,11 @@ public sealed class RingSupportSettings
     public RingSupportSurfaceTargetMode SurfaceTargetMode { get; }
 
     /// <summary>
+    /// Gets where support bases should generate and the requested fallback order.
+    /// </summary>
+    public SupportBaseGenerationMode BaseGenerationMode { get; }
+
+    /// <summary>
     /// Gets the source mesh faces allowed by Selected Faces Only targeting.
     /// </summary>
     public IReadOnlyList<FaceSelectionKey> SelectedFaces
@@ -105,7 +114,21 @@ public sealed class RingSupportSettings
             ThirdPoint,
             Spacing,
             SurfaceTargetMode,
-            _selectedFaces);
+            _selectedFaces,
+            BaseGenerationMode);
+    }
+
+    /// <summary>
+    /// Rejects unknown support-base generation policies before they enter document state.
+    /// </summary>
+    private static SupportBaseGenerationMode ValidateBaseGenerationMode(SupportBaseGenerationMode baseGenerationMode)
+    {
+        if (!Enum.IsDefined(baseGenerationMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseGenerationMode), "Support base generation mode is not supported.");
+        }
+
+        return baseGenerationMode;
     }
 
     /// <summary>

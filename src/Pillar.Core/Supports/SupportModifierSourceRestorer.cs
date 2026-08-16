@@ -72,7 +72,15 @@ public static class SupportModifierSourceRestorer
 
             SupportDirectEditSettings reverseSettings = new SupportDirectEditSettings(
                 modifier.DirectEditSettings.OriginalBasePosition,
-                modifier.DirectEditSettings.OriginalStemTopZ);
+                modifier.DirectEditSettings.OriginalStemTopZ,
+                modifier.DirectEditSettings.OriginalBaseAttachmentKind,
+                modifier.DirectEditSettings.OriginalBaseDirection,
+                modifier.DirectEditSettings.OriginalBasePosition,
+                modifier.DirectEditSettings.OriginalStemTopZ,
+                modifier.DirectEditSettings.OriginalBaseAttachmentKind,
+                modifier.DirectEditSettings.OriginalBaseDirection,
+                modifier.DirectEditSettings.OriginalModelBaseLength,
+                modifier.DirectEditSettings.OriginalModelBaseLength);
             restored = SupportDirectEditPlanner.RebuildSupport(restored, reverseSettings);
         }
 
@@ -86,7 +94,13 @@ public static class SupportModifierSourceRestorer
     {
         Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
         Vector3 headJointPosition = support.TipPosition - (headDirection * support.Profile.HeadHeight);
-        Vector3 basePosition = new Vector3(headJointPosition.X, headJointPosition.Y, support.BasePosition.Z);
+        Vector3 baseDirection = support.BaseAttachmentKind == SupportBaseAttachmentKind.Model
+            ? SupportBaseDirectionCalculator.ClampDirectionToProfile(support.BaseDirection, support.Profile)
+            : Vector3.UnitZ;
+        Vector3 basePosition = new Vector3(
+            headJointPosition.X - (baseDirection.X * support.Profile.ModelBaseHeight),
+            headJointPosition.Y - (baseDirection.Y * support.Profile.ModelBaseHeight),
+            support.BasePosition.Z);
         return SupportEntity.CreateLoaded(
             support.Id,
             support.Name,
@@ -96,7 +110,9 @@ public static class SupportModifierSourceRestorer
             support.HeadDirection,
             0.0f,
             Vector3.UnitZ,
-            support.Profile);
+            support.Profile,
+            baseAttachmentKind: support.BaseAttachmentKind,
+            baseDirection: baseDirection);
     }
 
     /// <summary>

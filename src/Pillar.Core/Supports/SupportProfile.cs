@@ -23,7 +23,11 @@ public sealed class SupportProfile
         float headHeight,
         float headPenetrationDepth,
         float headTopDiameter,
-        float maxHeadAngleFromVerticalDegrees)
+        float maxHeadAngleFromVerticalDegrees,
+        float modelBaseHeight = SupportDefaults.DefaultModelBaseHeight,
+        float modelBasePenetrationDepth = SupportDefaults.DefaultModelBasePenetrationDepth,
+        float modelBaseBottomDiameter = SupportDefaults.DefaultModelBaseBottomDiameter,
+        float maxModelBaseAngleFromVerticalDegrees = SupportDefaults.DefaultMaxModelBaseAngleFromVerticalDegrees)
     {
         BaseBottomRadius = ValidatePositiveDimension(baseBottomRadius, nameof(baseBottomRadius));
         BaseHeight = ValidatePositiveDimension(baseHeight, nameof(baseHeight));
@@ -36,6 +40,10 @@ public sealed class SupportProfile
         HeadPenetrationDepth = ValidatePositiveDimension(headPenetrationDepth, nameof(headPenetrationDepth));
         HeadTopDiameter = ValidatePositiveDimension(headTopDiameter, nameof(headTopDiameter));
         MaxHeadAngleFromVerticalDegrees = ValidateAngle(maxHeadAngleFromVerticalDegrees, nameof(maxHeadAngleFromVerticalDegrees));
+        ModelBaseHeight = ValidatePositiveDimension(modelBaseHeight, nameof(modelBaseHeight));
+        ModelBasePenetrationDepth = ValidatePositiveDimension(modelBasePenetrationDepth, nameof(modelBasePenetrationDepth));
+        ModelBaseBottomDiameter = ValidatePositiveDimension(modelBaseBottomDiameter, nameof(modelBaseBottomDiameter));
+        MaxModelBaseAngleFromVerticalDegrees = ValidateAngle(maxModelBaseAngleFromVerticalDegrees, nameof(maxModelBaseAngleFromVerticalDegrees));
     }
 
     /// <summary>
@@ -47,6 +55,26 @@ public sealed class SupportProfile
     /// Gets the axial height of the base section.
     /// </summary>
     public float BaseHeight { get; }
+
+    /// <summary>
+    /// Gets the desired height of base geometry that connects to the model.
+    /// </summary>
+    public float ModelBaseHeight { get; }
+
+    /// <summary>
+    /// Gets how far model-connected base geometry penetrates past the model intersection point.
+    /// </summary>
+    public float ModelBasePenetrationDepth { get; }
+
+    /// <summary>
+    /// Gets the model-connected base diameter at the model intersection point.
+    /// </summary>
+    public float ModelBaseBottomDiameter { get; }
+
+    /// <summary>
+    /// Gets the maximum angle model-connected base geometry may lean away from vertical in degrees.
+    /// </summary>
+    public float MaxModelBaseAngleFromVerticalDegrees { get; }
 
     /// <summary>
     /// Gets the stem diameter where the stem attaches to the base.
@@ -117,7 +145,34 @@ public sealed class SupportProfile
             HeadHeight,
             HeadPenetrationDepth,
             HeadTopDiameter,
-            MaxHeadAngleFromVerticalDegrees);
+            MaxHeadAngleFromVerticalDegrees,
+            ModelBaseHeight,
+            ModelBasePenetrationDepth,
+            ModelBaseBottomDiameter,
+            MaxModelBaseAngleFromVerticalDegrees);
+    }
+
+    /// <summary>
+    /// Creates a copy with one Direct Edit model-base length while preserving every other preset dimension.
+    /// </summary>
+    public SupportProfile WithModelBaseHeight(float modelBaseHeight)
+    {
+        return new SupportProfile(
+            BaseBottomRadius,
+            BaseHeight,
+            StemBottomDiameter,
+            StemTopDiameter,
+            MaximumBranchLength,
+            ModelClearance,
+            BranchAngleFromVerticalDegrees,
+            HeadHeight,
+            HeadPenetrationDepth,
+            HeadTopDiameter,
+            MaxHeadAngleFromVerticalDegrees,
+            modelBaseHeight,
+            ModelBasePenetrationDepth,
+            ModelBaseBottomDiameter,
+            MaxModelBaseAngleFromVerticalDegrees);
     }
 
     /// <summary>

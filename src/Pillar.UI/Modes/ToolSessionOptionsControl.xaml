@@ -4,7 +4,8 @@
 -->
 <UserControl x:Class="Pillar.UI.Modes.ToolSessionOptionsControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:modes="clr-namespace:Pillar.UI.Modes">
     <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <TextBlock x:Name="SessionTitleTextBlock"
@@ -16,6 +17,10 @@
                        Style="{StaticResource ModeOverlayBodyTextStyle}"
                        TextWrapping="Wrap"
                        Text="This tool is active." />
+
+            <modes:SupportBaseGenerationOptionsControl x:Name="SupportBaseGenerationOptions"
+                                                       Margin="0,14,0,0"
+                                                       Visibility="Collapsed" />
 
             <Button Margin="0,16,0,0"
                     MinHeight="30"

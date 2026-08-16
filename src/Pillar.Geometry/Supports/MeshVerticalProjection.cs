@@ -315,12 +315,42 @@ public static class MeshVerticalProjection
         out MeshProjectionHit hit,
         out SupportPlacementPlan placementPlan)
     {
+        return TryProjectSupportToMesh(
+            mesh,
+            guidePoint,
+            profile,
+            fallbackRadius,
+            SupportBaseGenerationMode.BuildPlateOnly,
+            out hit,
+            out placementPlan);
+    }
+
+    /// <summary>
+    /// Finds a supportable projection using the requested support-base surface preference.
+    /// </summary>
+    public static bool TryProjectSupportToMesh(
+        MeshEntity mesh,
+        Vector3 guidePoint,
+        SupportProfile profile,
+        float fallbackRadius,
+        SupportBaseGenerationMode baseGenerationMode,
+        out MeshProjectionHit hit,
+        out SupportPlacementPlan placementPlan)
+    {
         if (mesh == null)
         {
             throw new ArgumentNullException(nameof(mesh));
         }
 
-        return TryProjectSupportToMesh(mesh, mesh.WorldTransform, guidePoint, profile, fallbackRadius, out hit, out placementPlan);
+        return TryProjectSupportToMesh(
+            mesh,
+            mesh.WorldTransform,
+            guidePoint,
+            profile,
+            fallbackRadius,
+            baseGenerationMode,
+            out hit,
+            out placementPlan);
     }
 
     /// <summary>
@@ -349,6 +379,30 @@ public static class MeshVerticalProjection
         out MeshProjectionHit hit,
         out SupportPlacementPlan placementPlan)
     {
+        return TryProjectSupportToMesh(
+            mesh,
+            worldTransform,
+            guidePoint,
+            profile,
+            fallbackRadius,
+            SupportBaseGenerationMode.BuildPlateOnly,
+            out hit,
+            out placementPlan);
+    }
+
+    /// <summary>
+    /// Finds a supportable projection with an explicit transform and base-surface preference.
+    /// </summary>
+    public static bool TryProjectSupportToMesh(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 guidePoint,
+        SupportProfile profile,
+        float fallbackRadius,
+        SupportBaseGenerationMode baseGenerationMode,
+        out MeshProjectionHit hit,
+        out SupportPlacementPlan placementPlan)
+    {
         if (mesh == null)
         {
             throw new ArgumentNullException(nameof(mesh));
@@ -359,7 +413,66 @@ public static class MeshVerticalProjection
             throw new ArgumentNullException(nameof(profile));
         }
 
-        if (TryProjectSupportVertically(mesh, worldTransform, guidePoint, profile, out hit, out placementPlan))
+        if (baseGenerationMode == SupportBaseGenerationMode.BuildPlateThenModel)
+        {
+            if (TryProjectSupportToMesh(
+                mesh,
+                worldTransform,
+                guidePoint,
+                profile,
+                fallbackRadius,
+                SupportBaseGenerationMode.BuildPlateOnly,
+                out hit,
+                out placementPlan))
+            {
+                return true;
+            }
+
+            return TryProjectSupportToMesh(
+                mesh,
+                worldTransform,
+                guidePoint,
+                profile,
+                fallbackRadius,
+                SupportBaseGenerationMode.ModelOnly,
+                out hit,
+                out placementPlan);
+        }
+
+        if (baseGenerationMode == SupportBaseGenerationMode.ModelThenBuildPlate)
+        {
+            if (TryProjectSupportToMesh(
+                mesh,
+                worldTransform,
+                guidePoint,
+                profile,
+                fallbackRadius,
+                SupportBaseGenerationMode.ModelOnly,
+                out hit,
+                out placementPlan))
+            {
+                return true;
+            }
+
+            return TryProjectSupportToMesh(
+                mesh,
+                worldTransform,
+                guidePoint,
+                profile,
+                fallbackRadius,
+                SupportBaseGenerationMode.BuildPlateOnly,
+                out hit,
+                out placementPlan);
+        }
+
+        if (TryProjectSupportVertically(
+            mesh,
+            worldTransform,
+            guidePoint,
+            profile,
+            baseGenerationMode,
+            out hit,
+            out placementPlan))
         {
             return true;
         }
@@ -371,7 +484,15 @@ public static class MeshVerticalProjection
             return false;
         }
 
-        return TryProjectSupportToNearestSurface(mesh, worldTransform, guidePoint, profile, fallbackRadius, out hit, out placementPlan);
+        return TryProjectSupportToNearestSurface(
+            mesh,
+            worldTransform,
+            guidePoint,
+            profile,
+            fallbackRadius,
+            baseGenerationMode,
+            out hit,
+            out placementPlan);
     }
 
     /// <summary>
@@ -382,6 +503,7 @@ public static class MeshVerticalProjection
         Matrix4x4 worldTransform,
         Vector3 guidePoint,
         SupportProfile profile,
+        SupportBaseGenerationMode baseGenerationMode,
         out MeshProjectionHit hit,
         out SupportPlacementPlan placementPlan)
     {
@@ -410,7 +532,14 @@ public static class MeshVerticalProjection
             Vector3 normal = CalculateTriangleNormal(a, b, c);
             SupportPlacementPlan candidatePlacementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, worldTransform, point, normal, profile, out candidatePlacementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                worldTransform,
+                point,
+                normal,
+                profile,
+                baseGenerationMode,
+                out candidatePlacementPlan))
             {
                 continue;
             }
@@ -440,6 +569,7 @@ public static class MeshVerticalProjection
         Vector3 guidePoint,
         SupportProfile profile,
         float fallbackRadius,
+        SupportBaseGenerationMode baseGenerationMode,
         out MeshProjectionHit hit,
         out SupportPlacementPlan placementPlan)
     {
@@ -471,7 +601,14 @@ public static class MeshVerticalProjection
             Vector3 normal = CalculateTriangleNormal(a, b, c);
             SupportPlacementPlan candidatePlacementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, worldTransform, closestPoint, normal, profile, out candidatePlacementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                worldTransform,
+                closestPoint,
+                normal,
+                profile,
+                baseGenerationMode,
+                out candidatePlacementPlan))
             {
                 continue;
             }

@@ -149,17 +149,21 @@ public partial class MainWindow : Window
             _scene,
             _commandRunner,
             _layerPanelViewModel.GetSelectedModelEntityId,
+            GetPointSupportBaseGenerationMode,
             GetRingSupportSpacingOrDefault,
             GetRingSupportSurfaceTargetMode,
+            GetRingSupportBaseGenerationMode,
             GetLineSupportSpacingOrDefault,
             GetLineSupportPlaceSupportsAtBendsOrDefault,
             GetLineSupportSurfaceTargetMode,
+            GetLineSupportBaseGenerationMode,
             CreateToolbarFaceSelectionSnapshot,
             GetContourSupportZHeightOrDefault,
             GetContourSupportCoplanarThresholdOrDefault,
             GetContourSupportSpacingOrDefault,
             GetContourSupportStartOffsetOrDefault,
             GetContourSupportFinalOffsetOrDefault,
+            GetContourSupportBaseGenerationMode,
             GetAreaSupportSpacingOrDefault,
             GetAreaSupportBoundaryOffsetOrDefault,
             GetAreaSupportBoundarySpacingOrDefault,
@@ -170,6 +174,7 @@ public partial class MainWindow : Window
             GetAreaSupportAdditionalOffsetCountOrDefault,
             GetAreaSupportOffsetSpacingOrDefault,
             GetAreaSupportShowSpacing,
+            GetAreaSupportBaseGenerationMode,
             SetContourSupportZHeight,
             SetContourSupportClosedState,
             StartRingSupportFaceSelectionSession,
@@ -384,9 +389,12 @@ public partial class MainWindow : Window
         _supportBracingToolOptionsControl.RemoveAllButtressesRequested += SupportBracingToolOptionsControl_RemoveAllButtressesRequested;
         _supportBracingToolOptionsControl.CloseRequested += SupportBracingToolOptionsControl_CloseRequested;
         _directEditToolOptionsControl.HighlightAngleChanged += DirectEditToolOptionsControl_HighlightAngleChanged;
+        _directEditToolOptionsControl.MoveBaseToBuildPlateRequested += DirectEditToolOptionsControl_MoveBaseToBuildPlateRequested;
+        _directEditToolOptionsControl.ConnectBaseToModelRequested += DirectEditToolOptionsControl_ConnectBaseToModelRequested;
         _directEditToolOptionsControl.CloseRequested += DirectEditToolOptionsControl_CloseRequested;
         _directEditTool.EditCommitted += DirectEditTool_EditCommitted;
         _directEditTool.StatusMessageRequested += DirectEditTool_StatusMessageRequested;
+        _directEditTool.BuildPlateRegenerationFailed += DirectEditTool_BuildPlateRegenerationFailed;
         _modelTranslateTool.PreviewTransformRequested += ModelTranslateTool_PreviewTransformRequested;
         _translateToolOptionsControl.PositionChanged += TranslateToolOptionsControl_PositionChanged;
         _translateToolOptionsControl.MoveToOriginRequested += TranslateToolOptionsControl_MoveToOriginRequested;
@@ -492,6 +500,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Reads the Point Support base-surface preference from its active options panel.
+    /// </summary>
+    private SupportBaseGenerationMode GetPointSupportBaseGenerationMode()
+    {
+        return _toolSessionOptionsControl.GetSupportBaseGenerationMode();
+    }
+
+    /// <summary>
+    /// Reads the Ring Support base-surface preference from its options panel.
+    /// </summary>
+    private SupportBaseGenerationMode GetRingSupportBaseGenerationMode()
+    {
+        return _ringSupportToolOptionsControl.GetSupportBaseGenerationMode();
+    }
+
+    /// <summary>
     /// Reads Line Support spacing from the active Line Support options panel while keeping WPF controls out of rendering tools.
     /// </summary>
     private float GetLineSupportSpacingOrDefault()
@@ -519,6 +543,14 @@ public partial class MainWindow : Window
     private LineSupportSurfaceTargetMode GetLineSupportSurfaceTargetMode()
     {
         return _lineSupportToolOptionsControl.GetSurfaceTargetMode();
+    }
+
+    /// <summary>
+    /// Reads the Line Support base-surface preference from its options panel.
+    /// </summary>
+    private SupportBaseGenerationMode GetLineSupportBaseGenerationMode()
+    {
+        return _lineSupportToolOptionsControl.GetSupportBaseGenerationMode();
     }
 
     /// <summary>
@@ -589,6 +621,14 @@ public partial class MainWindow : Window
 
         _viewModel.SetStatusText("Contour support final offset is invalid; using 0.00 mm.");
         return ContourSupportToolOptionsControl.DefaultFinalOffset;
+    }
+
+    /// <summary>
+    /// Reads the Contour Support base-surface preference from its options panel.
+    /// </summary>
+    private SupportBaseGenerationMode GetContourSupportBaseGenerationMode()
+    {
+        return _contourSupportToolOptionsControl.GetSupportBaseGenerationMode();
     }
 
     /// <summary>
@@ -710,6 +750,14 @@ public partial class MainWindow : Window
     private bool GetAreaSupportShowSpacing()
     {
         return _areaSupportToolOptionsControl.GetShowSupportSpacing();
+    }
+
+    /// <summary>
+    /// Reads the Area Support base-surface preference from its options panel.
+    /// </summary>
+    private SupportBaseGenerationMode GetAreaSupportBaseGenerationMode()
+    {
+        return _areaSupportToolOptionsControl.GetSupportBaseGenerationMode();
     }
 
     /// <summary>

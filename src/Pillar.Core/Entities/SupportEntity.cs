@@ -38,7 +38,9 @@ public sealed class SupportEntity : CadEntity
         float branchLength,
         Vector3 branchDirection,
         SupportProfile profile,
-        SupportStyle? style = null)
+        SupportStyle? style = null,
+        SupportBaseAttachmentKind baseAttachmentKind = SupportBaseAttachmentKind.BuildPlate,
+        Vector3? baseDirection = null)
         : base("Support")
     {
         if (supportLayerGroupId == Guid.Empty)
@@ -51,7 +53,11 @@ public sealed class SupportEntity : CadEntity
         HeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(headDirection, Profile);
         BranchLength = ValidateBranchLength(branchLength, nameof(branchLength));
         BranchDirection = NormalizeOrDefault(branchDirection, Vector3.UnitZ);
-        ValidateGeometry(tipPosition, basePosition, HeadDirection, BranchDirection, Profile);
+        BaseAttachmentKind = ValidateBaseAttachmentKind(baseAttachmentKind);
+        BaseDirection = BaseAttachmentKind == SupportBaseAttachmentKind.Model
+            ? SupportBaseDirectionCalculator.ClampDirectionToProfile(baseDirection ?? Vector3.UnitZ, Profile)
+            : Vector3.UnitZ;
+        ValidateGeometry(tipPosition, basePosition, HeadDirection, BranchDirection, BaseDirection, Profile);
 
         SupportLayerGroupId = supportLayerGroupId;
         TipPosition = tipPosition;
@@ -69,9 +75,19 @@ public sealed class SupportEntity : CadEntity
     public Vector3 TipPosition { get; }
 
     /// <summary>
-    /// Gets the base position on the build plane.
+    /// Gets the base contact position on the build plate or owning model.
     /// </summary>
     public Vector3 BasePosition { get; }
+
+    /// <summary>
+    /// Gets the surface that owns this support's base contact.
+    /// </summary>
+    public SupportBaseAttachmentKind BaseAttachmentKind { get; }
+
+    /// <summary>
+    /// Gets the direction from a model base contact toward the vertical stem.
+    /// </summary>
+    public Vector3 BaseDirection { get; }
 
     /// <summary>
     /// Gets the normalized direction from the head joint toward the model contact point.
@@ -111,9 +127,21 @@ public sealed class SupportEntity : CadEntity
         float branchLength,
         Vector3 branchDirection,
         SupportProfile profile,
-        SupportStyle? style = null)
+        SupportStyle? style = null,
+        SupportBaseAttachmentKind baseAttachmentKind = SupportBaseAttachmentKind.BuildPlate,
+        Vector3? baseDirection = null)
     {
-        SupportEntity support = new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, profile, style);
+        SupportEntity support = new SupportEntity(
+            supportLayerGroupId,
+            tipPosition,
+            basePosition,
+            headDirection,
+            branchLength,
+            branchDirection,
+            profile,
+            style,
+            baseAttachmentKind,
+            baseDirection);
         support.Id = id;
         support.Name = string.IsNullOrWhiteSpace(name) ? "Support" : name.Trim();
         return support;
@@ -126,7 +154,7 @@ public sealed class SupportEntity : CadEntity
     {
         SupportPartDimensions dimensions = SupportDimensionResolver.Resolve(Profile, Style);
         float maximumRadius = MathF.Max(
-            Profile.BaseBottomRadius,
+            MathF.Max(Profile.BaseBottomRadius, Profile.ModelBaseBottomDiameter * 0.5f),
             MathF.Max(
                 dimensions.StemBottomDiameter,
                 MathF.Max(dimensions.StemTopDiameter, MathF.Max(dimensions.HeadBottomDiameter, dimensions.HeadTopDiameter))) * 0.5f);
@@ -141,21 +169,41 @@ public sealed class SupportEntity : CadEntity
         Vector3 penetrationTip = isButtress
             ? TipPosition
             : TipPosition + (HeadDirection * Profile.HeadPenetrationDepth);
-        Vector3 min = Vector3.Min(Vector3.Min(Vector3.Min(Vector3.Min(TipPosition, penetrationTip), BasePosition), headBottom), stemTop) - radiusPadding;
-        Vector3 max = Vector3.Max(Vector3.Max(TipPosition, BasePosition), stemTop) + radiusPadding;
-        max = Vector3.Max(max, penetrationTip + radiusPadding);
-        max = Vector3.Max(max, headBottom + radiusPadding);
-        return (min, max);
+        Vector3 basePenetrationTip = BaseAttachmentKind == SupportBaseAttachmentKind.Model
+            ? BasePosition - (BaseDirection * Profile.ModelBasePenetrationDepth)
+            : BasePosition;
+        Vector3 baseJoint = BaseAttachmentKind == SupportBaseAttachmentKind.Model
+            ? BasePosition + (BaseDirection * Profile.ModelBaseHeight)
+            : BasePosition;
+        Vector3 minimumPoint = Vector3.Min(TipPosition, penetrationTip);
+        minimumPoint = Vector3.Min(minimumPoint, BasePosition);
+        minimumPoint = Vector3.Min(minimumPoint, basePenetrationTip);
+        minimumPoint = Vector3.Min(minimumPoint, baseJoint);
+        minimumPoint = Vector3.Min(minimumPoint, headBottom);
+        minimumPoint = Vector3.Min(minimumPoint, stemTop);
+        Vector3 maximumPoint = Vector3.Max(TipPosition, BasePosition);
+        maximumPoint = Vector3.Max(maximumPoint, stemTop);
+        maximumPoint = Vector3.Max(maximumPoint, penetrationTip);
+        maximumPoint = Vector3.Max(maximumPoint, headBottom);
+        maximumPoint = Vector3.Max(maximumPoint, basePenetrationTip);
+        maximumPoint = Vector3.Max(maximumPoint, baseJoint);
+        return (minimumPoint - radiusPadding, maximumPoint + radiusPadding);
     }
 
     /// <summary>
     /// Validates the support axis and profile before the entity reaches document storage.
     /// </summary>
-    private static void ValidateGeometry(Vector3 tipPosition, Vector3 basePosition, Vector3 headDirection, Vector3 branchDirection, SupportProfile profile)
+    private static void ValidateGeometry(
+        Vector3 tipPosition,
+        Vector3 basePosition,
+        Vector3 headDirection,
+        Vector3 branchDirection,
+        Vector3 baseDirection,
+        SupportProfile profile)
     {
         if (basePosition.Z > tipPosition.Z)
         {
-            throw new ArgumentException("A support base cannot be above its tip in v1 support placement.");
+            throw new ArgumentException("A support base cannot be above its tip.");
         }
 
         float totalLength = Vector3.Distance(basePosition, tipPosition);
@@ -189,6 +237,29 @@ public sealed class SupportEntity : CadEntity
         {
             throw new ArgumentException("A support branch direction must be non-zero.");
         }
+
+        if (!float.IsFinite(baseDirection.X) || !float.IsFinite(baseDirection.Y) || !float.IsFinite(baseDirection.Z))
+        {
+            throw new ArgumentException("A support base direction must be finite.");
+        }
+
+        if (baseDirection.Z <= 0.0f)
+        {
+            throw new ArgumentException("A support base direction must point upward.");
+        }
+    }
+
+    /// <summary>
+    /// Rejects unknown base attachment kinds before they reach geometry generation.
+    /// </summary>
+    private static SupportBaseAttachmentKind ValidateBaseAttachmentKind(SupportBaseAttachmentKind value)
+    {
+        if (!Enum.IsDefined(value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), "Support base attachment kind is not supported.");
+        }
+
+        return value;
     }
 
     /// <summary>

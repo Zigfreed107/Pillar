@@ -59,14 +59,26 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0"
                                    Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,0,0,8"
+                                   FontStyle="Italic"
+                                   TextWrapping="Wrap"
+                                   Text="This section controls the base geometry when the base sits on the build plate" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="0"
                                    VerticalAlignment="Center"
                                    Text="Bottom radius" />
                         <controls:NumericUpDown x:Name="BaseBottomRadiusInput"
-                                                Grid.Row="0"
+                                                Grid.Row="1"
                                                 Grid.Column="1"
                                                 Margin="8,0,0,6"
                                                 Minimum="0.1"
@@ -74,18 +86,78 @@
                                                 Increment="0.1"
                                                 DecimalPlaces="1" />
 
-                        <TextBlock Grid.Row="1"
+                        <TextBlock Grid.Row="2"
                                    Grid.Column="0"
                                    VerticalAlignment="Center"
                                    Text="Height" />
                         <controls:NumericUpDown x:Name="BaseHeightInput"
-                                                Grid.Row="1"
+                                                Grid.Row="2"
                                                 Grid.Column="1"
-                                                Margin="8,0,0,0"
+                                                Margin="8,0,0,6"
                                                 Minimum="0.1"
                                                 Maximum="1000"
                                                 Increment="0.1"
                                                 DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,6,0,8"
+                                   FontStyle="Italic"
+                                   TextWrapping="Wrap"
+                                   Text="This section controls the base geometry when it connects to the model" />
+
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Height" />
+                        <controls:NumericUpDown x:Name="ModelBaseHeightInput"
+                                                Grid.Row="4"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="5"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Penetration depth" />
+                        <controls:NumericUpDown x:Name="ModelBasePenetrationDepthInput"
+                                                Grid.Row="5"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="6"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Bottom diameter" />
+                        <controls:NumericUpDown x:Name="ModelBaseBottomDiameterInput"
+                                                Grid.Row="6"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,6"
+                                                Minimum="0.1"
+                                                Maximum="1000"
+                                                Increment="0.1"
+                                                DecimalPlaces="1" />
+
+                        <TextBlock Grid.Row="7"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   Text="Max angle from vertical" />
+                        <controls:NumericUpDown x:Name="MaxModelBaseAngleFromVerticalInput"
+                                                Grid.Row="7"
+                                                Grid.Column="1"
+                                                Margin="8,0,0,0"
+                                                Minimum="0"
+                                                Maximum="90"
+                                                Increment="1"
+                                                DecimalPlaces="0" />
                     </Grid>
                 </GroupBox>
 

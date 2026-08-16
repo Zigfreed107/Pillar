@@ -521,7 +521,9 @@ public static class SupportBracingPlanner
         firstButtress = null!;
         secondButtress = null!;
 
-        if (settings.ButtressSpacing <= GeometryTolerance)
+        // Buttresses create new surrounding bases without a mesh query, so only grounded sources are eligible.
+        if (support.BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate
+            || settings.ButtressSpacing <= GeometryTolerance)
         {
             return false;
         }
@@ -675,6 +677,14 @@ public static class SupportBracingPlanner
     /// </summary>
     private static Vector3 CalculateBaseTopPosition(SupportEntity support)
     {
+        if (support.BaseAttachmentKind == SupportBaseAttachmentKind.Model)
+        {
+            Vector3 baseDirection = SupportBaseDirectionCalculator.ClampDirectionToProfile(
+                support.BaseDirection,
+                support.Profile);
+            return support.BasePosition + (baseDirection * support.Profile.ModelBaseHeight);
+        }
+
         float supportHeight = MathF.Max(0.0f, CalculateSupportHeight(support));
         float baseHeight = MathF.Min(support.Profile.BaseHeight, supportHeight);
         return support.BasePosition + (Vector3.UnitZ * baseHeight);
@@ -685,7 +695,23 @@ public static class SupportBracingPlanner
     /// </summary>
     private static float CalculateSupportHeight(SupportEntity support)
     {
-        return CalculateStemTopPosition(support).Z - support.BasePosition.Z;
+        return CalculateStemTopPosition(support).Z - CalculateBaseTopPositionWithoutHeightClamp(support).Z;
+    }
+
+    /// <summary>
+    /// Gets the start height of the vertical stem without recursively consulting support height.
+    /// </summary>
+    private static Vector3 CalculateBaseTopPositionWithoutHeightClamp(SupportEntity support)
+    {
+        if (support.BaseAttachmentKind == SupportBaseAttachmentKind.Model)
+        {
+            Vector3 baseDirection = SupportBaseDirectionCalculator.ClampDirectionToProfile(
+                support.BaseDirection,
+                support.Profile);
+            return support.BasePosition + (baseDirection * support.Profile.ModelBaseHeight);
+        }
+
+        return support.BasePosition;
     }
 
     /// <summary>

@@ -25,6 +25,11 @@ public class ManualSupportTool : ITool
     private readonly SceneManager _scene;
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
+    private readonly Func<SupportBaseGenerationMode> _getPointSupportBaseGenerationMode;
+    private readonly Func<SupportBaseGenerationMode> _getRingSupportBaseGenerationMode;
+    private readonly Func<SupportBaseGenerationMode> _getLineSupportBaseGenerationMode;
+    private readonly Func<SupportBaseGenerationMode> _getContourSupportBaseGenerationMode;
+    private readonly Func<SupportBaseGenerationMode> _getAreaSupportBaseGenerationMode;
     private readonly Func<float> _getRingSupportSpacing;
     private readonly Func<RingSupportSurfaceTargetMode> _getRingSupportSurfaceTargetMode;
     private readonly Func<float> _getLineSupportSpacing;
@@ -63,17 +68,21 @@ public class ManualSupportTool : ITool
         SceneManager scene,
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
+        Func<SupportBaseGenerationMode> getPointSupportBaseGenerationMode,
         Func<float> getRingSupportSpacing,
         Func<RingSupportSurfaceTargetMode> getRingSupportSurfaceTargetMode,
+        Func<SupportBaseGenerationMode> getRingSupportBaseGenerationMode,
         Func<float> getLineSupportSpacing,
         Func<bool> getLineSupportPlaceSupportsAtBends,
         Func<LineSupportSurfaceTargetMode> getLineSupportSurfaceTargetMode,
+        Func<SupportBaseGenerationMode> getLineSupportBaseGenerationMode,
         Func<IReadOnlyCollection<FaceSelectionKey>> getSharedFaceSelection,
         Func<float> getContourSupportZHeight,
         Func<float> getContourSupportCoplanarThresholdDegrees,
         Func<float> getContourSupportSpacing,
         Func<float> getContourSupportStartOffset,
         Func<float> getContourSupportFinalOffset,
+        Func<SupportBaseGenerationMode> getContourSupportBaseGenerationMode,
         Func<float> getAreaSupportSpacing,
         Func<float> getAreaSupportBoundaryOffset,
         Func<float> getAreaSupportBoundarySpacing,
@@ -84,6 +93,7 @@ public class ManualSupportTool : ITool
         Func<int> getAreaSupportAdditionalOffsetCount,
         Func<float> getAreaSupportOffsetSpacing,
         Func<bool> getAreaSupportShowSpacing,
+        Func<SupportBaseGenerationMode> getAreaSupportBaseGenerationMode,
         Action<float> contourSupportZHeightSelectedReporter,
         Action<bool> contourSupportClosedStateReporter,
         Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> ringFaceSelectionSessionStarter,
@@ -96,17 +106,21 @@ public class ManualSupportTool : ITool
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
+        _getPointSupportBaseGenerationMode = getPointSupportBaseGenerationMode ?? throw new ArgumentNullException(nameof(getPointSupportBaseGenerationMode));
         _getRingSupportSpacing = getRingSupportSpacing ?? throw new ArgumentNullException(nameof(getRingSupportSpacing));
         _getRingSupportSurfaceTargetMode = getRingSupportSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getRingSupportSurfaceTargetMode));
+        _getRingSupportBaseGenerationMode = getRingSupportBaseGenerationMode ?? throw new ArgumentNullException(nameof(getRingSupportBaseGenerationMode));
         _getLineSupportSpacing = getLineSupportSpacing ?? throw new ArgumentNullException(nameof(getLineSupportSpacing));
         _getLineSupportPlaceSupportsAtBends = getLineSupportPlaceSupportsAtBends ?? throw new ArgumentNullException(nameof(getLineSupportPlaceSupportsAtBends));
         _getLineSupportSurfaceTargetMode = getLineSupportSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getLineSupportSurfaceTargetMode));
+        _getLineSupportBaseGenerationMode = getLineSupportBaseGenerationMode ?? throw new ArgumentNullException(nameof(getLineSupportBaseGenerationMode));
         _getSharedFaceSelection = getSharedFaceSelection ?? throw new ArgumentNullException(nameof(getSharedFaceSelection));
         _getContourSupportZHeight = getContourSupportZHeight ?? throw new ArgumentNullException(nameof(getContourSupportZHeight));
         _getContourSupportCoplanarThresholdDegrees = getContourSupportCoplanarThresholdDegrees ?? throw new ArgumentNullException(nameof(getContourSupportCoplanarThresholdDegrees));
         _getContourSupportSpacing = getContourSupportSpacing ?? throw new ArgumentNullException(nameof(getContourSupportSpacing));
         _getContourSupportStartOffset = getContourSupportStartOffset ?? throw new ArgumentNullException(nameof(getContourSupportStartOffset));
         _getContourSupportFinalOffset = getContourSupportFinalOffset ?? throw new ArgumentNullException(nameof(getContourSupportFinalOffset));
+        _getContourSupportBaseGenerationMode = getContourSupportBaseGenerationMode ?? throw new ArgumentNullException(nameof(getContourSupportBaseGenerationMode));
         _getAreaSupportSpacing = getAreaSupportSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportSpacing));
         _getAreaSupportBoundaryOffset = getAreaSupportBoundaryOffset ?? throw new ArgumentNullException(nameof(getAreaSupportBoundaryOffset));
         _getAreaSupportBoundarySpacing = getAreaSupportBoundarySpacing ?? throw new ArgumentNullException(nameof(getAreaSupportBoundarySpacing));
@@ -117,6 +131,7 @@ public class ManualSupportTool : ITool
         _getAreaSupportAdditionalOffsetCount = getAreaSupportAdditionalOffsetCount ?? throw new ArgumentNullException(nameof(getAreaSupportAdditionalOffsetCount));
         _getAreaSupportOffsetSpacing = getAreaSupportOffsetSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportOffsetSpacing));
         _getAreaSupportShowSpacing = getAreaSupportShowSpacing ?? throw new ArgumentNullException(nameof(getAreaSupportShowSpacing));
+        _getAreaSupportBaseGenerationMode = getAreaSupportBaseGenerationMode ?? throw new ArgumentNullException(nameof(getAreaSupportBaseGenerationMode));
         _contourSupportZHeightSelectedReporter = contourSupportZHeightSelectedReporter ?? throw new ArgumentNullException(nameof(contourSupportZHeightSelectedReporter));
         _contourSupportClosedStateReporter = contourSupportClosedStateReporter ?? throw new ArgumentNullException(nameof(contourSupportClosedStateReporter));
         _ringFaceSelectionSessionStarter = ringFaceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(ringFaceSelectionSessionStarter));
@@ -187,6 +202,7 @@ public class ManualSupportTool : ITool
                 _scene,
                 _commandRunner,
                 _getSelectedModelEntityId,
+                _getPointSupportBaseGenerationMode,
                 _createSupportProfile,
                 RaiseStatusMessageRequested);
 
@@ -204,6 +220,7 @@ public class ManualSupportTool : ITool
                 _getLineSupportSpacing,
                 _getLineSupportPlaceSupportsAtBends,
                 _getLineSupportSurfaceTargetMode,
+                _getLineSupportBaseGenerationMode,
                 _getSharedFaceSelection,
                 _lineFaceSelectionSessionStarter,
                 _createSupportProfile,
@@ -227,6 +244,7 @@ public class ManualSupportTool : ITool
                 _getSelectedModelEntityId,
                 _getRingSupportSpacing,
                 _getRingSupportSurfaceTargetMode,
+                _getRingSupportBaseGenerationMode,
                 _getSharedFaceSelection,
                 _ringFaceSelectionSessionStarter,
                 _createSupportProfile,
@@ -253,6 +271,7 @@ public class ManualSupportTool : ITool
                 _getContourSupportSpacing,
                 _getContourSupportStartOffset,
                 _getContourSupportFinalOffset,
+                _getContourSupportBaseGenerationMode,
                 _createSupportProfile,
                 _contourSupportZHeightSelectedReporter,
                 _contourSupportClosedStateReporter,
@@ -283,6 +302,7 @@ public class ManualSupportTool : ITool
                 _getAreaSupportAdditionalOffsetCount,
                 _getAreaSupportOffsetSpacing,
                 _getAreaSupportShowSpacing,
+                _getAreaSupportBaseGenerationMode,
                 _createSupportProfile,
                 _areaFaceSelectionSessionStarter,
                 RaiseStatusMessageRequested,

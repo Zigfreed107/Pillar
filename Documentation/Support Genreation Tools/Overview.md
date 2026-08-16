@@ -17,7 +17,7 @@ Concrete `SupportEntity` instances are generated geometry inputs. A support enti
 The current support model has four conceptual sections:
 
 - Base
-  A truncated cone rising from the build plane.
+  Either a truncated cone rising from the build plate or a tapered, penetrating tip attached to an upward-facing model surface.
 - Stem
   The main body between base and head.
 - Branch
@@ -26,6 +26,10 @@ The current support model has four conceptual sections:
   The angled or vertical tip section that attaches to the model.
 
 `SupportMeshBuilder` converts a `SupportEntity` plus the configured side count into triangle geometry. The builder should tolerate short supports by clamping output sensibly instead of rejecting the entire support when possible.
+
+Each support entity records whether its base contact belongs to the build plate or the model. Model contacts also store an upward base direction, which follows the supporting face normal until the preset's maximum angle from vertical is reached. The model-base height, penetration depth, and bottom diameter are independent from the build-plate base dimensions.
+
+Point, Line, Ring, Contour, and Area tools expose a base-generation policy. `BuildPlateOnly` preserves the original grounded behavior, `ModelOnly` requires an upward-facing model contact, and the two fallback policies exhaust the preferred attachment type before trying the other type. Generated tool settings retain this policy so previews, edits, saves, loads, and model-transform regeneration use the same placement rules.
 
 ## Support Presets
 
@@ -52,7 +56,7 @@ The support system currently centers around these generator styles:
 - Line supports
 - Ring supports
 - Contour supports
-- future area and editing workflows
+- Area supports
 
 Each generator should store compact settings and use a shared regeneration path where practical.
 
@@ -60,7 +64,7 @@ Each generator should store compact settings and use a shared regeneration path 
 
 ### Point Supports
 
-Point supports are ordinary support entities. During model transform regeneration, each support tip acts as the model-relative anchor and the support is rebuilt from transformed tip data plus the original profile.
+Point supports are ordinary support entities. During model transform regeneration, each support tip acts as the model-relative anchor and the support is rebuilt from transformed tip data plus the original profile. The existing entity's base attachment kind determines which exclusive placement policy is used during regeneration.
 
 ### Ring Supports
 

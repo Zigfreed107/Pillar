@@ -52,6 +52,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly Func<Guid?> _getSelectedModelEntityId;
     private readonly Func<float> _getSpacing;
     private readonly Func<RingSupportSurfaceTargetMode> _getSurfaceTargetMode;
+    private readonly Func<SupportBaseGenerationMode> _getBaseGenerationMode;
     private readonly Func<IReadOnlyCollection<FaceSelectionKey>> _getSharedFaceSelection;
     private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
     private readonly Func<SupportProfile> _createSupportProfile;
@@ -85,6 +86,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         Func<Guid?> getSelectedModelEntityId,
         Func<float> getSpacing,
         Func<RingSupportSurfaceTargetMode> getSurfaceTargetMode,
+        Func<SupportBaseGenerationMode> getBaseGenerationMode,
         Func<IReadOnlyCollection<FaceSelectionKey>> getSharedFaceSelection,
         Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
         Func<SupportProfile> createSupportProfile,
@@ -99,6 +101,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
         _getSpacing = getSpacing ?? throw new ArgumentNullException(nameof(getSpacing));
         _getSurfaceTargetMode = getSurfaceTargetMode ?? throw new ArgumentNullException(nameof(getSurfaceTargetMode));
+        _getBaseGenerationMode = getBaseGenerationMode ?? throw new ArgumentNullException(nameof(getBaseGenerationMode));
         _getSharedFaceSelection = getSharedFaceSelection ?? throw new ArgumentNullException(nameof(getSharedFaceSelection));
         _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
@@ -443,7 +446,8 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             _thirdPoint.Value,
             _getSpacing(),
             surfaceTargetMode,
-            selectedFaces);
+            selectedFaces,
+            _getBaseGenerationMode());
 
         if (_editingSupportLayerGroupId.HasValue)
         {
@@ -957,6 +961,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
                 supportProfile,
                 fallbackRadius,
                 settings.SurfaceTargetMode,
+                settings.BaseGenerationMode,
                 selectedTriangleIndices,
                 out projectionHit,
                 out placementPlan,
@@ -999,7 +1004,9 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
                     placementPlan.HeadDirection,
                     placementPlan.BranchLength,
                     placementPlan.BranchDirection,
-                    supportProfile));
+                    supportProfile,
+                    baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                    baseDirection: placementPlan.BaseDirection));
             }
             catch (ArgumentException)
             {
@@ -1032,6 +1039,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         SupportProfile supportProfile = _createSupportProfile();
         float fallbackRadius = MeshVerticalProjection.CalculateSupportFallbackRadius(_getSpacing(), supportProfile);
         RingSupportSurfaceTargetMode surfaceTargetMode = _getSurfaceTargetMode();
+        SupportBaseGenerationMode baseGenerationMode = _getBaseGenerationMode();
 
         if (surfaceTargetMode == RingSupportSurfaceTargetMode.SelectedFacesOnly)
         {
@@ -1054,6 +1062,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
                 supportProfile,
                 fallbackRadius,
                 surfaceTargetMode,
+                baseGenerationMode,
                 selectedTriangleIndices,
                 out projectionHit,
                 out placementPlan,
@@ -1247,6 +1256,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
         SupportProfile supportProfile,
         float fallbackRadius,
         RingSupportSurfaceTargetMode surfaceTargetMode,
+        SupportBaseGenerationMode baseGenerationMode,
         IReadOnlyList<int> selectedTriangleIndices,
         out MeshProjectionHit projectionHit,
         out SupportPlacementPlan placementPlan,
@@ -1272,6 +1282,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
                 projectionHit.Point,
                 projectionHit.Normal,
                 supportProfile,
+                baseGenerationMode,
                 out placementPlan);
         }
 
@@ -1280,6 +1291,7 @@ public sealed class RingSupportOperation : IToolOperation, IEditableSupportGroup
             guidePoint,
             supportProfile,
             fallbackRadius,
+            baseGenerationMode,
             out projectionHit,
             out placementPlan);
         targetFound = didProject;

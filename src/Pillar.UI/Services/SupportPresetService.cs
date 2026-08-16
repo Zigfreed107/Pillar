@@ -158,6 +158,10 @@ public sealed class SupportPresetService
                 Name = preset.Name,
                 BaseBottomRadius = preset.Profile.BaseBottomRadius,
                 BaseHeight = preset.Profile.BaseHeight,
+                ModelBaseHeight = preset.Profile.ModelBaseHeight,
+                ModelBasePenetrationDepth = preset.Profile.ModelBasePenetrationDepth,
+                ModelBaseBottomDiameter = preset.Profile.ModelBaseBottomDiameter,
+                MaxModelBaseAngleFromVerticalDegrees = preset.Profile.MaxModelBaseAngleFromVerticalDegrees,
                 StemBottomDiameter = preset.Profile.StemBottomDiameter,
                 StemTopDiameter = preset.Profile.StemTopDiameter,
                 MaximumBranchLength = preset.Profile.MaximumBranchLength,
@@ -213,7 +217,11 @@ public sealed class SupportPresetService
             presetDto.HeadHeight,
             presetDto.HeadPenetrationDepth,
             presetDto.HeadTopDiameter,
-            presetDto.MaxHeadAngleFromVerticalDegrees);
+            presetDto.MaxHeadAngleFromVerticalDegrees,
+            presetDto.ModelBaseHeight ?? SupportDefaults.DefaultModelBaseHeight,
+            presetDto.ModelBasePenetrationDepth ?? SupportDefaults.DefaultModelBasePenetrationDepth,
+            presetDto.ModelBaseBottomDiameter ?? SupportDefaults.DefaultModelBaseBottomDiameter,
+            presetDto.MaxModelBaseAngleFromVerticalDegrees ?? SupportDefaults.DefaultMaxModelBaseAngleFromVerticalDegrees);
 
         return new SupportPreset(presetDto.Name, profile);
     }
@@ -239,6 +247,10 @@ public sealed class SupportPresetService
         public string Name { get; set; } = string.Empty;
         public float BaseBottomRadius { get; set; }
         public float BaseHeight { get; set; }
+        public float? ModelBaseHeight { get; set; }
+        public float? ModelBasePenetrationDepth { get; set; }
+        public float? ModelBaseBottomDiameter { get; set; }
+        public float? MaxModelBaseAngleFromVerticalDegrees { get; set; }
         public float StemBottomDiameter { get; set; }
         public float StemTopDiameter { get; set; }
         public float MaximumBranchLength { get; set; }

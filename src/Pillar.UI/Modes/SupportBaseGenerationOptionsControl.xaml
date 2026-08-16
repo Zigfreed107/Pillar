@@ -1,0 +1,21 @@
+<!--
+    SupportBaseGenerationOptionsControl.xaml
+    Presents the shared support-base surface preference used by support creation option panels.
+-->
+<UserControl x:Class="Pillar.UI.Modes.SupportBaseGenerationOptionsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Style="{StaticResource ModeOverlayLabelTextStyle}"
+                   Text="Support bases generate:" />
+        <ComboBox x:Name="GenerationModeComboBox"
+                  Margin="0,4,0,0"
+                  SelectedIndex="0"
+                  SelectionChanged="GenerationModeComboBox_SelectionChanged">
+            <ComboBoxItem Content="on build plate only" />
+            <ComboBoxItem Content="on model only" />
+            <ComboBoxItem Content="on the build plate if possible, then the model" />
+            <ComboBoxItem Content="on the model if possible, then the build plate" />
+        </ComboBox>
+    </StackPanel>
+</UserControl>

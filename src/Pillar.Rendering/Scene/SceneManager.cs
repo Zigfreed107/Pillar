@@ -634,9 +634,19 @@ public class SceneManager
     /// <summary>
     /// Shows the Direct Edit gizmo at one shared stem.
     /// </summary>
-    public void ShowDirectEditGizmo(Vector3 basePosition, Vector3 stemTop, float xyLength, float zLength)
+    public void ShowDirectEditGizmo(
+        Vector3 basePosition,
+        Vector3 stemTop,
+        float xyLength,
+        float zLength,
+        bool showBaseZArrow)
     {
-        _directEditPreviewRenderer.ShowGizmo(basePosition, stemTop, xyLength, zLength);
+        _directEditPreviewRenderer.ShowGizmo(
+            basePosition,
+            stemTop,
+            xyLength,
+            zLength,
+            showBaseZArrow);
     }
 
     /// <summary>

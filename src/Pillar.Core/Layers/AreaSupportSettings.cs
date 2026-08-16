@@ -1,6 +1,7 @@
 // AreaSupportSettings.cs
 // Stores the editable parametric definition used to regenerate an Area Support group from selected mesh faces.
 using Pillar.Core.Selection;
+using Pillar.Core.Supports;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -24,6 +25,7 @@ public sealed class AreaSupportSettings
     public const AreaSupportFillMode DefaultFillMode = AreaSupportFillMode.HexGrid;
     public const int DefaultAdditionalOffsetCount = 1;
     public const int MaximumAdditionalOffsetCount = 100;
+    public const SupportBaseGenerationMode DefaultBaseGenerationMode = SupportBaseGenerationMode.BuildPlateOnly;
 
     /// <summary>
     /// Creates validated Area Support generator settings.
@@ -102,7 +104,8 @@ public sealed class AreaSupportSettings
         float minimumThinRegionThickness,
         AreaSupportFillMode fillMode,
         int additionalOffsetCount,
-        float offsetSpacing)
+        float offsetSpacing,
+        SupportBaseGenerationMode baseGenerationMode = DefaultBaseGenerationMode)
     {
         if (selectedFaces == null)
         {
@@ -131,6 +134,7 @@ public sealed class AreaSupportSettings
         FillMode = ValidateFillMode(fillMode);
         AdditionalOffsetCount = ValidateAdditionalOffsetCount(additionalOffsetCount);
         OffsetSpacing = ValidateOffsetSpacing(offsetSpacing);
+        BaseGenerationMode = ValidateBaseGenerationMode(baseGenerationMode);
     }
 
     /// <summary>
@@ -184,11 +188,29 @@ public sealed class AreaSupportSettings
     public float OffsetSpacing { get; }
 
     /// <summary>
+    /// Gets where support bases should generate and the requested fallback order.
+    /// </summary>
+    public SupportBaseGenerationMode BaseGenerationMode { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public AreaSupportSettings Clone()
     {
-        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness, FillMode, AdditionalOffsetCount, OffsetSpacing);
+        return new AreaSupportSettings(SelectedFaces, Spacing, BoundaryOffset, BoundarySpacing, ConcaveCornerAngleDegrees, SupportThinRegions, MinimumThinRegionThickness, FillMode, AdditionalOffsetCount, OffsetSpacing, BaseGenerationMode);
+    }
+
+    /// <summary>
+    /// Rejects unknown support-base generation policies before they enter document state.
+    /// </summary>
+    private static SupportBaseGenerationMode ValidateBaseGenerationMode(SupportBaseGenerationMode baseGenerationMode)
+    {
+        if (!Enum.IsDefined(baseGenerationMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseGenerationMode), "Support base generation mode is not supported.");
+        }
+
+        return baseGenerationMode;
     }
 
     /// <summary>

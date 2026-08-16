@@ -228,7 +228,18 @@ public static class SupportGroupTransformRegenerator
             Vector3 newHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(transformedHeadDirection, oldSupportEntity.Profile);
             SupportBranchPlan branchPlan;
 
-            if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, newWorldTransform, newTipPosition, newHeadDirection, oldSupportEntity.Profile, out branchPlan))
+            SupportBaseGenerationMode baseGenerationMode = oldSupportEntity.BaseAttachmentKind == SupportBaseAttachmentKind.Model
+                ? SupportBaseGenerationMode.ModelOnly
+                : SupportBaseGenerationMode.BuildPlateOnly;
+
+            if (!SupportBranchPlanner.TryCreateBranchPlan(
+                mesh,
+                newWorldTransform,
+                newTipPosition,
+                newHeadDirection,
+                oldSupportEntity.Profile,
+                baseGenerationMode,
+                out branchPlan))
             {
                 continue;
             }
@@ -241,7 +252,9 @@ public static class SupportGroupTransformRegenerator
                 newHeadDirection,
                 branchPlan.BranchLength,
                 branchPlan.BranchDirection,
-                oldSupportEntity.Profile);
+                oldSupportEntity.Profile,
+                branchPlan.BaseAttachmentKind,
+                branchPlan.BaseDirection);
         }
 
         return newSupportEntities;
@@ -295,6 +308,7 @@ public static class SupportGroupTransformRegenerator
                         projectionHit.Point,
                         projectionHit.Normal,
                         supportProfile,
+                        settings.BaseGenerationMode,
                         out placementPlan))
                 {
                     continue;
@@ -306,6 +320,7 @@ public static class SupportGroupTransformRegenerator
                 guidePoint,
                 supportProfile,
                 fallbackRadius,
+                settings.BaseGenerationMode,
                 out projectionHit,
                 out placementPlan))
             {
@@ -320,7 +335,9 @@ public static class SupportGroupTransformRegenerator
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
         }
 
         return newSupportEntities;
@@ -373,6 +390,7 @@ public static class SupportGroupTransformRegenerator
                         projectionHit.Point,
                         projectionHit.Normal,
                         supportProfile,
+                        settings.BaseGenerationMode,
                         out placementPlan))
                 {
                     continue;
@@ -384,6 +402,7 @@ public static class SupportGroupTransformRegenerator
                 guidePoint,
                 supportProfile,
                 fallbackRadius,
+                settings.BaseGenerationMode,
                 out projectionHit,
                 out placementPlan))
             {
@@ -398,7 +417,9 @@ public static class SupportGroupTransformRegenerator
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
         }
 
         return newSupportEntities;
@@ -428,7 +449,14 @@ public static class SupportGroupTransformRegenerator
             ContourSupportSample sample = contourResult.SupportSamples[i];
             SupportPlacementPlan placementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, newWorldTransform, sample.Position, sample.Normal, supportProfile, out placementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                newWorldTransform,
+                sample.Position,
+                sample.Normal,
+                supportProfile,
+                settings.BaseGenerationMode,
+                out placementPlan))
             {
                 continue;
             }
@@ -441,7 +469,9 @@ public static class SupportGroupTransformRegenerator
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
         }
 
         return newSupportEntities;
@@ -471,7 +501,14 @@ public static class SupportGroupTransformRegenerator
             AreaSupportSample sample = areaSupportResult.SupportSamples[i];
             SupportPlacementPlan placementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(mesh, newWorldTransform, sample.Position, sample.Normal, supportProfile, out placementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                newWorldTransform,
+                sample.Position,
+                sample.Normal,
+                supportProfile,
+                settings.BaseGenerationMode,
+                out placementPlan))
             {
                 continue;
             }
@@ -484,7 +521,9 @@ public static class SupportGroupTransformRegenerator
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
         }
 
         return newSupportEntities;
@@ -517,7 +556,8 @@ public static class SupportGroupTransformRegenerator
             NormalizePointToRingPlane(transformedFirstPoint, transformedThirdPoint),
             oldSettings.Spacing,
             oldSettings.SurfaceTargetMode,
-            oldSettings.SelectedFaces);
+            oldSettings.SelectedFaces,
+            oldSettings.BaseGenerationMode);
     }
 
     /// <summary>
@@ -543,7 +583,8 @@ public static class SupportGroupTransformRegenerator
             oldSettings.Spacing,
             oldSettings.PlaceSupportsAtBends,
             oldSettings.SurfaceTargetMode,
-            oldSettings.SelectedFaces);
+            oldSettings.SelectedFaces,
+            oldSettings.BaseGenerationMode);
     }
 
     /// <summary>
@@ -596,7 +637,8 @@ public static class SupportGroupTransformRegenerator
             oldSettings.CoplanarThresholdDegrees,
             oldSettings.Spacing,
             oldSettings.StartOffset,
-            oldSettings.FinalOffset);
+            oldSettings.FinalOffset,
+            oldSettings.BaseGenerationMode);
     }
 
     /// <summary>
@@ -662,11 +704,22 @@ public static class SupportGroupTransformRegenerator
         Vector3 headDirection,
         float branchLength,
         Vector3 branchDirection,
-        SupportProfile supportProfile)
+        SupportProfile supportProfile,
+        SupportBaseAttachmentKind baseAttachmentKind = SupportBaseAttachmentKind.BuildPlate,
+        Vector3? baseDirection = null)
     {
         try
         {
-            supportEntities.Add(new SupportEntity(supportLayerGroupId, tipPosition, basePosition, headDirection, branchLength, branchDirection, supportProfile));
+            supportEntities.Add(new SupportEntity(
+                supportLayerGroupId,
+                tipPosition,
+                basePosition,
+                headDirection,
+                branchLength,
+                branchDirection,
+                supportProfile,
+                baseAttachmentKind: baseAttachmentKind,
+                baseDirection: baseDirection));
         }
         catch (ArgumentException)
         {

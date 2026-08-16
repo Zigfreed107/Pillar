@@ -628,7 +628,8 @@ public partial class MainWindow
                 "Point Support Options",
                 "Point Support is active. Click the selected model to place individual supports.",
                 ToolSessionPanelSet.SupportPresets,
-                () => FinishManualSupportPlaceholderToolSession("Finished point support tool"));
+                () => FinishManualSupportPlaceholderToolSession("Finished point support tool"),
+                showSupportBaseGenerationOptions: true);
             return;
         }
 
@@ -966,6 +967,7 @@ public partial class MainWindow
             _lineSupportToolOptionsControl.SetLineSupportSpacing(settings.Spacing);
             _lineSupportToolOptionsControl.SetPlaceSupportsAtBends(settings.PlaceSupportsAtBends);
             _lineSupportToolOptionsControl.SetSurfaceTargetMode(settings.SurfaceTargetMode);
+            _lineSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditLineSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
@@ -992,6 +994,7 @@ public partial class MainWindow
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _ringSupportToolOptionsControl.SetRingSupportSpacing(settings.Spacing);
             _ringSupportToolOptionsControl.SetSurfaceTargetMode(settings.SurfaceTargetMode);
+            _ringSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
@@ -1017,6 +1020,7 @@ public partial class MainWindow
 
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _contourSupportToolOptionsControl.SetContourSupportSettings(settings);
+            _contourSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditContourSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Contour);
@@ -1042,6 +1046,7 @@ public partial class MainWindow
 
             SetActiveMode(WorkspaceModeId.ManualSupport);
             _areaSupportToolOptionsControl.SetAreaSupportSettings(settings);
+            _areaSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditAreaSupportGroup(supportLayerGroup);
             SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Area);
@@ -1324,6 +1329,22 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Explains why one or more selected supports could not be regenerated onto the build plate.
+    /// </summary>
+    private void DirectEditTool_BuildPlateRegenerationFailed(int failedSupportCount)
+    {
+        string message = failedSupportCount == 1
+            ? "The support could not be regenerated with a base on Z=0 because no route clears the model using its current support parameters."
+            : $"{failedSupportCount} supports could not be regenerated with bases on Z=0 because no routes clear the model using their current support parameters.";
+        MessageBox.Show(
+            this,
+            message,
+            "Unable to Move Base to Build Plate",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    /// <summary>
     /// Saves and applies the support head and branch angle highlight threshold.
     /// </summary>
     private void DirectEditToolOptionsControl_HighlightAngleChanged(object? sender, EventArgs e)
@@ -1333,6 +1354,26 @@ public partial class MainWindow
         Properties.Settings.Default.DirectEditHighlightAngleDegrees = _directEditToolOptionsControl.HighlightAngleDegrees;
         Properties.Settings.Default.Save();
         ApplyDirectEditAngleHighlight();
+    }
+
+    /// <summary>
+    /// Requests an undoable build-plate base conversion for the selected Direct Edit supports.
+    /// </summary>
+    private void DirectEditToolOptionsControl_MoveBaseToBuildPlateRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _directEditTool.ChangeSelectedBaseAttachment(SupportBaseAttachmentKind.BuildPlate);
+    }
+
+    /// <summary>
+    /// Requests an undoable model-base conversion for the selected Direct Edit supports.
+    /// </summary>
+    private void DirectEditToolOptionsControl_ConnectBaseToModelRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _directEditTool.ChangeSelectedBaseAttachment(SupportBaseAttachmentKind.Model);
     }
 
     /// <summary>
@@ -3135,10 +3176,16 @@ public partial class MainWindow
     /// <summary>
     /// Shows the reusable Finish-only options panel for tools that do not yet have dedicated settings.
     /// </summary>
-    private void ShowPlaceholderToolOptions(string title, string description, ToolSessionPanelSet panels, Action finishAction)
+    private void ShowPlaceholderToolOptions(
+        string title,
+        string description,
+        ToolSessionPanelSet panels,
+        Action finishAction,
+        bool showSupportBaseGenerationOptions = false)
     {
         _activePlaceholderToolFinishAction = finishAction ?? throw new ArgumentNullException(nameof(finishAction));
         _toolSessionOptionsControl.SetSessionText(title, description);
+        _toolSessionOptionsControl.SetSupportBaseGenerationOptionsVisible(showSupportBaseGenerationOptions);
         _toolSessionOverlayCoordinator.BeginSession(_toolSessionOptionsControl, panels);
         UpdateGeneratedSupportDeleteButtonState();
     }

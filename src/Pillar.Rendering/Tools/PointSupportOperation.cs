@@ -26,6 +26,7 @@ public sealed class PointSupportOperation : IToolOperation
     private readonly SceneManager _scene;
     private readonly CadCommandRunner _commandRunner;
     private readonly Func<Guid?> _getSelectedModelEntityId;
+    private readonly Func<SupportBaseGenerationMode> _getBaseGenerationMode;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<string> _statusReporter;
     private Guid? _activeSupportLayerGroupId;
@@ -39,6 +40,7 @@ public sealed class PointSupportOperation : IToolOperation
         SceneManager scene,
         CadCommandRunner commandRunner,
         Func<Guid?> getSelectedModelEntityId,
+        Func<SupportBaseGenerationMode> getBaseGenerationMode,
         Func<SupportProfile> createSupportProfile,
         Action<string> statusReporter)
     {
@@ -47,6 +49,7 @@ public sealed class PointSupportOperation : IToolOperation
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
         _getSelectedModelEntityId = getSelectedModelEntityId ?? throw new ArgumentNullException(nameof(getSelectedModelEntityId));
+        _getBaseGenerationMode = getBaseGenerationMode ?? throw new ArgumentNullException(nameof(getBaseGenerationMode));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
     }
@@ -93,7 +96,13 @@ public sealed class PointSupportOperation : IToolOperation
         Vector3 tipPosition = meshSurfaceHit.HitPosition;
         SupportPlacementPlan placementPlan;
 
-        if (!SupportPlacementPlanner.TryCreatePlacement(targetMesh, tipPosition, meshSurfaceHit.SurfaceNormal, supportProfile, out placementPlan))
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            targetMesh,
+            tipPosition,
+            meshSurfaceHit.SurfaceNormal,
+            supportProfile,
+            _getBaseGenerationMode(),
+            out placementPlan))
         {
             _statusReporter("Support skipped because it would pass through the model.");
             return;
@@ -109,7 +118,9 @@ public sealed class PointSupportOperation : IToolOperation
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
 
             _commandRunner.Execute(new AddSupportToNewGroupCommand(_document, resolvedSupportLayerGroup, firstSupportEntity));
             _activeSupportLayerGroupId = resolvedSupportLayerGroup.Id;
@@ -124,7 +135,9 @@ public sealed class PointSupportOperation : IToolOperation
                 placementPlan.HeadDirection,
                 placementPlan.BranchLength,
                 placementPlan.BranchDirection,
-                supportProfile);
+                supportProfile,
+                baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                baseDirection: placementPlan.BaseDirection);
 
             _commandRunner.Execute(new AddEntityCommand(_document, supportEntity, "Add Support"));
         }

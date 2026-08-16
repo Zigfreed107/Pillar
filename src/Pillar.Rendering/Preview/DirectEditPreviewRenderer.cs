@@ -25,7 +25,8 @@ public enum DirectEditGizmoHandleKind
     XAxis,
     YAxis,
     XYPlane,
-    ZAxis
+    ZAxis,
+    BaseZAxis
 }
 
 /// <summary>
@@ -37,9 +38,11 @@ public sealed class DirectEditPreviewRenderer
     private const float ArrowShaftDiameterFactor = 0.10f;
     private const float ArrowHeadRadiusFactor = 0.15f;
     private readonly GroupModel3D _supportPreviewRoot = new GroupModel3D();
+    private readonly TopMostGroup3D _topMostGizmoRoot;
     private readonly MeshGeometryModel3D _xArrow;
     private readonly MeshGeometryModel3D _yArrow;
     private readonly MeshGeometryModel3D _zArrow;
+    private readonly MeshGeometryModel3D _baseZArrow;
     private readonly MeshGeometryModel3D _xyPlane;
     private readonly ScaleTransform3D _xArrowScale;
     private readonly ScaleTransform3D _yArrowScale;
@@ -47,6 +50,8 @@ public sealed class DirectEditPreviewRenderer
     private readonly TranslateTransform3D _xArrowTranslation;
     private readonly TranslateTransform3D _yArrowTranslation;
     private readonly TranslateTransform3D _zArrowTranslation;
+    private readonly ScaleTransform3D _baseZArrowScale;
+    private readonly TranslateTransform3D _baseZArrowTranslation;
     private readonly Vector3Collection _planePositions;
     private readonly int _supportSides;
 
@@ -65,29 +70,46 @@ public sealed class DirectEditPreviewRenderer
         (_zArrow, _zArrowScale, _zArrowTranslation) = CreateArrow(
             new Color4(0.18f, 0.39f, 0.90f, 1.0f),
             Vector3.UnitZ);
+        (_baseZArrow, _baseZArrowScale, _baseZArrowTranslation) = CreateArrow(
+            new Color4(0.18f, 0.39f, 0.90f, 1.0f),
+            -Vector3.UnitZ);
         (_xyPlane, _planePositions) = CreatePlane();
+
+        _topMostGizmoRoot = new TopMostGroup3D
+        {
+            EnableTopMost = true
+        };
+        _topMostGizmoRoot.Children.Add(_xArrow);
+        _topMostGizmoRoot.Children.Add(_yArrow);
+        _topMostGizmoRoot.Children.Add(_zArrow);
+        _topMostGizmoRoot.Children.Add(_baseZArrow);
 
         sceneRoot.Children.Add(_supportPreviewRoot);
         sceneRoot.Children.Add(_xyPlane);
-        sceneRoot.Children.Add(_xArrow);
-        sceneRoot.Children.Add(_yArrow);
-        sceneRoot.Children.Add(_zArrow);
+        sceneRoot.Children.Add(_topMostGizmoRoot);
     }
 
     /// <summary>
     /// Positions and shows all solid handles for one selected shared stem.
     /// </summary>
-    public void ShowGizmo(Vector3 basePosition, Vector3 stemTop, float xyLength, float zLength)
+    public void ShowGizmo(
+        Vector3 basePosition,
+        Vector3 stemTop,
+        float xyLength,
+        float zLength,
+        bool showBaseZArrow)
     {
         float safeXyLength = IsPositiveFinite(xyLength) ? xyLength : 1.0f;
         float safeZLength = IsPositiveFinite(zLength) ? zLength : 1.0f;
         ApplyArrowTransform(_xArrowScale, _xArrowTranslation, basePosition, safeXyLength);
         ApplyArrowTransform(_yArrowScale, _yArrowTranslation, basePosition, safeXyLength);
         ApplyArrowTransform(_zArrowScale, _zArrowTranslation, stemTop, safeZLength);
+        ApplyArrowTransform(_baseZArrowScale, _baseZArrowTranslation, basePosition, safeZLength);
         UpdatePlane(basePosition, safeXyLength);
         _xyPlane.Geometry?.UpdateVertices();
         _xyPlane.Geometry?.UpdateBounds();
         SetGizmoVisibility(Visibility.Visible);
+        _baseZArrow.Visibility = showBaseZArrow ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -128,6 +150,12 @@ public sealed class DirectEditPreviewRenderer
         if (ReferenceEquals(element, _zArrow))
         {
             kind = DirectEditGizmoHandleKind.ZAxis;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _baseZArrow))
+        {
+            kind = DirectEditGizmoHandleKind.BaseZAxis;
             return true;
         }
 
@@ -254,13 +282,14 @@ public sealed class DirectEditPreviewRenderer
     }
 
     /// <summary>
-    /// Changes visibility for all four interactive handles.
+    /// Changes visibility for every interactive handle.
     /// </summary>
     private void SetGizmoVisibility(Visibility visibility)
     {
         _xArrow.Visibility = visibility;
         _yArrow.Visibility = visibility;
         _zArrow.Visibility = visibility;
+        _baseZArrow.Visibility = visibility;
         _xyPlane.Visibility = visibility;
     }
 

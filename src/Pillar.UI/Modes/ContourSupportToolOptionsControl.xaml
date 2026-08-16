@@ -5,11 +5,16 @@
 <UserControl x:Class="Pillar.UI.Modes.ContourSupportToolOptionsControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="clr-namespace:Pillar.UI.Controls">
+             xmlns:controls="clr-namespace:Pillar.UI.Controls"
+             xmlns:modes="clr-namespace:Pillar.UI.Modes">
     <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
                        Text="Contour Support Options" />
+
+            <modes:SupportBaseGenerationOptionsControl x:Name="SupportBaseGenerationOptions"
+                                                       Margin="0,14,0,0"
+                                                       GenerationModeChanged="SupportBaseGenerationOptions_Changed" />
 
             <Grid Margin="0,14,0,0">
                 <Grid.RowDefinitions>

@@ -53,6 +53,10 @@ public partial class SupportPresetEditorWindow : Window
     {
         BaseBottomRadiusInput.Value = profile.BaseBottomRadius;
         BaseHeightInput.Value = profile.BaseHeight;
+        ModelBaseHeightInput.Value = profile.ModelBaseHeight;
+        ModelBasePenetrationDepthInput.Value = profile.ModelBasePenetrationDepth;
+        ModelBaseBottomDiameterInput.Value = profile.ModelBaseBottomDiameter;
+        MaxModelBaseAngleFromVerticalInput.Value = profile.MaxModelBaseAngleFromVerticalDegrees;
         StemBottomDiameterInput.Value = profile.StemBottomDiameter;
         StemTopDiameterInput.Value = profile.StemTopDiameter;
         MaximumBranchLengthInput.Value = profile.MaximumBranchLength;
@@ -80,7 +84,11 @@ public partial class SupportPresetEditorWindow : Window
             (float)HeadHeightInput.Value,
             (float)HeadPenetrationDepthInput.Value,
             (float)HeadTopDiameterInput.Value,
-            (float)MaxHeadAngleFromVerticalInput.Value);
+            (float)MaxHeadAngleFromVerticalInput.Value,
+            (float)ModelBaseHeightInput.Value,
+            (float)ModelBasePenetrationDepthInput.Value,
+            (float)ModelBaseBottomDiameterInput.Value,
+            (float)MaxModelBaseAngleFromVerticalInput.Value);
     }
 
     /// <summary>

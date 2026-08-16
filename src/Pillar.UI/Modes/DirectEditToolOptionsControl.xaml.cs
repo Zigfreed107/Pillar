@@ -25,6 +25,16 @@ public partial class DirectEditToolOptionsControl : UserControl
     public event EventHandler? HighlightAngleChanged;
 
     /// <summary>
+    /// Raised when the user asks to move selected support bases to the build plate.
+    /// </summary>
+    public event EventHandler? MoveBaseToBuildPlateRequested;
+
+    /// <summary>
+    /// Raised when the user asks to connect selected support bases to the model.
+    /// </summary>
+    public event EventHandler? ConnectBaseToModelRequested;
+
+    /// <summary>
     /// Raised when the user closes the Direct Edit session.
     /// </summary>
     public event EventHandler? CloseRequested;
@@ -46,6 +56,26 @@ public partial class DirectEditToolOptionsControl : UserControl
         _ = sender;
         _ = e;
         HighlightAngleChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Publishes the selected-support build-plate conversion request.
+    /// </summary>
+    private void MoveBaseToBuildPlateButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        MoveBaseToBuildPlateRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Publishes the selected-support model-connection request.
+    /// </summary>
+    private void ConnectBaseToModelButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        ConnectBaseToModelRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

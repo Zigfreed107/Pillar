@@ -100,6 +100,8 @@ public static class SupportOutputReferenceReconciler
         private readonly string _name;
         private readonly Vector3 _tipPosition;
         private readonly Vector3 _basePosition;
+        private readonly SupportBaseAttachmentKind _baseAttachmentKind;
+        private readonly Vector3 _baseDirection;
         private readonly Vector3 _headDirection;
         private readonly float _branchLength;
         private readonly Vector3 _branchDirection;
@@ -107,6 +109,10 @@ public static class SupportOutputReferenceReconciler
         private readonly float _styleDiameter;
         private readonly float _baseBottomRadius;
         private readonly float _baseHeight;
+        private readonly float _modelBaseHeight;
+        private readonly float _modelBasePenetrationDepth;
+        private readonly float _modelBaseBottomDiameter;
+        private readonly float _maxModelBaseAngleFromVerticalDegrees;
         private readonly float _stemBottomDiameter;
         private readonly float _stemTopDiameter;
         private readonly float _maximumBranchLength;
@@ -127,6 +133,8 @@ public static class SupportOutputReferenceReconciler
             _name = support.Name;
             _tipPosition = support.TipPosition;
             _basePosition = support.BasePosition;
+            _baseAttachmentKind = support.BaseAttachmentKind;
+            _baseDirection = support.BaseDirection;
             _headDirection = support.HeadDirection;
             _branchLength = support.BranchLength;
             _branchDirection = support.BranchDirection;
@@ -136,6 +144,10 @@ public static class SupportOutputReferenceReconciler
                 : ((ButtressSupportStyle)support.Style).BranchDiameter;
             _baseBottomRadius = profile.BaseBottomRadius;
             _baseHeight = profile.BaseHeight;
+            _modelBaseHeight = profile.ModelBaseHeight;
+            _modelBasePenetrationDepth = profile.ModelBasePenetrationDepth;
+            _modelBaseBottomDiameter = profile.ModelBaseBottomDiameter;
+            _maxModelBaseAngleFromVerticalDegrees = profile.MaxModelBaseAngleFromVerticalDegrees;
             _stemBottomDiameter = profile.StemBottomDiameter;
             _stemTopDiameter = profile.StemTopDiameter;
             _maximumBranchLength = profile.MaximumBranchLength;
@@ -156,6 +168,8 @@ public static class SupportOutputReferenceReconciler
                 && string.Equals(_name, other._name, StringComparison.Ordinal)
                 && _tipPosition == other._tipPosition
                 && _basePosition == other._basePosition
+                && _baseAttachmentKind == other._baseAttachmentKind
+                && _baseDirection == other._baseDirection
                 && _headDirection == other._headDirection
                 && _branchLength == other._branchLength
                 && _branchDirection == other._branchDirection
@@ -163,6 +177,10 @@ public static class SupportOutputReferenceReconciler
                 && _styleDiameter == other._styleDiameter
                 && _baseBottomRadius == other._baseBottomRadius
                 && _baseHeight == other._baseHeight
+                && _modelBaseHeight == other._modelBaseHeight
+                && _modelBasePenetrationDepth == other._modelBasePenetrationDepth
+                && _modelBaseBottomDiameter == other._modelBaseBottomDiameter
+                && _maxModelBaseAngleFromVerticalDegrees == other._maxModelBaseAngleFromVerticalDegrees
                 && _stemBottomDiameter == other._stemBottomDiameter
                 && _stemTopDiameter == other._stemTopDiameter
                 && _maximumBranchLength == other._maximumBranchLength
@@ -192,6 +210,8 @@ public static class SupportOutputReferenceReconciler
             hash.Add(_name, StringComparer.Ordinal);
             hash.Add(_tipPosition);
             hash.Add(_basePosition);
+            hash.Add(_baseAttachmentKind);
+            hash.Add(_baseDirection);
             hash.Add(_headDirection);
             hash.Add(_branchLength);
             hash.Add(_branchDirection);
@@ -199,6 +219,10 @@ public static class SupportOutputReferenceReconciler
             hash.Add(_styleDiameter);
             hash.Add(_baseBottomRadius);
             hash.Add(_baseHeight);
+            hash.Add(_modelBaseHeight);
+            hash.Add(_modelBasePenetrationDepth);
+            hash.Add(_modelBaseBottomDiameter);
+            hash.Add(_maxModelBaseAngleFromVerticalDegrees);
             hash.Add(_stemBottomDiameter);
             hash.Add(_stemTopDiameter);
             hash.Add(_maximumBranchLength);

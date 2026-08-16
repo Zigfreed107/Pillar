@@ -15,6 +15,12 @@
                        Style="{StaticResource ModeOverlayBodyTextStyle}"
                        TextWrapping="Wrap"
                        Text="Click or Ctrl-click support stems, or drag empty space for normal window/crossing selection. Drag the gizmo shown on the first selection to edit them together." />
+            <Button Margin="0,14,0,0"
+                    Content="Move base to build plate"
+                    Click="MoveBaseToBuildPlateButton_Click" />
+            <Button Margin="0,6,0,0"
+                    Content="Connect base to model"
+                    Click="ConnectBaseToModelButton_Click" />
             <TextBlock Margin="0,12,0,0"
                        Style="{StaticResource ModeOverlayLabelTextStyle}"
                        Text="Highlight angles less than" />

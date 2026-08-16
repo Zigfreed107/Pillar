@@ -2,6 +2,7 @@
 // Stores the editable parametric definition used to regenerate a Contour Support group.
 using System;
 using System.Numerics;
+using Pillar.Core.Supports;
 
 namespace Pillar.Core.Layers;
 
@@ -14,6 +15,7 @@ public sealed class ContourSupportSettings
     public const float DefaultCoplanarThresholdDegrees = 15.0f;
     public const float DefaultStartOffset = 0.0f;
     public const float DefaultFinalOffset = 0.0f;
+    public const SupportBaseGenerationMode DefaultBaseGenerationMode = SupportBaseGenerationMode.BuildPlateOnly;
 
     /// <summary>
     /// Creates validated Contour Support generator settings.
@@ -25,7 +27,8 @@ public sealed class ContourSupportSettings
         float coplanarThresholdDegrees,
         float spacing,
         float startOffset,
-        float finalOffset)
+        float finalOffset,
+        SupportBaseGenerationMode baseGenerationMode = DefaultBaseGenerationMode)
     {
         ValidatePoint(seedPoint, nameof(seedPoint));
 
@@ -46,6 +49,7 @@ public sealed class ContourSupportSettings
         Spacing = ValidateSpacing(spacing);
         StartOffset = ValidateOffset(startOffset, nameof(startOffset));
         FinalOffset = ValidateOffset(finalOffset, nameof(finalOffset));
+        BaseGenerationMode = ValidateBaseGenerationMode(baseGenerationMode);
     }
 
     /// <summary>
@@ -84,6 +88,11 @@ public sealed class ContourSupportSettings
     public float FinalOffset { get; }
 
     /// <summary>
+    /// Gets where support bases should generate and the requested fallback order.
+    /// </summary>
+    public SupportBaseGenerationMode BaseGenerationMode { get; }
+
+    /// <summary>
     /// Creates a defensive copy for ownership boundaries and undo snapshots.
     /// </summary>
     public ContourSupportSettings Clone()
@@ -95,7 +104,21 @@ public sealed class ContourSupportSettings
             CoplanarThresholdDegrees,
             Spacing,
             StartOffset,
-            FinalOffset);
+            FinalOffset,
+            BaseGenerationMode);
+    }
+
+    /// <summary>
+    /// Rejects unknown support-base generation policies before they enter document state.
+    /// </summary>
+    private static SupportBaseGenerationMode ValidateBaseGenerationMode(SupportBaseGenerationMode baseGenerationMode)
+    {
+        if (!Enum.IsDefined(baseGenerationMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseGenerationMode), "Support base generation mode is not supported.");
+        }
+
+        return baseGenerationMode;
     }
 
     /// <summary>

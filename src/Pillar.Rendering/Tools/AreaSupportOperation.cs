@@ -57,6 +57,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
     private readonly Func<int> _getAdditionalOffsetCount;
     private readonly Func<float> _getOffsetSpacing;
     private readonly Func<bool> _getShowSupportSpacing;
+    private readonly Func<SupportBaseGenerationMode> _getBaseGenerationMode;
     private readonly Func<SupportProfile> _createSupportProfile;
     private readonly Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> _faceSelectionSessionStarter;
     private readonly Action<string> _statusReporter;
@@ -88,6 +89,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         Func<int> getAdditionalOffsetCount,
         Func<float> getOffsetSpacing,
         Func<bool> getShowSupportSpacing,
+        Func<SupportBaseGenerationMode> getBaseGenerationMode,
         Func<SupportProfile> createSupportProfile,
         Action<IReadOnlyCollection<FaceSelectionKey>, Action<IReadOnlyCollection<FaceSelectionKey>>> faceSelectionSessionStarter,
         Action<string> statusReporter,
@@ -107,6 +109,7 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
         _getAdditionalOffsetCount = getAdditionalOffsetCount ?? throw new ArgumentNullException(nameof(getAdditionalOffsetCount));
         _getOffsetSpacing = getOffsetSpacing ?? throw new ArgumentNullException(nameof(getOffsetSpacing));
         _getShowSupportSpacing = getShowSupportSpacing ?? throw new ArgumentNullException(nameof(getShowSupportSpacing));
+        _getBaseGenerationMode = getBaseGenerationMode ?? throw new ArgumentNullException(nameof(getBaseGenerationMode));
         _createSupportProfile = createSupportProfile ?? throw new ArgumentNullException(nameof(createSupportProfile));
         _faceSelectionSessionStarter = faceSelectionSessionStarter ?? throw new ArgumentNullException(nameof(faceSelectionSessionStarter));
         _statusReporter = statusReporter ?? throw new ArgumentNullException(nameof(statusReporter));
@@ -444,7 +447,13 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
             AreaSupportSample sample = areaSupportResult.SupportSamples[i];
             SupportPlacementPlan placementPlan;
 
-            if (!SupportPlacementPlanner.TryCreatePlacement(selectedMesh, sample.Position, sample.Normal, supportProfile, out placementPlan))
+            if (!SupportPlacementPlanner.TryCreatePlacement(
+                selectedMesh,
+                sample.Position,
+                sample.Normal,
+                supportProfile,
+                settings.BaseGenerationMode,
+                out placementPlan))
             {
                 invalidSupportCount++;
                 continue;
@@ -459,7 +468,9 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
                     placementPlan.HeadDirection,
                     placementPlan.BranchLength,
                     placementPlan.BranchDirection,
-                    supportProfile));
+                    supportProfile,
+                    baseAttachmentKind: placementPlan.BaseAttachmentKind,
+                    baseDirection: placementPlan.BaseDirection));
             }
             catch (ArgumentException)
             {
@@ -492,7 +503,8 @@ public sealed class AreaSupportOperation : IToolOperation, IEditableSupportGroup
             _getMinimumThinRegionThickness(),
             _getFillMode(),
             _getAdditionalOffsetCount(),
-            _getOffsetSpacing());
+            _getOffsetSpacing(),
+            _getBaseGenerationMode());
     }
 
     /// <summary>

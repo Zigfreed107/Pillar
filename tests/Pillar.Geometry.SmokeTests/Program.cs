@@ -42,6 +42,14 @@ public static class Program
         RunTest(failures, "Near-vertical positive-Z side face remains supportable", ValidateNearVerticalPositiveZSideFaceRemainsSupportable);
         RunTest(failures, "Upward support contact is rejected", ValidateUpwardSupportContactIsRejected);
         RunTest(failures, "Downward overhang support placement remains valid", ValidateDownwardOverhangSupportPlacementRemainsValid);
+        RunTest(failures, "Model-only support starts on an upward model face", ValidateModelOnlySupportStartsOnUpwardFace);
+        RunTest(failures, "Build-plate-only support rejects an obstructed route", ValidateBuildPlateOnlyRejectsObstructedRoute);
+        RunTest(failures, "Build-plate-first support falls back to the model", ValidateBuildPlateFirstFallsBackToModel);
+        RunTest(failures, "Model-first support falls back to the build plate", ValidateModelFirstFallsBackToBuildPlate);
+        RunTest(failures, "Support base fallback modes honor their first choice", ValidateSupportBaseFallbackModesHonorFirstChoice);
+        RunTest(failures, "Model base direction clamps to profile angle", ValidateModelBaseDirectionClampsToProfileAngle);
+        RunTest(failures, "Model base follows an inclined upward face", ValidateModelBaseFollowsInclinedUpwardFace);
+        RunTest(failures, "Model-connected support mesh is closed", ValidateModelConnectedSupportMesh);
         RunTest(failures, "Angled head support mesh is closed", ValidateAngledHeadSupportMesh);
         RunTest(failures, "Joint ball normals point outward", ValidateJointBallNormalsPointOutward);
         RunTest(failures, "Default branch setting creates no branch", ValidateDefaultBranchSettingCreatesNoBranch);
@@ -59,6 +67,11 @@ public static class Program
         RunTest(failures, "Individual branched supports remain cluster eligible", ValidateIndividualBranchedSupportsRemainClusterEligible);
         RunTest(failures, "Cluster modifier redirects nearby supports", ValidateClusterModifierRedirectsNearbySupports);
         RunTest(failures, "Direct Edit preserves contact and rebuilds the branch", ValidateDirectEditPreservesContactAndRebuildsBranch);
+        RunTest(failures, "Direct Edit aligns angled model bases with the stem", ValidateDirectEditAlignsAngledModelBaseWithStem);
+        RunTest(failures, "Direct Edit drag keeps a model base contact fixed", ValidateDirectEditDragKeepsModelBaseContactFixed);
+        RunTest(failures, "Direct Edit lower Z drag changes model-base length", ValidateDirectEditLowerZDragChangesModelBaseLength);
+        RunTest(failures, "Direct Edit connects a selected base to the model", ValidateDirectEditConnectsBaseToModel);
+        RunTest(failures, "Direct Edit moves a selected base to the build plate", ValidateDirectEditMovesBaseToBuildPlate);
         RunTest(failures, "Direct Edit source restoration reverses cumulative edits", ValidateDirectEditSourceRestorationReversesCumulativeEdits);
         RunTest(failures, "Direct Edit multi-selection preserves relative stem positions", ValidateDirectEditMultiSelectionPreservesRelativePositions);
         RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
@@ -336,6 +349,262 @@ public static class Program
         }
 
         ValidateVectorNear(Vector3.UnitZ, placementPlan.HeadDirection, 0.0001f, "Expected the overhang head direction to be vertical.");
+    }
+
+    /// <summary>
+    /// Validates that model-only placement uses the highest upward-facing surface below the stem.
+    /// </summary>
+    private static void ValidateModelOnlySupportStartsOnUpwardFace()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateModelBaseOpportunityMesh();
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            mesh,
+            new Vector3(0.0f, 0.0f, 10.0f),
+            -Vector3.UnitZ,
+            profile,
+            SupportBaseGenerationMode.ModelOnly,
+            out placementPlan))
+        {
+            throw new InvalidOperationException("Expected model-only placement to find the upward-facing platform.");
+        }
+
+        if (placementPlan.BaseAttachmentKind != SupportBaseAttachmentKind.Model)
+        {
+            throw new InvalidOperationException("Expected model-only placement to produce a model-attached base.");
+        }
+
+        ValidateVectorNear(new Vector3(0.0f, 0.0f, 3.0f), placementPlan.BasePosition, 0.0001f, "Expected the base contact on the upward platform.");
+        ValidateVectorNear(Vector3.UnitZ, placementPlan.BaseDirection, 0.0001f, "Expected a horizontal platform to produce a vertical base tip.");
+    }
+
+    /// <summary>
+    /// Validates that the legacy build-plate-only policy does not cross a blocking model surface.
+    /// </summary>
+    private static void ValidateBuildPlateOnlyRejectsObstructedRoute()
+    {
+        SupportPlacementPlan placementPlan;
+
+        if (SupportPlacementPlanner.TryCreatePlacement(
+            CreateModelBaseOpportunityMesh(),
+            new Vector3(0.0f, 0.0f, 10.0f),
+            -Vector3.UnitZ,
+            SupportDefaults.CreateProfile(),
+            SupportBaseGenerationMode.BuildPlateOnly,
+            out placementPlan))
+        {
+            throw new InvalidOperationException("Expected the platform to prevent a support from reaching the build plate.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that build-plate-first placement uses a model base only after the grounded route fails.
+    /// </summary>
+    private static void ValidateBuildPlateFirstFallsBackToModel()
+    {
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            CreateModelBaseOpportunityMesh(),
+            new Vector3(0.0f, 0.0f, 10.0f),
+            -Vector3.UnitZ,
+            SupportDefaults.CreateProfile(),
+            SupportBaseGenerationMode.BuildPlateThenModel,
+            out placementPlan)
+            || placementPlan.BaseAttachmentKind != SupportBaseAttachmentKind.Model)
+        {
+            throw new InvalidOperationException("Expected build-plate-first placement to fall back to the upward model face.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that model-first placement falls back to the plate when no upward model base face exists.
+    /// </summary>
+    private static void ValidateModelFirstFallsBackToBuildPlate()
+    {
+        MeshEntity mesh = CreateSingleTriangleMesh(
+            new Vector3(-5.0f, -5.0f, 10.0f),
+            new Vector3(-5.0f, 5.0f, 10.0f),
+            new Vector3(5.0f, -5.0f, 10.0f),
+            Transform3DData.Identity);
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            mesh,
+            Vector3.UnitZ * 10.0f,
+            -Vector3.UnitZ,
+            SupportDefaults.CreateProfile(),
+            SupportBaseGenerationMode.ModelThenBuildPlate,
+            out placementPlan)
+            || placementPlan.BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate)
+        {
+            throw new InvalidOperationException("Expected model-first placement to fall back to the clear build plate.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that steep upward surface normals cannot tilt a model base beyond its preset limit.
+    /// </summary>
+    private static void ValidateModelBaseDirectionClampsToProfileAngle()
+    {
+        SupportProfile profile = new SupportProfile(
+            SupportDefaults.DefaultBaseBottomRadius,
+            SupportDefaults.DefaultBaseHeight,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            SupportDefaults.DefaultMaximumBranchLength,
+            SupportDefaults.DefaultModelClearance,
+            SupportDefaults.DefaultBranchAngleFromVerticalDegrees,
+            SupportDefaults.DefaultHeadHeight,
+            SupportDefaults.DefaultHeadPenetrationDepth,
+            SupportDefaults.DefaultHeadTopDiameter,
+            SupportDefaults.DefaultMaxHeadAngleFromVerticalDegrees,
+            SupportDefaults.DefaultModelBaseHeight,
+            SupportDefaults.DefaultModelBasePenetrationDepth,
+            SupportDefaults.DefaultModelBaseBottomDiameter,
+            30.0f);
+        Vector3 baseDirection;
+
+        if (!SupportBaseDirectionCalculator.TryCreateDirectionFromSurfaceNormal(
+            Vector3.Normalize(new Vector3(1.0f, 0.0f, 0.1f)),
+            profile,
+            out baseDirection))
+        {
+            throw new InvalidOperationException("Expected a steep upward-facing normal to remain eligible.");
+        }
+
+        float angleDegrees = MathF.Acos(Vector3.Dot(baseDirection, Vector3.UnitZ)) * (180.0f / MathF.PI);
+
+        if (MathF.Abs(angleDegrees - 30.0f) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected model base direction to clamp to 30 degrees from vertical.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that each fallback policy keeps its preferred attachment when both routes are valid.
+    /// </summary>
+    private static void ValidateSupportBaseFallbackModesHonorFirstChoice()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateDualBaseOpportunityMesh(profile);
+        SupportPlacementPlan buildPlateFirstPlan;
+        SupportPlacementPlan modelFirstPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            mesh,
+            Vector3.UnitZ * 10.0f,
+            -Vector3.UnitZ,
+            profile,
+            SupportBaseGenerationMode.BuildPlateThenModel,
+            out buildPlateFirstPlan)
+            || !SupportPlacementPlanner.TryCreatePlacement(
+                mesh,
+                Vector3.UnitZ * 10.0f,
+                -Vector3.UnitZ,
+                profile,
+                SupportBaseGenerationMode.ModelThenBuildPlate,
+                out modelFirstPlan))
+        {
+            throw new InvalidOperationException("Expected both fallback policies to find a valid support route.");
+        }
+
+        if (buildPlateFirstPlan.BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate
+            || modelFirstPlan.BaseAttachmentKind != SupportBaseAttachmentKind.Model)
+        {
+            throw new InvalidOperationException("Expected each fallback policy to retain its first valid attachment choice.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that placement follows an eligible inclined face normal and offsets the contact beneath the vertical stem.
+    /// </summary>
+    private static void ValidateModelBaseFollowsInclinedUpwardFace()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        Vector3 expectedDirection = Vector3.Normalize(new Vector3(1.0f, 0.0f, 1.0f));
+        Vector3 expectedContact = new Vector3(
+            -expectedDirection.X * profile.ModelBaseHeight,
+            0.0f,
+            3.0f);
+        Vector3 tangent = Vector3.Normalize(new Vector3(1.0f, 0.0f, -1.0f));
+        Vector3 lateral = Vector3.UnitY;
+        MeshEntity mesh = new MeshEntity(
+            "Inclined model-base mesh",
+            new List<Vector3>
+            {
+                expectedContact - (tangent * 3.0f) - (lateral * 3.0f),
+                expectedContact + (tangent * 3.0f) - (lateral * 3.0f),
+                expectedContact - (tangent * 3.0f) + (lateral * 3.0f),
+                new Vector3(-5.0f, -5.0f, 10.0f),
+                new Vector3(-5.0f, 5.0f, 10.0f),
+                new Vector3(5.0f, -5.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0, 1, 2,
+                3, 4, 5
+            },
+            userTransform: Transform3DData.Identity);
+        SupportPlacementPlan placementPlan;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            mesh,
+            Vector3.UnitZ * 10.0f,
+            -Vector3.UnitZ,
+            profile,
+            SupportBaseGenerationMode.ModelOnly,
+            out placementPlan))
+        {
+            throw new InvalidOperationException("Expected model-only placement to use the inclined upward face.");
+        }
+
+        ValidateVectorNear(expectedDirection, placementPlan.BaseDirection, 0.0001f, "Expected the base tip to follow the inclined face normal.");
+        ValidateVectorNear(expectedContact, placementPlan.BasePosition, 0.0001f, "Expected the inclined contact to offset beneath the vertical stem.");
+        Vector3 baseJoint = placementPlan.BasePosition + (placementPlan.BaseDirection * profile.ModelBaseHeight);
+
+        if (MathF.Abs(baseJoint.X) > 0.0001f || MathF.Abs(baseJoint.Y) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the inclined base joint to meet the vertical stem axis.");
+        }
+    }
+
+    /// <summary>
+    /// Validates that model base penetration, tip, joint, stem, and head produce closed printable components.
+    /// </summary>
+    private static void ValidateModelConnectedSupportMesh()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        SupportEntity support = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 10.0f),
+            new Vector3(0.0f, 0.0f, 3.0f),
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            SupportStyle.Individual,
+            SupportBaseAttachmentKind.Model,
+            Vector3.UnitZ);
+        SupportMeshData meshData = SupportMeshBuilder.Build(support, 16);
+
+        ValidateClosedMesh(meshData);
+
+        float minimumZ = float.MaxValue;
+
+        for (int i = 0; i < meshData.Positions.Count; i++)
+        {
+            minimumZ = MathF.Min(minimumZ, GetPosition(meshData, i).Z);
+        }
+
+        float expectedMinimumZ = support.BasePosition.Z - profile.ModelBasePenetrationDepth;
+
+        if (MathF.Abs(minimumZ - expectedMinimumZ) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected model base geometry to end at its configured penetration depth.");
+        }
     }
 
     /// <summary>
@@ -2807,7 +3076,8 @@ public static class Program
             10.0f,
             true,
             LineSupportSurfaceTargetMode.SelectedFacesOnly,
-            new List<FaceSelectionKey> { selectedFace }));
+            new List<FaceSelectionKey> { selectedFace },
+            SupportBaseGenerationMode.ModelThenBuildPlate));
 
         document.AddEntity(mesh);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -2824,6 +3094,7 @@ public static class Program
 
         if (regeneratedSettings == null
             || regeneratedSettings.SurfaceTargetMode != LineSupportSurfaceTargetMode.SelectedFacesOnly
+            || regeneratedSettings.BaseGenerationMode != SupportBaseGenerationMode.ModelThenBuildPlate
             || regeneratedSettings.SelectedFaces.Count != 1
             || !regeneratedSettings.SelectedFaces[0].Equals(selectedFace))
         {
@@ -2859,7 +3130,8 @@ public static class Program
             new Vector3(0.15f, 0.30f, 13.0f),
             1.0f,
             RingSupportSurfaceTargetMode.SelectedFacesOnly,
-            new List<FaceSelectionKey> { selectedFace }));
+            new List<FaceSelectionKey> { selectedFace },
+            SupportBaseGenerationMode.ModelThenBuildPlate));
 
         document.AddEntity(mesh);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -2876,6 +3148,7 @@ public static class Program
 
         if (regeneratedSettings == null
             || regeneratedSettings.SurfaceTargetMode != RingSupportSurfaceTargetMode.SelectedFacesOnly
+            || regeneratedSettings.BaseGenerationMode != SupportBaseGenerationMode.ModelThenBuildPlate
             || regeneratedSettings.SelectedFaces.Count != 1
             || !regeneratedSettings.SelectedFaces[0].Equals(selectedFace))
         {
@@ -4165,7 +4438,8 @@ public static class Program
             new Vector3(1.0f, 2.0f, 4.0f),
             2.5f,
             RingSupportSurfaceTargetMode.SelectedFacesOnly,
-            new List<FaceSelectionKey> { selectedFace });
+            new List<FaceSelectionKey> { selectedFace },
+            SupportBaseGenerationMode.ModelThenBuildPlate);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Ring Supports");
         supportLayerGroup.SetRingSupportSettings(settings);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -4187,6 +4461,7 @@ public static class Program
 
             if (loadedSettings == null
                 || loadedSettings.SurfaceTargetMode != RingSupportSurfaceTargetMode.SelectedFacesOnly
+                || loadedSettings.BaseGenerationMode != SupportBaseGenerationMode.ModelThenBuildPlate
                 || loadedSettings.SelectedFaces.Count != 1
                 || !loadedSettings.SelectedFaces[0].Equals(selectedFace))
             {
@@ -4237,7 +4512,8 @@ public static class Program
             2.5f,
             false,
             LineSupportSurfaceTargetMode.SelectedFacesOnly,
-            new List<FaceSelectionKey> { selectedFace }));
+            new List<FaceSelectionKey> { selectedFace },
+            SupportBaseGenerationMode.BuildPlateThenModel));
         document.AddSupportLayerGroup(supportLayerGroup);
 
         GphDocumentSerializer serializer = new GphDocumentSerializer();
@@ -4283,6 +4559,11 @@ public static class Program
                 throw new InvalidOperationException("Expected the loaded Line Support settings to preserve surface targeting behavior.");
             }
 
+            if (loadedSettings.BaseGenerationMode != SupportBaseGenerationMode.BuildPlateThenModel)
+            {
+                throw new InvalidOperationException("Expected the loaded Line Support settings to preserve base generation behavior.");
+            }
+
             if (loadedSettings.SelectedFaces.Count != 1 || !loadedSettings.SelectedFaces[0].Equals(selectedFace))
             {
                 throw new InvalidOperationException("Expected the loaded Line Support settings to preserve selected faces.");
@@ -4317,7 +4598,8 @@ public static class Program
             15.0f,
             2.5f,
             0.5f,
-            0.75f);
+            0.75f,
+            SupportBaseGenerationMode.ModelOnly);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Contour Supports");
         supportLayerGroup.SetContourSupportSettings(settings);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -4351,7 +4633,8 @@ public static class Program
                 || MathF.Abs(loadedSettings.CoplanarThresholdDegrees - settings.CoplanarThresholdDegrees) > 0.0001f
                 || MathF.Abs(loadedSettings.Spacing - settings.Spacing) > 0.0001f
                 || MathF.Abs(loadedSettings.StartOffset - settings.StartOffset) > 0.0001f
-                || MathF.Abs(loadedSettings.FinalOffset - settings.FinalOffset) > 0.0001f)
+                || MathF.Abs(loadedSettings.FinalOffset - settings.FinalOffset) > 0.0001f
+                || loadedSettings.BaseGenerationMode != SupportBaseGenerationMode.ModelOnly)
             {
                 throw new InvalidOperationException("Expected loaded Contour Support settings to preserve all numeric fields.");
             }
@@ -4382,7 +4665,8 @@ public static class Program
             1.75f,
             AreaSupportFillMode.BoundaryOffsets,
             3,
-            2.25f);
+            2.25f,
+            SupportBaseGenerationMode.BuildPlateThenModel);
         SupportLayerGroup supportLayerGroup = new SupportLayerGroup(mesh.Id, "Area Supports");
         supportLayerGroup.SetAreaSupportSettings(settings);
         document.AddSupportLayerGroup(supportLayerGroup);
@@ -4432,6 +4716,11 @@ public static class Program
             if (MathF.Abs(loadedSettings.OffsetSpacing - 2.25f) > 0.0001f)
             {
                 throw new InvalidOperationException("Expected Area Support offset spacing to survive save and load.");
+            }
+
+            if (loadedSettings.BaseGenerationMode != SupportBaseGenerationMode.BuildPlateThenModel)
+            {
+                throw new InvalidOperationException("Expected Area Support base generation behavior to survive save and load.");
             }
         }
         finally
@@ -4555,8 +4844,14 @@ public static class Program
         SupportDirectEditSettings settings = new SupportDirectEditSettings(
             new Vector3(2.0f, 3.0f, 0.0f),
             originalStemTopZ - 1.0f,
+            SupportBaseAttachmentKind.Model,
+            Vector3.Normalize(new Vector3(1.0f, 0.0f, 1.0f)),
             support.BasePosition,
-            originalStemTopZ);
+            originalStemTopZ,
+            SupportBaseAttachmentKind.BuildPlate,
+            Vector3.UnitZ,
+            2.25f,
+            SupportDefaults.DefaultModelBaseHeight);
         SupportModifierDefinition modifier = new SupportModifierDefinition(
             Guid.NewGuid(),
             SupportModifierKind.DirectEdit,
@@ -4595,6 +4890,32 @@ public static class Program
                 || MathF.Abs(settings.OriginalStemTopZ - loadedSettings.OriginalStemTopZ) > 0.0001f)
             {
                 throw new InvalidOperationException("Direct Edit stem heights did not survive persistence.");
+            }
+
+            if (loadedSettings.BaseAttachmentKind != SupportBaseAttachmentKind.Model
+                || loadedSettings.OriginalBaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate
+                || !loadedSettings.BaseDirection.HasValue
+                || !loadedSettings.OriginalBaseDirection.HasValue)
+            {
+                throw new InvalidOperationException("Direct Edit base attachments did not survive persistence.");
+            }
+
+            ValidateVectorNear(
+                settings.BaseDirection!.Value,
+                loadedSettings.BaseDirection.Value,
+                0.0001f,
+                "The edited Direct Edit base direction did not survive persistence.");
+            ValidateVectorNear(
+                settings.OriginalBaseDirection!.Value,
+                loadedSettings.OriginalBaseDirection.Value,
+                0.0001f,
+                "The original Direct Edit base direction did not survive persistence.");
+
+            if (MathF.Abs((loadedSettings.ModelBaseLength ?? 0.0f) - 2.25f) > 0.0001f
+                || MathF.Abs((loadedSettings.OriginalModelBaseLength ?? 0.0f)
+                    - SupportDefaults.DefaultModelBaseHeight) > 0.0001f)
+            {
+                throw new InvalidOperationException("Direct Edit model-base lengths did not survive persistence.");
             }
         }
         finally
@@ -4710,6 +5031,22 @@ public static class Program
             1.25f,
             0.85f,
             0.45f);
+        SupportProfile profile = new SupportProfile(
+            SupportDefaults.DefaultBaseBottomRadius,
+            SupportDefaults.DefaultBaseHeight,
+            SupportDefaults.DefaultStemBottomDiameter,
+            SupportDefaults.DefaultStemTopDiameter,
+            SupportDefaults.DefaultMaximumBranchLength,
+            SupportDefaults.DefaultModelClearance,
+            SupportDefaults.DefaultBranchAngleFromVerticalDegrees,
+            SupportDefaults.DefaultHeadHeight,
+            SupportDefaults.DefaultHeadPenetrationDepth,
+            SupportDefaults.DefaultHeadTopDiameter,
+            SupportDefaults.DefaultMaxHeadAngleFromVerticalDegrees,
+            1.7f,
+            0.4f,
+            0.45f,
+            55.0f);
         SupportEntity clusteredSupport = new SupportEntity(
             supportLayerGroup.Id,
             new Vector3(2.0f, 0.0f, 6.0f),
@@ -4717,8 +5054,10 @@ public static class Program
             Vector3.UnitZ,
             2.0f,
             Vector3.UnitX,
-            SupportDefaults.CreateProfile(),
-            new ClusteredSupportStyle(1.25f, 0.85f, 0.45f));
+            profile,
+            new ClusteredSupportStyle(1.25f, 0.85f, 0.45f),
+            SupportBaseAttachmentKind.Model,
+            Vector3.Normalize(new Vector3(1.0f, 0.0f, 1.0f)));
         supportLayerGroup.SetSupportModifiers(new List<SupportModifierDefinition>
         {
             SupportModifierDefinition.CreateNew(
@@ -4761,6 +5100,25 @@ public static class Program
                 || MathF.Abs(loadedStyle.CentralStemTopDiameter.Value - 0.85f) > 0.0001f)
             {
                 throw new InvalidOperationException("Expected clustered support style diameters to survive save and load.");
+            }
+
+            if (loadedSupport.BaseAttachmentKind != SupportBaseAttachmentKind.Model)
+            {
+                throw new InvalidOperationException("Expected the model base attachment kind to survive save and load.");
+            }
+
+            ValidateVectorNear(
+                clusteredSupport.BaseDirection,
+                loadedSupport.BaseDirection,
+                0.0001f,
+                "Expected the model base direction to survive save and load.");
+
+            if (MathF.Abs(loadedSupport.Profile.ModelBaseHeight - 1.7f) > 0.0001f
+                || MathF.Abs(loadedSupport.Profile.ModelBasePenetrationDepth - 0.4f) > 0.0001f
+                || MathF.Abs(loadedSupport.Profile.ModelBaseBottomDiameter - 0.45f) > 0.0001f
+                || MathF.Abs(loadedSupport.Profile.MaxModelBaseAngleFromVerticalDegrees - 55.0f) > 0.0001f)
+            {
+                throw new InvalidOperationException("Expected model base profile dimensions to survive save and load.");
             }
 
             if (loadedDocument.SupportLayerGroups.Count != 1
@@ -5374,6 +5732,457 @@ public static class Program
     }
 
     /// <summary>
+    /// Validates that Direct Edit derives the vertical stem axis from an angled model base joint rather than its contact XY.
+    /// </summary>
+    private static void ValidateDirectEditAlignsAngledModelBaseWithStem()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        Vector3 baseDirection = Vector3.Normalize(new Vector3(1.0f, 0.0f, 1.0f));
+        Vector3 sourceBasePosition = new Vector3(
+            -baseDirection.X * profile.ModelBaseHeight,
+            0.0f,
+            3.0f);
+        SupportEntity source = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 10.0f),
+            sourceBasePosition,
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            SupportStyle.Individual,
+            SupportBaseAttachmentKind.Model,
+            baseDirection);
+        Vector3 editedBasePosition = source.BasePosition + new Vector3(2.0f, -1.0f, 0.0f);
+        SupportDirectEditSettings settings = new SupportDirectEditSettings(
+            editedBasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(source).Z);
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, settings);
+        Vector3 editedStemBase = SupportDirectEditPlanner.CalculateStemBase(edited);
+        Vector3 editedStemTop = SupportDirectEditPlanner.CalculateStemTop(edited);
+
+        if (MathF.Abs(editedStemBase.X - editedStemTop.X) > 0.0001f
+            || MathF.Abs(editedStemBase.Y - editedStemTop.Y) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected the edited vertical stem to begin directly above the angled model base joint.");
+        }
+
+        ValidateClosedMesh(SupportMeshBuilder.Build(edited, 16));
+    }
+
+    /// <summary>
+    /// Validates that dragging a model-connected stem pivots its base without moving either model contact.
+    /// </summary>
+    private static void ValidateDirectEditDragKeepsModelBaseContactFixed()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        Vector3 contactPosition = new Vector3(0.0f, 0.0f, 3.0f);
+        SupportEntity source = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 10.0f),
+            contactPosition,
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            SupportStyle.Individual,
+            SupportBaseAttachmentKind.Model,
+            Vector3.UnitZ);
+        SupportDirectEditSettings startSettings = new SupportDirectEditSettings(
+            source.BasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(source).Z,
+            source.BaseAttachmentKind,
+            source.BaseDirection);
+        Vector3 requestedDelta = new Vector3(0.4f, -0.25f, 0.0f);
+        SupportDirectEditSettings draggedSettings = SupportDirectEditPlanner.CreateDraggedSettings(
+            source,
+            startSettings,
+            requestedDelta,
+            0.0f);
+        SupportEntity dragged = SupportDirectEditPlanner.RebuildSupport(source, draggedSettings);
+        Vector3 sourceStemBase = SupportDirectEditPlanner.CalculateStemBase(source);
+        Vector3 draggedStemBase = SupportDirectEditPlanner.CalculateStemBase(dragged);
+
+        ValidateVectorNear(contactPosition, draggedSettings.BasePosition, 0.0001f, "Dragging moved the stored model-base contact.");
+        ValidateVectorNear(contactPosition, dragged.BasePosition, 0.0001f, "Rebuilding moved the model-base contact.");
+        ValidateVectorNear(source.TipPosition, dragged.TipPosition, 0.0001f, "Dragging a model base moved the head contact.");
+        ValidateVectorNear(
+            new Vector3(sourceStemBase.X + requestedDelta.X, sourceStemBase.Y + requestedDelta.Y, draggedStemBase.Z),
+            draggedStemBase,
+            0.0001f,
+            "The model base did not pivot toward the dragged stem position.");
+
+        SupportDirectEditSettings limitedSettings = SupportDirectEditPlanner.CreateDraggedSettings(
+            source,
+            startSettings,
+            new Vector3(100.0f, 0.0f, 0.0f),
+            0.0f);
+        Vector3 limitedDirection = limitedSettings.BaseDirection ?? Vector3.UnitZ;
+        float limitedAngleDegrees = MathF.Acos(Math.Clamp(limitedDirection.Z, 0.0f, 1.0f)) * (180.0f / MathF.PI);
+
+        if (limitedAngleDegrees > profile.MaxModelBaseAngleFromVerticalDegrees + 0.001f)
+        {
+            throw new InvalidOperationException("A dragged model base exceeded its maximum angle from vertical.");
+        }
+
+        SupportDirectEditSettings zDraggedSettings = SupportDirectEditPlanner.CreateDraggedSettings(
+            source,
+            draggedSettings,
+            Vector3.Zero,
+            0.5f);
+        ValidateVectorNear(contactPosition, zDraggedSettings.BasePosition, 0.0001f, "A Z drag moved the model-base contact.");
+        ValidateVectorNear(
+            draggedSettings.BaseDirection ?? Vector3.UnitZ,
+            zDraggedSettings.BaseDirection ?? Vector3.UnitZ,
+            0.0001f,
+            "A Z drag changed the model-base direction.");
+
+        SupportEntity plateSource = CreateSupport(Vector3.Zero, Vector3.UnitZ * 10.0f, profile);
+        SupportDirectEditSettings plateStartSettings = new SupportDirectEditSettings(
+            plateSource.BasePosition,
+            SupportDirectEditPlanner.CalculateStemTop(plateSource).Z,
+            plateSource.BaseAttachmentKind,
+            plateSource.BaseDirection);
+        SupportDirectEditSettings plateDraggedSettings = SupportDirectEditPlanner.CreateDraggedSettings(
+            plateSource,
+            plateStartSettings,
+            requestedDelta,
+            0.0f);
+        ValidateVectorNear(
+            plateSource.BasePosition + requestedDelta,
+            plateDraggedSettings.BasePosition,
+            0.0001f,
+            "Dragging changed the existing build-plate translation behavior.");
+    }
+
+    /// <summary>
+    /// Validates that the lower Z handle changes only model-base length and direction around a fixed contact and stem XY.
+    /// </summary>
+    private static void ValidateDirectEditLowerZDragChangesModelBaseLength()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        Vector3 baseDirection = Vector3.Normalize(new Vector3(0.5f, 0.0f, 1.0f));
+        Vector3 contactPosition = new Vector3(
+            -baseDirection.X * profile.ModelBaseHeight,
+            0.0f,
+            3.0f);
+        SupportEntity source = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 12.0f),
+            contactPosition,
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            SupportStyle.Individual,
+            SupportBaseAttachmentKind.Model,
+            baseDirection);
+        Vector3 sourceStemBase = SupportDirectEditPlanner.CalculateStemBase(source);
+        float sourceStemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings startSettings = new SupportDirectEditSettings(
+            source.BasePosition,
+            sourceStemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.BasePosition,
+            sourceStemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.Profile.ModelBaseHeight,
+            source.Profile.ModelBaseHeight);
+        SupportDirectEditSettings lengthenedSettings = SupportDirectEditPlanner.CreateModelBaseLengthDraggedSettings(
+            source,
+            startSettings,
+            0.5f);
+        SupportEntity lengthened = SupportDirectEditPlanner.RebuildSupport(source, lengthenedSettings);
+        Vector3 lengthenedStemBase = SupportDirectEditPlanner.CalculateStemBase(lengthened);
+
+        ValidateVectorNear(contactPosition, lengthened.BasePosition, 0.0001f, "The lower Z drag moved the model contact.");
+
+        if (MathF.Abs(lengthenedStemBase.X - sourceStemBase.X) > 0.0001f
+            || MathF.Abs(lengthenedStemBase.Y - sourceStemBase.Y) > 0.0001f
+            || MathF.Abs(lengthenedStemBase.Z - sourceStemBase.Z - 0.5f) > 0.0001f)
+        {
+            throw new InvalidOperationException("The lower Z drag did not retain stem XY while changing its base height.");
+        }
+
+        if (!lengthenedSettings.ModelBaseLength.HasValue
+            || lengthenedSettings.ModelBaseLength.Value <= source.Profile.ModelBaseHeight
+            || MathF.Abs(lengthened.Profile.ModelBaseHeight - lengthenedSettings.ModelBaseLength.Value) > 0.0001f)
+        {
+            throw new InvalidOperationException("The lower Z drag did not store the lengthened model-base geometry.");
+        }
+
+        ValidateVectorNear(source.TipPosition, lengthened.TipPosition, 0.0001f, "The lower Z drag moved the head contact.");
+        ValidateVectorNear(
+            SupportDirectEditPlanner.CalculateStemTop(source),
+            SupportDirectEditPlanner.CalculateStemTop(lengthened),
+            0.0001f,
+            "The lower Z drag moved the stem top.");
+
+        SupportDirectEditSettings shortenedSettings = SupportDirectEditPlanner.CreateModelBaseLengthDraggedSettings(
+            source,
+            startSettings,
+            -100.0f);
+        Vector3 shortenedDirection = shortenedSettings.BaseDirection ?? Vector3.UnitZ;
+        float shortenedAngleDegrees = MathF.Acos(Math.Clamp(shortenedDirection.Z, 0.0f, 1.0f)) * (180.0f / MathF.PI);
+
+        if (shortenedAngleDegrees > profile.MaxModelBaseAngleFromVerticalDegrees + 0.001f)
+        {
+            throw new InvalidOperationException("The lower Z drag exceeded the model-base angle limit.");
+        }
+
+        SupportModifierDefinition modifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { source.Id },
+            null,
+            0,
+            null,
+            null,
+            Guid.NewGuid(),
+            lengthenedSettings);
+        IReadOnlyList<SupportEntity> restored = SupportModifierSourceRestorer.Restore(
+            new[] { lengthened },
+            new[] { modifier });
+
+        if (restored.Count != 1
+            || MathF.Abs(restored[0].Profile.ModelBaseHeight - source.Profile.ModelBaseHeight) > 0.0001f)
+        {
+            throw new InvalidOperationException("Removing the lower Z edit did not restore the original model-base length.");
+        }
+
+        ValidateVectorNear(source.BaseDirection, restored[0].BaseDirection, 0.0001f, "Removing the lower Z edit did not restore its direction.");
+        ValidateClosedMesh(SupportMeshBuilder.Build(lengthened, 16));
+    }
+
+    /// <summary>
+    /// Validates that Direct Edit freshly regenerates a grounded support onto an upward-facing model contact.
+    /// </summary>
+    private static void ValidateDirectEditConnectsBaseToModel()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        SupportEntity generatedSource = CreateSupport(Vector3.Zero, Vector3.UnitZ * 10.0f, profile);
+        SupportEntity source = SupportEntity.CreateLoaded(
+            generatedSource.Id,
+            generatedSource.Name,
+            generatedSource.SupportLayerGroupId,
+            generatedSource.TipPosition,
+            new Vector3(-2.0f, 0.0f, 0.0f),
+            generatedSource.HeadDirection,
+            2.0f,
+            Vector3.UnitX,
+            generatedSource.Profile,
+            generatedSource.Style,
+            generatedSource.BaseAttachmentKind,
+            generatedSource.BaseDirection);
+        SupportBranchPlan basePlan;
+
+        if (!SupportBranchPlanner.TryChangeBaseAttachment(
+            CreateModelBaseOpportunityMesh(),
+            source,
+            SupportBaseAttachmentKind.Model,
+            out basePlan))
+        {
+            throw new InvalidOperationException("Expected Direct Edit to find the upward model-base platform.");
+        }
+
+        if (basePlan.BranchLength > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected model conversion to regenerate from the zero-branch support parameters.");
+        }
+
+        float originalStemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings settings = new SupportDirectEditSettings(
+            basePlan.BasePosition,
+            basePlan.StemTopPosition.Z,
+            basePlan.BaseAttachmentKind,
+            basePlan.BaseDirection,
+            source.BasePosition,
+            originalStemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection);
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, settings);
+
+        if (edited.BaseAttachmentKind != SupportBaseAttachmentKind.Model)
+        {
+            throw new InvalidOperationException("Expected Direct Edit to store a model-attached base.");
+        }
+
+        ValidateVectorNear(source.TipPosition, edited.TipPosition, 0.0001f, "Base conversion moved the support head contact.");
+        ValidateVectorNear(
+            basePlan.StemTopPosition,
+            SupportDirectEditPlanner.CalculateStemTop(edited),
+            0.0001f,
+            "Model conversion did not use freshly regenerated branch geometry.");
+        ValidateClosedMesh(SupportMeshBuilder.Build(edited, 16));
+
+        SupportModifierDefinition modifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { source.Id },
+            null,
+            0,
+            null,
+            null,
+            Guid.NewGuid(),
+            settings);
+        IReadOnlyList<SupportEntity> restored = SupportModifierSourceRestorer.Restore(
+            new[] { edited },
+            new[] { modifier });
+
+        if (restored.Count != 1
+            || restored[0].BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate)
+        {
+            throw new InvalidOperationException("Expected removing the Direct Edit conversion to restore the build-plate base.");
+        }
+
+        ValidateVectorNear(source.BasePosition, restored[0].BasePosition, 0.0001f, "Base conversion restoration moved the original base.");
+        ValidateVectorNear(
+            SupportDirectEditPlanner.CalculateStemTop(source),
+            SupportDirectEditPlanner.CalculateStemTop(restored[0]),
+            0.0001f,
+            "Base conversion restoration did not recover the original stem top.");
+    }
+
+    /// <summary>
+    /// Validates that Direct Edit freshly regenerates grounded geometry and rejects an obstructed plate route.
+    /// </summary>
+    private static void ValidateDirectEditMovesBaseToBuildPlate()
+    {
+        SupportProfile profile = SupportDefaults.CreateProfile();
+        MeshEntity mesh = CreateDualBaseOpportunityMesh(profile);
+        SupportPlacementPlan modelPlacement;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            mesh,
+            Vector3.UnitZ * 10.0f,
+            -Vector3.UnitZ,
+            profile,
+            SupportBaseGenerationMode.ModelOnly,
+            out modelPlacement))
+        {
+            throw new InvalidOperationException("Expected a model-attached source support for Direct Edit conversion.");
+        }
+
+        SupportEntity generatedSource = new SupportEntity(
+            Guid.NewGuid(),
+            Vector3.UnitZ * 10.0f,
+            modelPlacement.BasePosition,
+            modelPlacement.HeadDirection,
+            modelPlacement.BranchLength,
+            modelPlacement.BranchDirection,
+            profile,
+            SupportStyle.Individual,
+            modelPlacement.BaseAttachmentKind,
+            modelPlacement.BaseDirection);
+        SupportEntity source = SupportEntity.CreateLoaded(
+            generatedSource.Id,
+            generatedSource.Name,
+            generatedSource.SupportLayerGroupId,
+            generatedSource.TipPosition,
+            generatedSource.BasePosition,
+            generatedSource.HeadDirection,
+            2.0f,
+            Vector3.UnitX,
+            generatedSource.Profile,
+            generatedSource.Style,
+            generatedSource.BaseAttachmentKind,
+            generatedSource.BaseDirection);
+        SupportBranchPlan basePlan;
+
+        if (!SupportBranchPlanner.TryChangeBaseAttachment(
+            mesh,
+            source,
+            SupportBaseAttachmentKind.BuildPlate,
+            out basePlan))
+        {
+            throw new InvalidOperationException("Expected Direct Edit to find the clear build-plate route.");
+        }
+
+        if (basePlan.BranchLength > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected build-plate conversion to regenerate from the zero-branch support parameters.");
+        }
+
+        float originalStemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings settings = new SupportDirectEditSettings(
+            basePlan.BasePosition,
+            basePlan.StemTopPosition.Z,
+            basePlan.BaseAttachmentKind,
+            basePlan.BaseDirection,
+            source.BasePosition,
+            originalStemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection);
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, settings);
+
+        if (edited.BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate
+            || MathF.Abs(edited.BasePosition.Z) > 0.0001f)
+        {
+            throw new InvalidOperationException("Expected Direct Edit to move the selected base onto Z=0.");
+        }
+
+        ValidateVectorNear(source.TipPosition, edited.TipPosition, 0.0001f, "Grounding the base moved the support head contact.");
+        ValidateVectorNear(
+            basePlan.StemTopPosition,
+            SupportDirectEditPlanner.CalculateStemTop(edited),
+            0.0001f,
+            "Grounding the base did not use freshly regenerated branch geometry.");
+
+        if (MathF.Abs(settings.OriginalStemTopZ - originalStemTopZ) > 0.0001f)
+        {
+            throw new InvalidOperationException("Build-plate regeneration replaced the original Direct Edit stem height.");
+        }
+        ValidateClosedMesh(SupportMeshBuilder.Build(edited, 16));
+
+        MeshEntity obstructedMesh = CreateModelBaseOpportunityMesh();
+        SupportPlacementPlan obstructedModelPlacement;
+
+        if (!SupportPlacementPlanner.TryCreatePlacement(
+            obstructedMesh,
+            Vector3.UnitZ * 10.0f,
+            -Vector3.UnitZ,
+            profile,
+            SupportBaseGenerationMode.ModelOnly,
+            out obstructedModelPlacement))
+        {
+            throw new InvalidOperationException("Expected an obstructed model-base source support.");
+        }
+
+        SupportEntity obstructedSource = new SupportEntity(
+            Guid.NewGuid(),
+            Vector3.UnitZ * 10.0f,
+            obstructedModelPlacement.BasePosition,
+            obstructedModelPlacement.HeadDirection,
+            obstructedModelPlacement.BranchLength,
+            obstructedModelPlacement.BranchDirection,
+            profile,
+            SupportStyle.Individual,
+            obstructedModelPlacement.BaseAttachmentKind,
+            obstructedModelPlacement.BaseDirection);
+
+        if (SupportBranchPlanner.TryChangeBaseAttachment(
+            obstructedMesh,
+            obstructedSource,
+            SupportBaseAttachmentKind.BuildPlate,
+            out _))
+        {
+            throw new InvalidOperationException("Expected build-plate regeneration to reject the model-obstructed route.");
+        }
+    }
+
+    /// <summary>
     /// Validates that removing cumulative Direct Edit actions can recover generator source geometry.
     /// </summary>
     private static void ValidateDirectEditSourceRestorationReversesCumulativeEdits()
@@ -5557,6 +6366,66 @@ public static class Program
     }
 
     /// <summary>
+    /// Creates a downward target at Z=10 above an upward platform at Z=3 that blocks the build-plate route.
+    /// </summary>
+    private static MeshEntity CreateModelBaseOpportunityMesh()
+    {
+        return new MeshEntity(
+            "Model-base opportunity mesh",
+            new List<Vector3>
+            {
+                new Vector3(-5.0f, -5.0f, 3.0f),
+                new Vector3(5.0f, -5.0f, 3.0f),
+                new Vector3(-5.0f, 5.0f, 3.0f),
+                new Vector3(5.0f, 5.0f, 3.0f),
+                new Vector3(-5.0f, -5.0f, 10.0f),
+                new Vector3(-5.0f, 5.0f, 10.0f),
+                new Vector3(5.0f, -5.0f, 10.0f),
+                new Vector3(5.0f, 5.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0, 1, 2,
+                1, 3, 2,
+                4, 5, 6,
+                6, 5, 7
+            },
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
+    /// Creates separate clear build-plate and inclined model-base routes beneath one downward target.
+    /// </summary>
+    private static MeshEntity CreateDualBaseOpportunityMesh(SupportProfile profile)
+    {
+        Vector3 baseDirection = Vector3.Normalize(new Vector3(1.0f, 0.0f, 1.0f));
+        Vector3 contact = new Vector3(
+            -baseDirection.X * profile.ModelBaseHeight,
+            0.0f,
+            3.0f);
+        Vector3 tangent = Vector3.Normalize(new Vector3(1.0f, 0.0f, -1.0f));
+        Vector3 lateral = Vector3.UnitY;
+
+        return new MeshEntity(
+            "Dual base opportunity mesh",
+            new List<Vector3>
+            {
+                contact - (tangent * 0.4f) - (lateral * 0.4f),
+                contact + (tangent * 0.4f) - (lateral * 0.4f),
+                contact - (tangent * 0.4f) + (lateral * 0.4f),
+                new Vector3(-5.0f, -5.0f, 10.0f),
+                new Vector3(-5.0f, 5.0f, 10.0f),
+                new Vector3(5.0f, -5.0f, 10.0f)
+            },
+            new List<int>
+            {
+                0, 1, 2,
+                3, 4, 5
+            },
+            userTransform: Transform3DData.Identity);
+    }
+
+    /// <summary>
     /// Creates Area Support settings that select every triangle in a mesh.
     /// </summary>
     private static AreaSupportSettings CreateAreaSupportSettingsForAllFaces(
@@ -5568,7 +6437,8 @@ public static class Program
         float? boundaryOffset = null,
         AreaSupportFillMode fillMode = AreaSupportFillMode.HexGrid,
         int additionalOffsetCount = AreaSupportSettings.DefaultAdditionalOffsetCount,
-        float? offsetSpacing = null)
+        float? offsetSpacing = null,
+        SupportBaseGenerationMode baseGenerationMode = AreaSupportSettings.DefaultBaseGenerationMode)
     {
         int triangleCount = mesh.TriangleIndices.Count / 3;
         List<FaceSelectionKey> selectedFaces = new List<FaceSelectionKey>(triangleCount);
@@ -5588,7 +6458,8 @@ public static class Program
             minimumThinRegionThickness,
             fillMode,
             additionalOffsetCount,
-            offsetSpacing ?? boundaryOffset ?? AreaSupportSettings.CalculateDefaultBoundaryOffset(spacing));
+            offsetSpacing ?? boundaryOffset ?? AreaSupportSettings.CalculateDefaultBoundaryOffset(spacing),
+            baseGenerationMode);
     }
 
     /// <summary>

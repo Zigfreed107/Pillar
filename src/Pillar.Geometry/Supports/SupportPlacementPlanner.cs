@@ -15,16 +15,24 @@ public readonly struct SupportPlacementPlan
     /// <summary>
     /// Creates one validated support placement result.
     /// </summary>
-    public SupportPlacementPlan(Vector3 basePosition, Vector3 headDirection, float branchLength, Vector3 branchDirection)
+    public SupportPlacementPlan(
+        Vector3 basePosition,
+        Vector3 headDirection,
+        float branchLength,
+        Vector3 branchDirection,
+        SupportBaseAttachmentKind baseAttachmentKind,
+        Vector3 baseDirection)
     {
         BasePosition = basePosition;
         HeadDirection = headDirection;
         BranchLength = branchLength;
         BranchDirection = branchDirection;
+        BaseAttachmentKind = baseAttachmentKind;
+        BaseDirection = baseDirection;
     }
 
     /// <summary>
-    /// Gets the build-plane base position below the chosen stem joint.
+    /// Gets the contact position on the build plate or model.
     /// </summary>
     public Vector3 BasePosition { get; }
 
@@ -42,6 +50,16 @@ public readonly struct SupportPlacementPlan
     /// Gets the normalized direction from the stem joint toward the head joint.
     /// </summary>
     public Vector3 BranchDirection { get; }
+
+    /// <summary>
+    /// Gets whether the base starts on the build plate or the model.
+    /// </summary>
+    public SupportBaseAttachmentKind BaseAttachmentKind { get; }
+
+    /// <summary>
+    /// Gets the direction from a model base contact toward the vertical stem.
+    /// </summary>
+    public Vector3 BaseDirection { get; }
 }
 
 /// <summary>
@@ -64,7 +82,40 @@ public static class SupportPlacementPlanner
             throw new ArgumentNullException(nameof(mesh));
         }
 
-        return TryCreatePlacement(mesh, mesh.WorldTransform, contactPoint, surfaceNormal, profile, out placementPlan);
+        return TryCreatePlacement(
+            mesh,
+            mesh.WorldTransform,
+            contactPoint,
+            surfaceNormal,
+            profile,
+            SupportBaseGenerationMode.BuildPlateOnly,
+            out placementPlan);
+    }
+
+    /// <summary>
+    /// Creates a support placement using the requested base-surface preference.
+    /// </summary>
+    public static bool TryCreatePlacement(
+        MeshEntity mesh,
+        Vector3 contactPoint,
+        Vector3 surfaceNormal,
+        SupportProfile profile,
+        SupportBaseGenerationMode baseGenerationMode,
+        out SupportPlacementPlan placementPlan)
+    {
+        if (mesh == null)
+        {
+            throw new ArgumentNullException(nameof(mesh));
+        }
+
+        return TryCreatePlacement(
+            mesh,
+            mesh.WorldTransform,
+            contactPoint,
+            surfaceNormal,
+            profile,
+            baseGenerationMode,
+            out placementPlan);
     }
 
     /// <summary>
@@ -76,6 +127,28 @@ public static class SupportPlacementPlanner
         Vector3 contactPoint,
         Vector3 surfaceNormal,
         SupportProfile profile,
+        out SupportPlacementPlan placementPlan)
+    {
+        return TryCreatePlacement(
+            mesh,
+            worldTransform,
+            contactPoint,
+            surfaceNormal,
+            profile,
+            SupportBaseGenerationMode.BuildPlateOnly,
+            out placementPlan);
+    }
+
+    /// <summary>
+    /// Creates a support placement against an explicit transform and base-surface preference.
+    /// </summary>
+    public static bool TryCreatePlacement(
+        MeshEntity mesh,
+        Matrix4x4 worldTransform,
+        Vector3 contactPoint,
+        Vector3 surfaceNormal,
+        SupportProfile profile,
+        SupportBaseGenerationMode baseGenerationMode,
         out SupportPlacementPlan placementPlan)
     {
         if (mesh == null)
@@ -98,7 +171,14 @@ public static class SupportPlacementPlanner
 
         SupportBranchPlan branchPlan;
 
-        if (!SupportBranchPlanner.TryCreateBranchPlan(mesh, worldTransform, contactPoint, headDirection, profile, out branchPlan))
+        if (!SupportBranchPlanner.TryCreateBranchPlan(
+            mesh,
+            worldTransform,
+            contactPoint,
+            headDirection,
+            profile,
+            baseGenerationMode,
+            out branchPlan))
         {
             placementPlan = default;
             return false;
@@ -108,7 +188,9 @@ public static class SupportPlacementPlanner
             branchPlan.BasePosition,
             headDirection,
             branchPlan.BranchLength,
-            branchPlan.BranchDirection);
+            branchPlan.BranchDirection,
+            branchPlan.BaseAttachmentKind,
+            branchPlan.BaseDirection);
         return true;
     }
 }

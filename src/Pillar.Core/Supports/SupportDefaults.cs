@@ -9,6 +9,10 @@ public static class SupportDefaults
 {
     public const float DefaultBaseBottomRadius = 1.25f;
     public const float DefaultBaseHeight = 1.50f;
+    public const float DefaultModelBaseHeight = 1.50f;
+    public const float DefaultModelBasePenetrationDepth = 0.30f;
+    public const float DefaultModelBaseBottomDiameter = 0.30f;
+    public const float DefaultMaxModelBaseAngleFromVerticalDegrees = 80.0f;
     public const float DefaultStemBottomDiameter = 1.00f;
     public const float DefaultStemTopDiameter = 0.75f;
     public const float DefaultMaximumBranchLength = 0.0f;
@@ -35,6 +39,10 @@ public static class SupportDefaults
             headHeight: DefaultHeadHeight,
             headPenetrationDepth: DefaultHeadPenetrationDepth,
             headTopDiameter: DefaultHeadTopDiameter,
-            maxHeadAngleFromVerticalDegrees: DefaultMaxHeadAngleFromVerticalDegrees);
+            maxHeadAngleFromVerticalDegrees: DefaultMaxHeadAngleFromVerticalDegrees,
+            modelBaseHeight: DefaultModelBaseHeight,
+            modelBasePenetrationDepth: DefaultModelBasePenetrationDepth,
+            modelBaseBottomDiameter: DefaultModelBaseBottomDiameter,
+            maxModelBaseAngleFromVerticalDegrees: DefaultMaxModelBaseAngleFromVerticalDegrees);
     }
 }

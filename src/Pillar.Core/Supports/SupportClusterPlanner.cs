@@ -419,7 +419,9 @@ public static class SupportClusterPlanner
     {
         candidate = default;
 
-        if (!IsFinite(support.TipPosition)
+        // Clustering relocates bases without access to the source mesh, so a model contact could not be revalidated.
+        if (support.BaseAttachmentKind != SupportBaseAttachmentKind.BuildPlate
+            || !IsFinite(support.TipPosition)
             || !IsFinite(support.BasePosition)
             || !IsFinite(support.HeadDirection))
         {
@@ -576,7 +578,9 @@ public static class SupportClusterPlanner
             branchLength,
             branchDirection,
             profile,
-            new ClusteredSupportStyle(plan.CentralStemBottomDiameter, plan.CentralStemTopDiameter, plan.ClusterBranchDiameter));
+            new ClusteredSupportStyle(plan.CentralStemBottomDiameter, plan.CentralStemTopDiameter, plan.ClusterBranchDiameter),
+            member.Support.BaseAttachmentKind,
+            member.Support.BaseDirection);
     }
 
 

@@ -37,7 +37,7 @@ public static class Program
         RunTest(failures, "All control points inside passes within", ValidateAllControlPointsInsidePassesWithin);
         RunTest(failures, "Outside control point fails within", ValidateOutsideControlPointFailsWithin);
         RunTest(failures, "Edge-touching segment is accepted", ValidateEdgeTouchingSegmentIsAccepted);
-        RunTest(failures, "Direct Edit arrows use solid meshes", ValidateDirectEditArrowsUseSolidMeshes);
+        RunTest(failures, "Direct Edit arrows are solid and top-most", ValidateDirectEditArrowsAreSolidAndTopMost);
         RunTest(failures, "Translate arrows are solid and top-most", ValidateTranslateArrowsAreSolidAndTopMost);
         RunTest(failures, "Raft geometry includes flat lighting normals", ValidateRaftGeometryIncludesFlatLightingNormals);
         RunTest(failures, "Locked tag preview is opaque and visible", ValidateLockedTagPreviewIsOpaqueAndVisible);
@@ -253,24 +253,53 @@ public static class Program
     }
 
     /// <summary>
-    /// Validates that Direct Edit arrows expose solid mesh hit targets instead of line geometry.
+    /// Validates that Direct Edit arrows expose solid mesh hit targets in an always-on-top render group.
     /// </summary>
-    private static void ValidateDirectEditArrowsUseSolidMeshes()
+    private static void ValidateDirectEditArrowsAreSolidAndTopMost()
     {
         GroupModel3D root = new GroupModel3D();
-        _ = new DirectEditPreviewRenderer(root, 16);
+        DirectEditPreviewRenderer renderer = new DirectEditPreviewRenderer(root, 16);
+        renderer.ShowGizmo(
+            new Vector3(1.0f, 2.0f, 3.0f),
+            new Vector3(1.0f, 2.0f, 8.0f),
+            2.0f,
+            3.0f,
+            true);
 
-        if (root.Children.Count < 5)
+        if (root.Children.Count != 3
+            || root.Children[2] is not TopMostGroup3D topMostRoot
+            || !topMostRoot.EnableTopMost
+            || topMostRoot.Children.Count != 4)
         {
-            throw new InvalidOperationException("Expected Direct Edit preview visuals to be created.");
+            throw new InvalidOperationException("Expected Direct Edit arrows beneath one enabled top-most render group.");
         }
 
-        for (int i = root.Children.Count - 3; i < root.Children.Count; i++)
+        for (int i = 0; i < topMostRoot.Children.Count; i++)
         {
-            if (root.Children[i] is not MeshGeometryModel3D)
+            if (topMostRoot.Children[i] is not MeshGeometryModel3D arrow
+                || !arrow.IsHitTestVisible)
             {
-                throw new InvalidOperationException("Expected every Direct Edit arrow to use solid mesh geometry.");
+                throw new InvalidOperationException("Expected every Direct Edit arrow to remain a solid interactive mesh.");
             }
+        }
+
+        if (!renderer.TryGetHandleKind(topMostRoot.Children[3], out DirectEditGizmoHandleKind handleKind)
+            || handleKind != DirectEditGizmoHandleKind.BaseZAxis
+            || topMostRoot.Children[3].Visibility != Visibility.Visible)
+        {
+            throw new InvalidOperationException("Expected a visible lower Z handle for a model-connected base.");
+        }
+
+        renderer.ShowGizmo(
+            new Vector3(1.0f, 2.0f, 0.0f),
+            new Vector3(1.0f, 2.0f, 8.0f),
+            2.0f,
+            3.0f,
+            false);
+
+        if (topMostRoot.Children[3].Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException("Expected the lower Z handle to remain hidden for a build-plate base.");
         }
     }
 

@@ -37,7 +37,20 @@ Examples include:
 
 - clustering targeted supports
 - adding braces to targeted supports
+- moving selected Direct Edit support bases between the build plate and valid upward-facing model surfaces
 - deleting targeted generated supports
+
+Direct Edit base conversions retain the existing head contact and regenerate the remaining support geometry from its current profile and resolved style dimensions. A conversion is committed only when the requested base route clears the owning model. The modifier stores both the edited and original base attachment kind, contact position, direction, and model-base length so undo, removal, save/load, and modifier replay restore the correct surface connection.
+
+`Move base to build plate` is a regeneration operation rather than a projection of the edited stem. It retains the head contact, then searches the support's current profile and resolved style dimensions for fresh head, branch, stem, and build-plate base geometry ending on Z=0. Supports without a clear parameter-compliant route remain unchanged and produce a warning dialog; valid supports in the same selection may still be committed.
+
+`Connect base to model` runs the equivalent fresh model-only placement search. It finds a suitable upward-facing model contact, derives and angle-limits the base direction, and regenerates the branch and vertical stem using the same parameter-driven search used when initially creating a model-connected support.
+
+During an XY Direct Edit drag, a model-connected base keeps its model contact fixed and pivots its fixed-height base segment toward the moved vertical stem, stopping at the preset's maximum angle from vertical. A build-plate base continues to translate across Z=0 with its stem. Z-axis drags leave either base connection unchanged.
+
+Direct Edit axis arrows render in an always-on-top scene pass so the selected support and model cannot visually occlude their handles. The translucent XY plane remains depth-aware to retain useful spatial context.
+
+Model-connected supports also show a lower blue Z arrow at the base-to-stem joint. Dragging it keeps the model contact and stem XY fixed while changing that support's model-base length. The drag cannot exceed the preset's maximum angle from vertical or move the base joint through the stem top. Build-plate supports do not show this lower handle.
 
 When source-support regeneration changes the generator revision, all existing modifiers for that support layer are discarded. Regeneration should report which modifiers were removed. The generator change, regenerated supports, and modifier removal must form one undoable command so Undo restores the complete previous state.
 

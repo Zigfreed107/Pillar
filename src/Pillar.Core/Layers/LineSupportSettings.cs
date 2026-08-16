@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Numerics;
 using Pillar.Core.Selection;
+using Pillar.Core.Supports;
 
 namespace Pillar.Core.Layers;
 
@@ -15,6 +16,7 @@ public sealed class LineSupportSettings
 {
     public const bool DefaultPlaceSupportsAtBends = true;
     public const LineSupportSurfaceTargetMode DefaultSurfaceTargetMode = LineSupportSurfaceTargetMode.FirstReachable;
+    public const SupportBaseGenerationMode DefaultBaseGenerationMode = SupportBaseGenerationMode.BuildPlateOnly;
 
     private readonly List<Vector3> _points;
     private readonly ReadOnlyCollection<FaceSelectionKey> _selectedFaces;
@@ -55,7 +57,8 @@ public sealed class LineSupportSettings
         float spacing,
         bool placeSupportsAtBends,
         LineSupportSurfaceTargetMode surfaceTargetMode,
-        IReadOnlyCollection<FaceSelectionKey> selectedFaces)
+        IReadOnlyCollection<FaceSelectionKey> selectedFaces,
+        SupportBaseGenerationMode baseGenerationMode = DefaultBaseGenerationMode)
     {
         if (points == null)
         {
@@ -83,6 +86,7 @@ public sealed class LineSupportSettings
         Spacing = ValidateSpacing(spacing);
         PlaceSupportsAtBends = placeSupportsAtBends;
         SurfaceTargetMode = ValidateSurfaceTargetMode(surfaceTargetMode);
+        BaseGenerationMode = ValidateBaseGenerationMode(baseGenerationMode);
 
         if (SurfaceTargetMode == LineSupportSurfaceTargetMode.SelectedFacesOnly && selectedFaces.Count == 0)
         {
@@ -116,6 +120,11 @@ public sealed class LineSupportSettings
     public LineSupportSurfaceTargetMode SurfaceTargetMode { get; }
 
     /// <summary>
+    /// Gets where support bases should generate and the requested fallback order.
+    /// </summary>
+    public SupportBaseGenerationMode BaseGenerationMode { get; }
+
+    /// <summary>
     /// Gets the source mesh faces allowed by Selected Faces Only targeting.
     /// </summary>
     public IReadOnlyList<FaceSelectionKey> SelectedFaces
@@ -128,7 +137,20 @@ public sealed class LineSupportSettings
     /// </summary>
     public LineSupportSettings Clone()
     {
-        return new LineSupportSettings(_points, Spacing, PlaceSupportsAtBends, SurfaceTargetMode, _selectedFaces);
+        return new LineSupportSettings(_points, Spacing, PlaceSupportsAtBends, SurfaceTargetMode, _selectedFaces, BaseGenerationMode);
+    }
+
+    /// <summary>
+    /// Rejects unknown support-base generation policies before they enter document state.
+    /// </summary>
+    private static SupportBaseGenerationMode ValidateBaseGenerationMode(SupportBaseGenerationMode baseGenerationMode)
+    {
+        if (!Enum.IsDefined(baseGenerationMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(baseGenerationMode), "Support base generation mode is not supported.");
+        }
+
+        return baseGenerationMode;
     }
 
     /// <summary>

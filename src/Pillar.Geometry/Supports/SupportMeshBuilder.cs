@@ -66,19 +66,48 @@ public static class SupportMeshBuilder
         Vector3 stemJointPosition = hasBranch
             ? headJointPosition - (branchDirection * support.BranchLength)
             : headJointPosition;
-        Vector3 stemBasePosition = new Vector3(stemJointPosition.X, stemJointPosition.Y, support.BasePosition.Z);
+        bool hasModelBase = support.BaseAttachmentKind == SupportBaseAttachmentKind.Model;
+        Vector3 baseDirection = hasModelBase
+            ? SupportBaseDirectionCalculator.ClampDirectionToProfile(support.BaseDirection, support.Profile)
+            : Vector3.UnitZ;
+        Vector3 modelBaseJointPosition = hasModelBase
+            ? support.BasePosition + (baseDirection * support.Profile.ModelBaseHeight)
+            : support.BasePosition;
+        Vector3 stemBasePosition = hasModelBase
+            ? modelBaseJointPosition
+            : new Vector3(stemJointPosition.X, stemJointPosition.Y, support.BasePosition.Z);
         float verticalLength = MathF.Max(0.0f, stemJointPosition.Z - stemBasePosition.Z);
 
         if (verticalLength > AxialTolerance)
         {
             (Vector3 U, Vector3 V) verticalFrame = CreatePerpendicularFrame(Vector3.UnitZ);
-            List<SectionStation> stemStations = CreateVerticalSectionStations(support.Profile, dimensions, verticalLength);
+            List<SectionStation> stemStations = hasModelBase
+                ? CreateModelConnectedStemStations(dimensions, verticalLength)
+                : CreateVerticalSectionStations(support.Profile, dimensions, verticalLength);
             AddClosedStem(
                 mesh,
                 stemBasePosition,
                 stemStations,
                 verticalFrame.U,
                 verticalFrame.V,
+                validatedRadialSegments);
+        }
+
+        if (hasModelBase)
+        {
+            AddClosedModelBase(
+                mesh,
+                support.BasePosition,
+                modelBaseJointPosition,
+                baseDirection,
+                support.Profile,
+                dimensions,
+                validatedRadialSegments);
+
+            AddJointBall(
+                mesh,
+                modelBaseJointPosition,
+                dimensions.StemBottomDiameter * 0.5f,
                 validatedRadialSegments);
         }
 
@@ -235,6 +264,56 @@ public static class SupportMeshBuilder
         }
 
         return stations;
+    }
+
+    /// <summary>
+    /// Creates the vertical stem profile above a model-connected base without adding build-plate base geometry.
+    /// </summary>
+    private static List<SectionStation> CreateModelConnectedStemStations(SupportPartDimensions dimensions, float totalLength)
+    {
+        List<SectionStation> stations = new List<SectionStation>();
+        AddStation(stations, 0.0f, dimensions.StemBottomDiameter * 0.5f);
+        AddStation(stations, totalLength, dimensions.StemTopDiameter * 0.5f);
+        return stations;
+    }
+
+    /// <summary>
+    /// Adds a tapered model-connected base from its penetration tip through the surface contact to the stem joint.
+    /// </summary>
+    private static void AddClosedModelBase(
+        SupportMeshAccumulator mesh,
+        Vector3 contactPosition,
+        Vector3 baseJointPosition,
+        Vector3 baseDirection,
+        SupportProfile profile,
+        SupportPartDimensions dimensions,
+        int radialSegments)
+    {
+        Vector3 penetrationTip = contactPosition - (baseDirection * profile.ModelBasePenetrationDepth);
+        float contactRadius = profile.ModelBaseBottomDiameter * 0.5f;
+        float jointRadius = dimensions.StemBottomDiameter * 0.5f;
+        (Vector3 U, Vector3 V) frame = CreatePerpendicularFrame(baseDirection);
+        Vector3[] stationCenters = new Vector3[3]
+        {
+            penetrationTip,
+            contactPosition,
+            baseJointPosition
+        };
+        float[] stationRadii = new float[3]
+        {
+            contactRadius,
+            contactRadius,
+            jointRadius
+        };
+        AddClosedAxialChain(
+            mesh,
+            stationCenters,
+            stationRadii,
+            3,
+            baseDirection,
+            frame.U,
+            frame.V,
+            radialSegments);
     }
 
     /// <summary>
