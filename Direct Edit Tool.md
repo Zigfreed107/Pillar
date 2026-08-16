@@ -36,6 +36,19 @@ This allows the user to fine tune supports so that they better fit around the mo
 	- clicking on the blue z arrow and dragging  - the ball mesh and top of the stem moves up and down in the z direction in proportion to the mouse movement. 
 4. As the height of the stem changes, the top of the head stays at the same place it intersects the model, and the branch and head are redrawn so that the base of the branch or head is still connected to the top of the stem (and ball joint in between).
 
+# Editing model contacts
+1. Selecting a support shows a blue ball at the head's model contact and, when the base connects to the model, another blue ball at the base contact.
+2. Each ball is always rendered on top of support and model geometry so it remains visible and clickable.
+3. Dragging a ball follows valid surface hits on the support layer's owning model:
+	- the head ball follows supportable downward or side-facing surfaces and updates the head direction from the surface normal.
+	- the base ball follows upward-facing surfaces and updates the model-base direction from the surface normal.
+4. The contact ball colour is read from `DirectEditTipGizomoColour`. Its diameter is the relevant contact-tip diameter multiplied by `DirectEditTipGizmoSizeFactor`, whose default is 2.
+
+# Editing the base of a branched head
+1. When a branch exists between the stem top and head base, a second X, Y, and XY-plane gizmo is shown at the head base.
+2. Dragging this gizmo moves the head base in the requested XY direction while retaining the head's model contact and fixed profile length.
+3. The head direction remains constrained by the support profile, and the branch is rebuilt between the unchanged stem top and the edited head base.
+
 # Editing of clustered supports
 If the user is editing a cluster of supports, then the editing takes place on the shared stem and each branch or head will have to be redrawn to keep the connection between the stem and the connection points on the model.
 
@@ -59,7 +72,7 @@ The editing of buttressed supports and their buttresses has some nuance:
 
 # Implementation
 
-- Direct edits are stored as renderer-independent, revision-bound DirectEdit modifier actions. Each action records both its original and edited shared-stem geometry so modifier removal, undo, redo, save/load, and full stack replay remain deterministic.
+- Direct edits are stored as renderer-independent, revision-bound DirectEdit modifier actions. Each action records its original and edited stem/base geometry and, when applicable, head-contact geometry so modifier removal, undo, redo, save/load, and full stack replay remain deterministic.
 - Direct Edit actions replay after clustering and before brace or buttress generation. This lets one edit target a clustered shared stem while ensuring stored reinforcement limits are reapplied to the edited geometry.
 - A tool launch owns one modifier session. Repeated drags append actions to that session, and reopening its Layer Panel row resumes the session using the normal downstream-modifier warning behavior.
 - The viewport controller owns hit testing and transient preview geometry. Document output changes only when a drag completes.
@@ -70,3 +83,6 @@ The editing of buttressed supports and their buttresses has some nuance:
 - Equivalent regenerated brace and buttress entities retain their existing document and render instances, so only reinforcement geometry affected by an edit rebuilds its mesh.
 - Low-angle diagnostics are render-only overlays on the affected head and branch parts. The configured FaceAngleHighlightColor is used without changing support-layer colors.
 - DirectEditXYGizmoScale and DirectEditZGizmoScale are application settings with defaults of 1.5 and 3.0. The angle threshold is a saved user setting.
+- DirectEditTipGizomoColour and DirectEditTipGizmoSizeFactor are application settings for the always-on-top head and model-base contact balls. Their defaults are blue and 2.0.
+- Head contact edits store reversible tip positions and head directions in the renderer-independent Direct Edit action. Model-base contact edits reuse the existing reversible base contact and direction fields.
+- A head contact or branched-head-base drag targets the support displaying the gizmo. A model-base contact drag targets every clustered head sharing that base and stem. Existing stem arrow drags retain their multi-selection behavior.

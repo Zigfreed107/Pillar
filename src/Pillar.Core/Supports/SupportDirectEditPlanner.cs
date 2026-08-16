@@ -96,7 +96,11 @@ public static class SupportDirectEditPlanner
             startSettings.OriginalBaseAttachmentKind,
             startSettings.OriginalBaseDirection,
             modelBaseLength,
-            startSettings.OriginalModelBaseLength);
+            startSettings.OriginalModelBaseLength,
+            startSettings.TipPosition,
+            startSettings.HeadDirection,
+            startSettings.OriginalTipPosition,
+            startSettings.OriginalHeadDirection);
     }
 
     /// <summary>
@@ -171,7 +175,144 @@ public static class SupportDirectEditPlanner
             startSettings.OriginalBaseAttachmentKind,
             startSettings.OriginalBaseDirection,
             modelBaseLength,
-            startSettings.OriginalModelBaseLength);
+            startSettings.OriginalModelBaseLength,
+            startSettings.TipPosition,
+            startSettings.HeadDirection,
+            startSettings.OriginalTipPosition,
+            startSettings.OriginalHeadDirection);
+    }
+
+    /// <summary>
+    /// Moves a head contact to one valid model-surface hit and adopts its constrained surface direction.
+    /// </summary>
+    public static bool TryCreateHeadContactDraggedSettings(
+        SupportEntity support,
+        SupportDirectEditSettings startSettings,
+        Vector3 tipPosition,
+        Vector3 headDirection,
+        out SupportDirectEditSettings settings)
+    {
+        if (support == null)
+        {
+            throw new ArgumentNullException(nameof(support));
+        }
+
+        if (startSettings == null)
+        {
+            throw new ArgumentNullException(nameof(startSettings));
+        }
+
+        Vector3 basePosition = startSettings.BasePosition;
+
+        if (!IsFinite(tipPosition) || tipPosition.Z <= basePosition.Z + GeometryTolerance)
+        {
+            settings = startSettings.Clone();
+            return false;
+        }
+
+        Vector3 constrainedHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(
+            headDirection,
+            support.Profile);
+        settings = CreateHeadGeometrySettings(
+            support,
+            startSettings,
+            tipPosition,
+            constrainedHeadDirection);
+        return true;
+    }
+
+    /// <summary>
+    /// Reorients a fixed-length head toward an XY-dragged head base while retaining its model contact.
+    /// </summary>
+    public static SupportDirectEditSettings CreateHeadBaseDraggedSettings(
+        SupportEntity support,
+        SupportDirectEditSettings startSettings,
+        Vector3 xyDelta)
+    {
+        if (support == null)
+        {
+            throw new ArgumentNullException(nameof(support));
+        }
+
+        if (startSettings == null)
+        {
+            throw new ArgumentNullException(nameof(startSettings));
+        }
+
+        if (!IsFinite(xyDelta))
+        {
+            throw new ArgumentException("Direct Edit head-base displacement must be finite.", nameof(xyDelta));
+        }
+
+        Vector3 tipPosition = startSettings.TipPosition ?? support.TipPosition;
+        Vector3 startHeadDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(
+            startSettings.HeadDirection ?? support.HeadDirection,
+            support.Profile);
+        Vector3 startHeadBase = tipPosition - (startHeadDirection * support.Profile.HeadHeight);
+        Vector3 requestedHeadBase = startHeadBase + new Vector3(xyDelta.X, xyDelta.Y, 0.0f);
+        Vector3 requestedDirection = tipPosition - requestedHeadBase;
+        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(
+            requestedDirection,
+            support.Profile);
+        return CreateHeadGeometrySettings(support, startSettings, tipPosition, headDirection);
+    }
+
+    /// <summary>
+    /// Moves a model-connected base contact to one valid upward-facing model-surface hit.
+    /// </summary>
+    public static bool TryCreateModelBaseContactDraggedSettings(
+        SupportEntity support,
+        SupportDirectEditSettings startSettings,
+        Vector3 basePosition,
+        Vector3 baseDirection,
+        out SupportDirectEditSettings settings)
+    {
+        if (support == null)
+        {
+            throw new ArgumentNullException(nameof(support));
+        }
+
+        if (startSettings == null)
+        {
+            throw new ArgumentNullException(nameof(startSettings));
+        }
+
+        float modelBaseLength = startSettings.ModelBaseLength ?? support.Profile.ModelBaseHeight;
+        SupportProfile profile = support.Profile.WithModelBaseHeight(modelBaseLength);
+        Vector3 constrainedBaseDirection = SupportBaseDirectionCalculator.ClampDirectionToProfile(
+            baseDirection,
+            profile);
+        Vector3 stemBase = CalculateStemBase(
+            basePosition,
+            SupportBaseAttachmentKind.Model,
+            constrainedBaseDirection,
+            profile);
+        Vector3 tipPosition = startSettings.TipPosition ?? support.TipPosition;
+
+        if (!IsFinite(basePosition)
+            || basePosition.Z >= tipPosition.Z - GeometryTolerance
+            || stemBase.Z >= startSettings.StemTopZ - GeometryTolerance)
+        {
+            settings = startSettings.Clone();
+            return false;
+        }
+
+        settings = new SupportDirectEditSettings(
+            basePosition,
+            startSettings.StemTopZ,
+            SupportBaseAttachmentKind.Model,
+            constrainedBaseDirection,
+            startSettings.OriginalBasePosition,
+            startSettings.OriginalStemTopZ,
+            startSettings.OriginalBaseAttachmentKind,
+            startSettings.OriginalBaseDirection,
+            modelBaseLength,
+            startSettings.OriginalModelBaseLength,
+            startSettings.TipPosition,
+            startSettings.HeadDirection,
+            startSettings.OriginalTipPosition,
+            startSettings.OriginalHeadDirection);
+        return true;
     }
 
     /// <summary>
@@ -211,13 +352,15 @@ public static class SupportDirectEditPlanner
         SupportProfile profile = settings.ModelBaseLength.HasValue
             ? support.Profile.WithModelBaseHeight(modelBaseLength)
             : support.Profile;
-        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, profile);
+        Vector3 tipPosition = settings.TipPosition ?? support.TipPosition;
+        Vector3 requestedHeadDirection = settings.HeadDirection ?? support.HeadDirection;
+        Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(requestedHeadDirection, profile);
         float usableHeadLength = CalculateUsableHeadLength(
-            support.TipPosition,
+            tipPosition,
             settings.BasePosition.Z,
             headDirection,
             profile.HeadHeight);
-        Vector3 headJoint = support.TipPosition - (headDirection * usableHeadLength);
+        Vector3 headJoint = tipPosition - (headDirection * usableHeadLength);
         Vector3 requestedBaseDirection = settings.BaseDirection ?? support.BaseDirection;
         Vector3 baseDirection = baseAttachmentKind == SupportBaseAttachmentKind.Model
             ? SupportBaseDirectionCalculator.ClampDirectionToProfile(requestedBaseDirection, profile)
@@ -236,7 +379,7 @@ public static class SupportDirectEditPlanner
             support.Id,
             support.Name,
             support.SupportLayerGroupId,
-            support.TipPosition,
+            tipPosition,
             settings.BasePosition,
             headDirection,
             branchLength > GeometryTolerance ? branchLength : 0.0f,
@@ -252,16 +395,24 @@ public static class SupportDirectEditPlanner
     /// </summary>
     public static Vector3 CalculateStemTop(SupportEntity support)
     {
+        Vector3 headJoint = CalculateHeadBase(support);
+        return support.BranchLength > GeometryTolerance
+            ? headJoint - (Vector3.Normalize(support.BranchDirection) * support.BranchLength)
+            : headJoint;
+    }
+
+    /// <summary>
+    /// Calculates the support head base used to position its optional branch XY gizmo.
+    /// </summary>
+    public static Vector3 CalculateHeadBase(SupportEntity support)
+    {
         Vector3 headDirection = SupportHeadDirectionCalculator.ClampDirectionToProfile(support.HeadDirection, support.Profile);
         float usableHeadLength = CalculateUsableHeadLength(
             support.TipPosition,
             support.BasePosition.Z,
             headDirection,
             support.Profile.HeadHeight);
-        Vector3 headJoint = support.TipPosition - (headDirection * usableHeadLength);
-        return support.BranchLength > GeometryTolerance
-            ? headJoint - (Vector3.Normalize(support.BranchDirection) * support.BranchLength)
-            : headJoint;
+        return support.TipPosition - (headDirection * usableHeadLength);
     }
 
     /// <summary>
@@ -342,5 +493,43 @@ public static class SupportDirectEditPlanner
             0.0f,
             (tipPosition.Z - baseZ) / headDirection.Z);
         return MathF.Min(requestedHeadLength, maximumLengthByHeight);
+    }
+
+    /// <summary>
+    /// Creates explicit reversible head geometry while retaining the current stem and base edit state.
+    /// </summary>
+    private static SupportDirectEditSettings CreateHeadGeometrySettings(
+        SupportEntity support,
+        SupportDirectEditSettings startSettings,
+        Vector3 tipPosition,
+        Vector3 headDirection)
+    {
+        Vector3 originalTipPosition = startSettings.OriginalTipPosition ?? support.TipPosition;
+        Vector3 originalHeadDirection = startSettings.OriginalHeadDirection ?? support.HeadDirection;
+        return new SupportDirectEditSettings(
+            startSettings.BasePosition,
+            startSettings.StemTopZ,
+            startSettings.BaseAttachmentKind,
+            startSettings.BaseDirection,
+            startSettings.OriginalBasePosition,
+            startSettings.OriginalStemTopZ,
+            startSettings.OriginalBaseAttachmentKind,
+            startSettings.OriginalBaseDirection,
+            startSettings.ModelBaseLength,
+            startSettings.OriginalModelBaseLength,
+            tipPosition,
+            headDirection,
+            originalTipPosition,
+            originalHeadDirection);
+    }
+
+    /// <summary>
+    /// Tests whether all vector components are finite.
+    /// </summary>
+    private static bool IsFinite(Vector3 value)
+    {
+        return float.IsFinite(value.X)
+            && float.IsFinite(value.Y)
+            && float.IsFinite(value.Z);
     }
 }

@@ -8,6 +8,7 @@ using Pillar.UI.Layers;
 using Pillar.Core.Tools;
 using Pillar.Rendering.Tools;
 using Pillar.UI.Modes;
+using HelixToolkit.Maths;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -1235,10 +1236,38 @@ public partial class MainWindow
         _directEditTool.Begin(
             supportLayerGroup.Id,
             (float)Properties.Settings.Default.DirectEditXYGizmoScale,
-            (float)Properties.Settings.Default.DirectEditZGizmoScale);
+            (float)Properties.Settings.Default.DirectEditZGizmoScale,
+            (float)Properties.Settings.Default.DirectEditTipGizmoSizeFactor,
+            ReadDirectEditTipGizmoColor());
         _toolManager.SetTool(_directEditTool);
         ShowToolOptionsControl(_directEditToolOptionsControl, ToolSessionPanelSet.None);
         _viewModel.SetStatusText("Direct Edit: click a support stem to show its handles.");
+    }
+
+    /// <summary>
+    /// Reads the application-level Direct Edit contact-handle color with a stable blue fallback.
+    /// </summary>
+    private static Color4 ReadDirectEditTipGizmoColor()
+    {
+        try
+        {
+            object? convertedColor = System.Windows.Media.ColorConverter.ConvertFromString(
+                Properties.Settings.Default.DirectEditTipGizomoColour);
+
+            if (convertedColor is System.Windows.Media.Color color)
+            {
+                return new Color4(
+                    color.R / 255.0f,
+                    color.G / 255.0f,
+                    color.B / 255.0f,
+                    color.A / 255.0f);
+            }
+        }
+        catch (FormatException)
+        {
+        }
+
+        return new Color4(0.18f, 0.39f, 0.90f, 1.0f);
     }
 
     /// <summary>

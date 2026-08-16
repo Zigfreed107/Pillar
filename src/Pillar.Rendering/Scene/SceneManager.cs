@@ -637,16 +637,34 @@ public class SceneManager
     public void ShowDirectEditGizmo(
         Vector3 basePosition,
         Vector3 stemTop,
+        Vector3 headBase,
+        Vector3 headTip,
+        Vector3 modelBaseTip,
         float xyLength,
         float zLength,
-        bool showBaseZArrow)
+        float headBaseXyLength,
+        float headTipBallDiameter,
+        float modelBaseTipBallDiameter,
+        bool showBaseZArrow,
+        bool showHeadBaseHandles,
+        bool showModelBaseTip,
+        Color4 tipGizmoColor)
     {
         _directEditPreviewRenderer.ShowGizmo(
             basePosition,
             stemTop,
+            headBase,
+            headTip,
+            modelBaseTip,
             xyLength,
             zLength,
-            showBaseZArrow);
+            headBaseXyLength,
+            headTipBallDiameter,
+            modelBaseTipBallDiameter,
+            showBaseZArrow,
+            showHeadBaseHandles,
+            showModelBaseTip,
+            tipGizmoColor);
     }
 
     /// <summary>

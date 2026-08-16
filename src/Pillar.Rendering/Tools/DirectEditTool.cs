@@ -1,6 +1,8 @@
 // DirectEditTool.cs
 // Owns selection-driven Direct Edit gizmos, constrained dragging, and transient support previews.
 using HelixToolkit.Wpf.SharpDX;
+using HelixToolkit.SharpDX;
+using HelixToolkit.Maths;
 using Pillar.Core.Document;
 using Pillar.Core.Entities;
 using Pillar.Core.Layers;
@@ -71,14 +73,19 @@ public sealed class DirectEditTool : ITool
     private readonly List<Guid> _selectedEditableSupportIds = new List<Guid>();
     private readonly List<SupportEntity> _previewSupports = new List<SupportEntity>();
     private readonly List<DirectEditCommitAction> _dragStartActions = new List<DirectEditCommitAction>();
+    private readonly List<IReadOnlyList<SupportEntity>> _dragActionSupports = new List<IReadOnlyList<SupportEntity>>();
     private readonly List<DirectEditCommitAction> _previewActions = new List<DirectEditCommitAction>();
+    private readonly Predicate<Element3D> _acceptOwningMeshVisual;
     private Guid? _activeSupportLayerGroupId;
+    private MeshEntity? _owningMesh;
     private SupportEntity? _gizmoSupport;
     private DirectEditGizmoHandleKind _dragHandle;
     private Vector2 _dragStartScreenPosition;
     private Vector3 _dragStartPlanePoint;
     private float _xyGizmoScale = 1.5f;
     private float _zGizmoScale = 3.0f;
+    private float _tipGizmoSizeFactor = 2.0f;
+    private Color4 _tipGizmoColor = new Color4(0.18f, 0.39f, 0.90f, 1.0f);
     private bool _isCommitting;
     private bool _isWindowSelectionGesture;
 
@@ -98,6 +105,7 @@ public sealed class DirectEditTool : ITool
         _projection = projection ?? throw new ArgumentNullException(nameof(projection));
         _windowSelectionTool = windowSelectionTool ?? throw new ArgumentNullException(nameof(windowSelectionTool));
         _selection = scene.SelectionManager;
+        _acceptOwningMeshVisual = IsOwningMeshVisual;
         _selection.SelectionChanged += Selection_SelectionChanged;
     }
 
@@ -119,12 +127,20 @@ public sealed class DirectEditTool : ITool
     /// <summary>
     /// Starts a Direct Edit session and immediately displays gizmos for the first selected support.
     /// </summary>
-    public void Begin(Guid supportLayerGroupId, float xyGizmoScale, float zGizmoScale)
+    public void Begin(
+        Guid supportLayerGroupId,
+        float xyGizmoScale,
+        float zGizmoScale,
+        float tipGizmoSizeFactor,
+        Color4 tipGizmoColor)
     {
         Cancel();
         _activeSupportLayerGroupId = supportLayerGroupId;
+        _owningMesh = FindOwningMesh(supportLayerGroupId);
         _xyGizmoScale = IsPositiveFinite(xyGizmoScale) ? xyGizmoScale : 1.5f;
         _zGizmoScale = IsPositiveFinite(zGizmoScale) ? zGizmoScale : 3.0f;
+        _tipGizmoSizeFactor = IsPositiveFinite(tipGizmoSizeFactor) ? tipGizmoSizeFactor : 2.0f;
+        _tipGizmoColor = tipGizmoColor;
         _windowSelectionTool.SetSelectionFilter(SelectionFilter.FromPredicate(
             (CadEntity entity) => IsWindowSelectableSupport(entity, supportLayerGroupId)));
         _windowSelectionTool.PruneSelectionToActiveFilter();
@@ -334,10 +350,12 @@ public sealed class DirectEditTool : ITool
         _windowSelectionTool.ResetSelectionFilter();
         _isWindowSelectionGesture = false;
         _activeSupportLayerGroupId = null;
+        _owningMesh = null;
         _gizmoSupport = null;
         _selectedStemGroups.Clear();
         _selectedEditableSupportIds.Clear();
         _dragStartActions.Clear();
+        _dragActionSupports.Clear();
         _previewActions.Clear();
         _previewSupports.Clear();
         _dragHandle = DirectEditGizmoHandleKind.None;
@@ -407,12 +425,11 @@ public sealed class DirectEditTool : ITool
         }
 
         _gizmoSupport = _selectedStemGroups[0].Anchor;
-        Vector3 stemTop = SupportDirectEditPlanner.CalculateStemTop(_gizmoSupport);
-        ShowGizmo(SupportDirectEditPlanner.CalculateStemBase(_gizmoSupport), stemTop);
+        ShowGizmo(_gizmoSupport);
         int supportCount = _selectedEditableSupportIds.Count;
         StatusMessageRequested?.Invoke(
             supportCount == 1
-                ? "Direct Edit: Ctrl-click more stems, or drag X, Y, XY, or Z."
+                ? "Direct Edit: drag an arrow, a contact ball, or Ctrl-click more stems."
                 : $"Direct Edit: {supportCount} selected supports will move together.");
     }
 
@@ -460,36 +477,51 @@ public sealed class DirectEditTool : ITool
         }
 
         _dragStartActions.Clear();
+        _dragActionSupports.Clear();
 
-        for (int i = 0; i < _selectedStemGroups.Count; i++)
+        if (IsHeadHandle(handleKind))
         {
-            SelectedStemGroup group = _selectedStemGroups[i];
-            Vector3 stemTop = SupportDirectEditPlanner.CalculateStemTop(group.Anchor);
-            SupportDirectEditSettings settings = new SupportDirectEditSettings(
-                group.Anchor.BasePosition,
-                stemTop.Z,
-                group.Anchor.BaseAttachmentKind,
-                group.Anchor.BaseDirection,
-                group.Anchor.BasePosition,
-                stemTop.Z,
-                group.Anchor.BaseAttachmentKind,
-                group.Anchor.BaseDirection,
-                group.Anchor.Profile.ModelBaseHeight,
-                group.Anchor.Profile.ModelBaseHeight);
-            _dragStartActions.Add(new DirectEditCommitAction(CreateTargetIds(group.Supports), settings));
+            List<SupportEntity> headSupport = new List<SupportEntity> { _gizmoSupport };
+            _dragActionSupports.Add(headSupport);
+            _dragStartActions.Add(new DirectEditCommitAction(
+                CreateTargetIds(headSupport),
+                CreateStartSettings(_gizmoSupport, true)));
+        }
+        else if (handleKind == DirectEditGizmoHandleKind.ModelBaseTip)
+        {
+            SelectedStemGroup group = _selectedStemGroups[0];
+            _dragActionSupports.Add(group.Supports);
+            _dragStartActions.Add(new DirectEditCommitAction(
+                CreateTargetIds(group.Supports),
+                CreateStartSettings(group.Anchor, false)));
+        }
+        else
+        {
+            for (int i = 0; i < _selectedStemGroups.Count; i++)
+            {
+                SelectedStemGroup group = _selectedStemGroups[i];
+                _dragActionSupports.Add(group.Supports);
+                _dragStartActions.Add(new DirectEditCommitAction(
+                    CreateTargetIds(group.Supports),
+                    CreateStartSettings(group.Anchor, false)));
+            }
         }
 
         _dragHandle = handleKind;
         _dragStartScreenPosition = screenPosition;
         Vector3 gizmoStemBase = SupportDirectEditPlanner.CalculateStemBase(_gizmoSupport);
-        _dragStartPlanePoint = gizmoStemBase;
+        Vector3 dragPlaneOrigin = IsHeadBaseHandle(handleKind)
+            ? SupportDirectEditPlanner.CalculateHeadBase(_gizmoSupport)
+            : gizmoStemBase;
+        _dragStartPlanePoint = dragPlaneOrigin;
 
         if (handleKind != DirectEditGizmoHandleKind.ZAxis
-            && handleKind != DirectEditGizmoHandleKind.BaseZAxis)
+            && handleKind != DirectEditGizmoHandleKind.BaseZAxis
+            && !IsSurfaceContactHandle(handleKind))
         {
             _projection.TryGetWorldPointOnHorizontalPlane(
                 screenPosition,
-                gizmoStemBase.Z,
+                dragPlaneOrigin.Z,
                 out _dragStartPlanePoint);
         }
 
@@ -509,6 +541,11 @@ public sealed class DirectEditTool : ITool
         if (_gizmoSupport == null || _dragStartActions.Count == 0)
         {
             return false;
+        }
+
+        if (IsSurfaceContactHandle(_dragHandle))
+        {
+            return TryBuildSurfaceContactAction(screenPosition, destination);
         }
 
         Vector3 xyDelta = Vector3.Zero;
@@ -554,7 +591,7 @@ public sealed class DirectEditTool : ITool
         {
             if (!_projection.TryGetWorldPointOnHorizontalPlane(
                     screenPosition,
-                    firstStemBase.Z,
+                    _dragStartPlanePoint.Z,
                     out Vector3 dragPoint))
             {
                 return false;
@@ -563,11 +600,13 @@ public sealed class DirectEditTool : ITool
             xyDelta = dragPoint - _dragStartPlanePoint;
             xyDelta.Z = 0.0f;
 
-            if (_dragHandle == DirectEditGizmoHandleKind.XAxis)
+            if (_dragHandle == DirectEditGizmoHandleKind.XAxis
+                || _dragHandle == DirectEditGizmoHandleKind.HeadBaseXAxis)
             {
                 xyDelta.Y = 0.0f;
             }
-            else if (_dragHandle == DirectEditGizmoHandleKind.YAxis)
+            else if (_dragHandle == DirectEditGizmoHandleKind.YAxis
+                || _dragHandle == DirectEditGizmoHandleKind.HeadBaseYAxis)
             {
                 xyDelta.X = 0.0f;
             }
@@ -579,19 +618,85 @@ public sealed class DirectEditTool : ITool
         {
             DirectEditCommitAction startAction = _dragStartActions[i];
             SupportDirectEditSettings start = startAction.Settings;
-            SupportDirectEditSettings edited = _dragHandle == DirectEditGizmoHandleKind.BaseZAxis
-                ? SupportDirectEditPlanner.CreateModelBaseLengthDraggedSettings(
-                    _selectedStemGroups[i].Anchor,
+            SupportEntity sourceSupport = _dragActionSupports[i][0];
+            SupportDirectEditSettings edited = IsHeadBaseHandle(_dragHandle)
+                ? SupportDirectEditPlanner.CreateHeadBaseDraggedSettings(
+                    sourceSupport,
+                    start,
+                    xyDelta)
+                : _dragHandle == DirectEditGizmoHandleKind.BaseZAxis
+                    ? SupportDirectEditPlanner.CreateModelBaseLengthDraggedSettings(
+                    sourceSupport,
                     start,
                     zDelta)
                 : SupportDirectEditPlanner.CreateDraggedSettings(
-                    _selectedStemGroups[i].Anchor,
+                    sourceSupport,
                     start,
                     xyDelta,
                     zDelta);
             destination.Add(new DirectEditCommitAction(startAction.TargetSupportIds, edited));
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Converts the current pointer hit on the owning model into one head- or base-contact edit.
+    /// </summary>
+    private bool TryBuildSurfaceContactAction(
+        Vector2 screenPosition,
+        List<DirectEditCommitAction> destination)
+    {
+        if (_owningMesh == null
+            || _dragStartActions.Count != 1
+            || _dragActionSupports.Count != 1
+            || !_projection.TryGetMeshSurfaceHit(
+                screenPosition,
+                _acceptOwningMeshVisual,
+                out MeshSurfaceHit surfaceHit))
+        {
+            return false;
+        }
+
+        DirectEditCommitAction startAction = _dragStartActions[0];
+        SupportEntity support = _dragActionSupports[0][0];
+        SupportDirectEditSettings edited;
+
+        if (_dragHandle == DirectEditGizmoHandleKind.HeadTip)
+        {
+            if (!SupportHeadDirectionCalculator.TryCreateHeadDirectionFromSurfaceNormal(
+                    surfaceHit.SurfaceNormal,
+                    support.Profile,
+                    out Vector3 headDirection)
+                || !SupportDirectEditPlanner.TryCreateHeadContactDraggedSettings(
+                    support,
+                    startAction.Settings,
+                    surfaceHit.HitPosition,
+                    headDirection,
+                    out edited))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!SupportBaseDirectionCalculator.TryCreateDirectionFromSurfaceNormal(
+                    surfaceHit.SurfaceNormal,
+                    support.Profile,
+                    out Vector3 baseDirection)
+                || !SupportDirectEditPlanner.TryCreateModelBaseContactDraggedSettings(
+                    support,
+                    startAction.Settings,
+                    surfaceHit.HitPosition,
+                    baseDirection,
+                    out edited))
+            {
+                return false;
+            }
+        }
+
+        destination.Clear();
+        destination.Add(new DirectEditCommitAction(startAction.TargetSupportIds, edited));
         return true;
     }
 
@@ -604,13 +709,13 @@ public sealed class DirectEditTool : ITool
 
         for (int groupIndex = 0; groupIndex < actions.Count; groupIndex++)
         {
-            SelectedStemGroup group = _selectedStemGroups[groupIndex];
+            IReadOnlyList<SupportEntity> supports = _dragActionSupports[groupIndex];
             SupportDirectEditSettings settings = actions[groupIndex].Settings;
 
-            for (int supportIndex = 0; supportIndex < group.Supports.Count; supportIndex++)
+            for (int supportIndex = 0; supportIndex < supports.Count; supportIndex++)
             {
                 _previewSupports.Add(SupportDirectEditPlanner.RebuildSupport(
-                    group.Supports[supportIndex],
+                    supports[supportIndex],
                     settings));
             }
         }
@@ -623,9 +728,7 @@ public sealed class DirectEditTool : ITool
         }
 
         SupportEntity firstPreviewSupport = _previewSupports[0];
-        ShowGizmo(
-            SupportDirectEditPlanner.CalculateStemBase(firstPreviewSupport),
-            SupportDirectEditPlanner.CalculateStemTop(firstPreviewSupport));
+        ShowGizmo(firstPreviewSupport);
     }
 
     /// <summary>
@@ -661,6 +764,7 @@ public sealed class DirectEditTool : ITool
 
         _dragHandle = DirectEditGizmoHandleKind.None;
         _dragStartActions.Clear();
+        _dragActionSupports.Clear();
         _previewActions.Clear();
         _previewSupports.Clear();
         _scene.HideDirectEditPreview();
@@ -832,7 +936,7 @@ public sealed class DirectEditTool : ITool
     /// <summary>
     /// Positions handles using the first selected support's resolved dimensions.
     /// </summary>
-    private void ShowGizmo(Vector3 basePosition, Vector3 stemTop)
+    private void ShowGizmo(SupportEntity displayedSupport)
     {
         if (_gizmoSupport == null)
         {
@@ -845,12 +949,24 @@ public sealed class DirectEditTool : ITool
         float baseDiameter = _gizmoSupport.BaseAttachmentKind == SupportBaseAttachmentKind.Model
             ? MathF.Max(_gizmoSupport.Profile.ModelBaseBottomDiameter, dimensions.StemBottomDiameter)
             : _gizmoSupport.Profile.BaseBottomRadius * 2.0f;
+        Vector3 stemBase = SupportDirectEditPlanner.CalculateStemBase(displayedSupport);
+        Vector3 stemTop = SupportDirectEditPlanner.CalculateStemTop(displayedSupport);
+        Vector3 headBase = SupportDirectEditPlanner.CalculateHeadBase(displayedSupport);
         _scene.ShowDirectEditGizmo(
-            basePosition,
+            stemBase,
             stemTop,
+            headBase,
+            displayedSupport.TipPosition,
+            displayedSupport.BasePosition,
             baseDiameter * _xyGizmoScale,
             dimensions.StemTopDiameter * _zGizmoScale,
-            _gizmoSupport.BaseAttachmentKind == SupportBaseAttachmentKind.Model);
+            dimensions.HeadBottomDiameter * _xyGizmoScale,
+            dimensions.HeadTopDiameter * _tipGizmoSizeFactor,
+            displayedSupport.Profile.ModelBaseBottomDiameter * _tipGizmoSizeFactor,
+            displayedSupport.BaseAttachmentKind == SupportBaseAttachmentKind.Model,
+            displayedSupport.BranchLength > 0.0f,
+            displayedSupport.BaseAttachmentKind == SupportBaseAttachmentKind.Model,
+            _tipGizmoColor);
     }
 
     /// <summary>
@@ -876,6 +992,68 @@ public sealed class DirectEditTool : ITool
         }
 
         return ids;
+    }
+
+    /// <summary>
+    /// Captures one support's reversible geometry at the start of a drag.
+    /// </summary>
+    private static SupportDirectEditSettings CreateStartSettings(
+        SupportEntity support,
+        bool includeHeadGeometry)
+    {
+        Vector3 stemTop = SupportDirectEditPlanner.CalculateStemTop(support);
+        return new SupportDirectEditSettings(
+            support.BasePosition,
+            stemTop.Z,
+            support.BaseAttachmentKind,
+            support.BaseDirection,
+            support.BasePosition,
+            stemTop.Z,
+            support.BaseAttachmentKind,
+            support.BaseDirection,
+            support.Profile.ModelBaseHeight,
+            support.Profile.ModelBaseHeight,
+            includeHeadGeometry ? support.TipPosition : null,
+            includeHeadGeometry ? support.HeadDirection : null,
+            includeHeadGeometry ? support.TipPosition : null,
+            includeHeadGeometry ? support.HeadDirection : null);
+    }
+
+    /// <summary>
+    /// Tests whether a handle edits one selected support's head rather than its shared stem.
+    /// </summary>
+    private static bool IsHeadHandle(DirectEditGizmoHandleKind handleKind)
+    {
+        return handleKind == DirectEditGizmoHandleKind.HeadTip
+            || IsHeadBaseHandle(handleKind);
+    }
+
+    /// <summary>
+    /// Tests whether a handle moves the base of a branched head in the XY plane.
+    /// </summary>
+    private static bool IsHeadBaseHandle(DirectEditGizmoHandleKind handleKind)
+    {
+        return handleKind == DirectEditGizmoHandleKind.HeadBaseXAxis
+            || handleKind == DirectEditGizmoHandleKind.HeadBaseYAxis
+            || handleKind == DirectEditGizmoHandleKind.HeadBaseXYPlane;
+    }
+
+    /// <summary>
+    /// Tests whether a handle follows direct viewport hits on the owning model.
+    /// </summary>
+    private static bool IsSurfaceContactHandle(DirectEditGizmoHandleKind handleKind)
+    {
+        return handleKind == DirectEditGizmoHandleKind.HeadTip
+            || handleKind == DirectEditGizmoHandleKind.ModelBaseTip;
+    }
+
+    /// <summary>
+    /// Accepts only rendered elements belonging to the active support layer's imported model.
+    /// </summary>
+    private bool IsOwningMeshVisual(Element3D element)
+    {
+        return _owningMesh != null
+            && ReferenceEquals(_scene.GetEntityFromVisual(element), _owningMesh);
     }
 
     /// <summary>

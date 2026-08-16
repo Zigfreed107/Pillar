@@ -80,7 +80,11 @@ public static class SupportModifierSourceRestorer
                 modifier.DirectEditSettings.OriginalBaseAttachmentKind,
                 modifier.DirectEditSettings.OriginalBaseDirection,
                 modifier.DirectEditSettings.OriginalModelBaseLength,
-                modifier.DirectEditSettings.OriginalModelBaseLength);
+                modifier.DirectEditSettings.OriginalModelBaseLength,
+                modifier.DirectEditSettings.OriginalTipPosition,
+                modifier.DirectEditSettings.OriginalHeadDirection,
+                modifier.DirectEditSettings.OriginalTipPosition,
+                modifier.DirectEditSettings.OriginalHeadDirection);
             restored = SupportDirectEditPlanner.RebuildSupport(restored, reverseSettings);
         }
 

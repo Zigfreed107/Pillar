@@ -50,6 +50,8 @@ During an XY Direct Edit drag, a model-connected base keeps its model contact fi
 
 Direct Edit axis arrows render in an always-on-top scene pass so the selected support and model cannot visually occlude their handles. The translucent XY plane remains depth-aware to retain useful spatial context.
 
+Direct Edit head-contact balls and model-base-contact balls also render in the always-on-top pass. Dragging either ball accepts hits only from the support layer's owning model and derives the edited head or base direction from that surface. A branched head additionally shows a second X/Y/XY gizmo at the head base; it retains the model contact and profile head length while the head direction and branch are rebuilt.
+
 Model-connected supports also show a lower blue Z arrow at the base-to-stem joint. Dragging it keeps the model contact and stem XY fixed while changing that support's model-base length. The drag cannot exceed the preset's maximum angle from vertical or move the base joint through the stem top. Build-plate supports do not show this lower handle.
 
 When source-support regeneration changes the generator revision, all existing modifiers for that support layer are discarded. Regeneration should report which modifiers were removed. The generator change, regenerated supports, and modifier removal must form one undoable command so Undo restores the complete previous state.

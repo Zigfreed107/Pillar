@@ -109,6 +109,24 @@ namespace Pillar.UI.Properties {
 
         [global::System.Configuration.ApplicationScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("#FF2E64E6")]
+        public string DirectEditTipGizomoColour {
+            get {
+                return ((string)(this["DirectEditTipGizomoColour"]));
+            }
+        }
+
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public double DirectEditTipGizmoSizeFactor {
+            get {
+                return ((double)(this["DirectEditTipGizmoSizeFactor"]));
+            }
+        }
+
+        [global::System.Configuration.ApplicationScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("1.5")]
         public double TranslateArrowDiameter {
             get {

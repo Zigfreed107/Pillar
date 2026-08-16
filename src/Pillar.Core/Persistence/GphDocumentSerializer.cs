@@ -1325,7 +1325,19 @@ public sealed class GphDocumentSerializer
             OriginalBaseDirection = settings.OriginalBaseDirection.HasValue
                 ? CreateVectorDto(settings.OriginalBaseDirection.Value)
                 : null,
-            OriginalModelBaseLength = settings.OriginalModelBaseLength
+            OriginalModelBaseLength = settings.OriginalModelBaseLength,
+            TipPosition = settings.TipPosition.HasValue
+                ? CreateVectorDto(settings.TipPosition.Value)
+                : null,
+            HeadDirection = settings.HeadDirection.HasValue
+                ? CreateVectorDto(settings.HeadDirection.Value)
+                : null,
+            OriginalTipPosition = settings.OriginalTipPosition.HasValue
+                ? CreateVectorDto(settings.OriginalTipPosition.Value)
+                : null,
+            OriginalHeadDirection = settings.OriginalHeadDirection.HasValue
+                ? CreateVectorDto(settings.OriginalHeadDirection.Value)
+                : null
         };
     }
 
@@ -2038,7 +2050,19 @@ public sealed class GphDocumentSerializer
                 ? null
                 : CreateVector(modifierDto.DirectEditSettings.OriginalBaseDirection),
             modifierDto.DirectEditSettings.ModelBaseLength,
-            modifierDto.DirectEditSettings.OriginalModelBaseLength);
+            modifierDto.DirectEditSettings.OriginalModelBaseLength,
+            modifierDto.DirectEditSettings.TipPosition == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.TipPosition),
+            modifierDto.DirectEditSettings.HeadDirection == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.HeadDirection),
+            modifierDto.DirectEditSettings.OriginalTipPosition == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.OriginalTipPosition),
+            modifierDto.DirectEditSettings.OriginalHeadDirection == null
+                ? null
+                : CreateVector(modifierDto.DirectEditSettings.OriginalHeadDirection));
     }
 
     /// <summary>
@@ -2432,6 +2456,10 @@ public sealed class GphDocumentSerializer
         public int? OriginalBaseAttachmentKind { get; set; }
         public GphVector3Dto? OriginalBaseDirection { get; set; }
         public float? OriginalModelBaseLength { get; set; }
+        public GphVector3Dto? TipPosition { get; set; }
+        public GphVector3Dto? HeadDirection { get; set; }
+        public GphVector3Dto? OriginalTipPosition { get; set; }
+        public GphVector3Dto? OriginalHeadDirection { get; set; }
     }
 
     /// <summary>

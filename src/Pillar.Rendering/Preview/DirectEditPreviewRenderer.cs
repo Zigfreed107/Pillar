@@ -26,7 +26,12 @@ public enum DirectEditGizmoHandleKind
     YAxis,
     XYPlane,
     ZAxis,
-    BaseZAxis
+    BaseZAxis,
+    HeadTip,
+    ModelBaseTip,
+    HeadBaseXAxis,
+    HeadBaseYAxis,
+    HeadBaseXYPlane
 }
 
 /// <summary>
@@ -43,7 +48,12 @@ public sealed class DirectEditPreviewRenderer
     private readonly MeshGeometryModel3D _yArrow;
     private readonly MeshGeometryModel3D _zArrow;
     private readonly MeshGeometryModel3D _baseZArrow;
+    private readonly MeshGeometryModel3D _headBaseXArrow;
+    private readonly MeshGeometryModel3D _headBaseYArrow;
+    private readonly MeshGeometryModel3D _headTipBall;
+    private readonly MeshGeometryModel3D _modelBaseTipBall;
     private readonly MeshGeometryModel3D _xyPlane;
+    private readonly MeshGeometryModel3D _headBaseXyPlane;
     private readonly ScaleTransform3D _xArrowScale;
     private readonly ScaleTransform3D _yArrowScale;
     private readonly ScaleTransform3D _zArrowScale;
@@ -52,7 +62,17 @@ public sealed class DirectEditPreviewRenderer
     private readonly TranslateTransform3D _zArrowTranslation;
     private readonly ScaleTransform3D _baseZArrowScale;
     private readonly TranslateTransform3D _baseZArrowTranslation;
+    private readonly ScaleTransform3D _headBaseXArrowScale;
+    private readonly ScaleTransform3D _headBaseYArrowScale;
+    private readonly TranslateTransform3D _headBaseXArrowTranslation;
+    private readonly TranslateTransform3D _headBaseYArrowTranslation;
+    private readonly ScaleTransform3D _headTipBallScale;
+    private readonly ScaleTransform3D _modelBaseTipBallScale;
+    private readonly TranslateTransform3D _headTipBallTranslation;
+    private readonly TranslateTransform3D _modelBaseTipBallTranslation;
     private readonly Vector3Collection _planePositions;
+    private readonly Vector3Collection _headBasePlanePositions;
+    private readonly PhongMaterial _tipGizmoMaterial;
     private readonly int _supportSides;
 
     /// <summary>
@@ -73,7 +93,17 @@ public sealed class DirectEditPreviewRenderer
         (_baseZArrow, _baseZArrowScale, _baseZArrowTranslation) = CreateArrow(
             new Color4(0.18f, 0.39f, 0.90f, 1.0f),
             -Vector3.UnitZ);
+        (_headBaseXArrow, _headBaseXArrowScale, _headBaseXArrowTranslation) = CreateArrow(
+            new Color4(0.86f, 0.18f, 0.18f, 1.0f),
+            Vector3.UnitX);
+        (_headBaseYArrow, _headBaseYArrowScale, _headBaseYArrowTranslation) = CreateArrow(
+            new Color4(0.18f, 0.75f, 0.25f, 1.0f),
+            Vector3.UnitY);
+        _tipGizmoMaterial = CreateMaterial(new Color4(0.18f, 0.39f, 0.90f, 1.0f));
+        (_headTipBall, _headTipBallScale, _headTipBallTranslation) = CreateBall(_tipGizmoMaterial);
+        (_modelBaseTipBall, _modelBaseTipBallScale, _modelBaseTipBallTranslation) = CreateBall(_tipGizmoMaterial);
         (_xyPlane, _planePositions) = CreatePlane();
+        (_headBaseXyPlane, _headBasePlanePositions) = CreatePlane();
 
         _topMostGizmoRoot = new TopMostGroup3D
         {
@@ -83,9 +113,14 @@ public sealed class DirectEditPreviewRenderer
         _topMostGizmoRoot.Children.Add(_yArrow);
         _topMostGizmoRoot.Children.Add(_zArrow);
         _topMostGizmoRoot.Children.Add(_baseZArrow);
+        _topMostGizmoRoot.Children.Add(_headBaseXArrow);
+        _topMostGizmoRoot.Children.Add(_headBaseYArrow);
+        _topMostGizmoRoot.Children.Add(_headTipBall);
+        _topMostGizmoRoot.Children.Add(_modelBaseTipBall);
 
         sceneRoot.Children.Add(_supportPreviewRoot);
         sceneRoot.Children.Add(_xyPlane);
+        sceneRoot.Children.Add(_headBaseXyPlane);
         sceneRoot.Children.Add(_topMostGizmoRoot);
     }
 
@@ -95,21 +130,59 @@ public sealed class DirectEditPreviewRenderer
     public void ShowGizmo(
         Vector3 basePosition,
         Vector3 stemTop,
+        Vector3 headBase,
+        Vector3 headTip,
+        Vector3 modelBaseTip,
         float xyLength,
         float zLength,
-        bool showBaseZArrow)
+        float headBaseXyLength,
+        float headTipBallDiameter,
+        float modelBaseTipBallDiameter,
+        bool showBaseZArrow,
+        bool showHeadBaseHandles,
+        bool showModelBaseTip,
+        Color4 tipGizmoColor)
     {
         float safeXyLength = IsPositiveFinite(xyLength) ? xyLength : 1.0f;
         float safeZLength = IsPositiveFinite(zLength) ? zLength : 1.0f;
+        float safeHeadBaseXyLength = IsPositiveFinite(headBaseXyLength) ? headBaseXyLength : 1.0f;
+        float safeHeadTipBallDiameter = IsPositiveFinite(headTipBallDiameter) ? headTipBallDiameter : 1.0f;
+        float safeModelBaseTipBallDiameter = IsPositiveFinite(modelBaseTipBallDiameter)
+            ? modelBaseTipBallDiameter
+            : 1.0f;
         ApplyArrowTransform(_xArrowScale, _xArrowTranslation, basePosition, safeXyLength);
         ApplyArrowTransform(_yArrowScale, _yArrowTranslation, basePosition, safeXyLength);
         ApplyArrowTransform(_zArrowScale, _zArrowTranslation, stemTop, safeZLength);
         ApplyArrowTransform(_baseZArrowScale, _baseZArrowTranslation, basePosition, safeZLength);
-        UpdatePlane(basePosition, safeXyLength);
+        ApplyArrowTransform(
+            _headBaseXArrowScale,
+            _headBaseXArrowTranslation,
+            headBase,
+            safeHeadBaseXyLength);
+        ApplyArrowTransform(
+            _headBaseYArrowScale,
+            _headBaseYArrowTranslation,
+            headBase,
+            safeHeadBaseXyLength);
+        ApplyBallTransform(_headTipBallScale, _headTipBallTranslation, headTip, safeHeadTipBallDiameter);
+        ApplyBallTransform(
+            _modelBaseTipBallScale,
+            _modelBaseTipBallTranslation,
+            modelBaseTip,
+            safeModelBaseTipBallDiameter);
+        ApplyMaterialColor(_tipGizmoMaterial, tipGizmoColor);
+        UpdatePlane(_planePositions, basePosition, safeXyLength);
+        UpdatePlane(_headBasePlanePositions, headBase, safeHeadBaseXyLength);
         _xyPlane.Geometry?.UpdateVertices();
         _xyPlane.Geometry?.UpdateBounds();
+        _headBaseXyPlane.Geometry?.UpdateVertices();
+        _headBaseXyPlane.Geometry?.UpdateBounds();
         SetGizmoVisibility(Visibility.Visible);
         _baseZArrow.Visibility = showBaseZArrow ? Visibility.Visible : Visibility.Collapsed;
+        _headBaseXArrow.Visibility = showHeadBaseHandles ? Visibility.Visible : Visibility.Collapsed;
+        _headBaseYArrow.Visibility = showHeadBaseHandles ? Visibility.Visible : Visibility.Collapsed;
+        _headBaseXyPlane.Visibility = showHeadBaseHandles ? Visibility.Visible : Visibility.Collapsed;
+        _modelBaseTipBall.Visibility = showModelBaseTip ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -156,6 +229,36 @@ public sealed class DirectEditPreviewRenderer
         if (ReferenceEquals(element, _baseZArrow))
         {
             kind = DirectEditGizmoHandleKind.BaseZAxis;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _headTipBall))
+        {
+            kind = DirectEditGizmoHandleKind.HeadTip;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _modelBaseTipBall))
+        {
+            kind = DirectEditGizmoHandleKind.ModelBaseTip;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _headBaseXArrow))
+        {
+            kind = DirectEditGizmoHandleKind.HeadBaseXAxis;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _headBaseYArrow))
+        {
+            kind = DirectEditGizmoHandleKind.HeadBaseYAxis;
+            return true;
+        }
+
+        if (ReferenceEquals(element, _headBaseXyPlane))
+        {
+            kind = DirectEditGizmoHandleKind.HeadBaseXYPlane;
             return true;
         }
 
@@ -223,6 +326,44 @@ public sealed class DirectEditPreviewRenderer
     }
 
     /// <summary>
+    /// Creates one reusable unit-diameter contact ball.
+    /// </summary>
+    private static (MeshGeometryModel3D Model, ScaleTransform3D Scale, TranslateTransform3D Translation) CreateBall(
+        PhongMaterial material)
+    {
+        MeshBuilder builder = new MeshBuilder();
+        builder.AddSphere(Vector3.Zero, 0.5f);
+        ScaleTransform3D scale = new ScaleTransform3D(1.0, 1.0, 1.0);
+        TranslateTransform3D translation = new TranslateTransform3D();
+        Transform3DGroup transform = new Transform3DGroup();
+        transform.Children.Add(scale);
+        transform.Children.Add(translation);
+        MeshGeometryModel3D model = new MeshGeometryModel3D
+        {
+            Geometry = builder.ToMeshGeometry3D(),
+            Material = material,
+            Transform = transform,
+            Visibility = Visibility.Collapsed,
+            IsHitTestVisible = true
+        };
+        return (model, scale, translation);
+    }
+
+    /// <summary>
+    /// Creates a lit solid material for one reusable gizmo family.
+    /// </summary>
+    private static PhongMaterial CreateMaterial(Color4 color)
+    {
+        return new PhongMaterial
+        {
+            AmbientColor = color,
+            DiffuseColor = color,
+            SpecularColor = new Color4(0.2f, 0.2f, 0.2f, 1.0f),
+            SpecularShininess = 18.0f
+        };
+    }
+
+    /// <summary>
     /// Creates the translucent yellow XY drag plane.
     /// </summary>
     private static (MeshGeometryModel3D Model, Vector3Collection Positions) CreatePlane()
@@ -271,14 +412,40 @@ public sealed class DirectEditPreviewRenderer
     }
 
     /// <summary>
+    /// Scales one unit-diameter ball and moves it to a model contact without rebuilding its mesh.
+    /// </summary>
+    private static void ApplyBallTransform(
+        ScaleTransform3D scale,
+        TranslateTransform3D translation,
+        Vector3 center,
+        float diameter)
+    {
+        scale.ScaleX = diameter;
+        scale.ScaleY = diameter;
+        scale.ScaleZ = diameter;
+        translation.OffsetX = center.X;
+        translation.OffsetY = center.Y;
+        translation.OffsetZ = center.Z;
+    }
+
+    /// <summary>
+    /// Updates the shared contact-ball material from application settings.
+    /// </summary>
+    private static void ApplyMaterialColor(PhongMaterial material, Color4 color)
+    {
+        material.AmbientColor = color;
+        material.DiffuseColor = color;
+    }
+
+    /// <summary>
     /// Writes the square XY handle with one corner at the stem base.
     /// </summary>
-    private void UpdatePlane(Vector3 origin, float length)
+    private static void UpdatePlane(Vector3Collection positions, Vector3 origin, float length)
     {
-        _planePositions[0] = origin;
-        _planePositions[1] = origin + new Vector3(length, 0.0f, 0.0f);
-        _planePositions[2] = origin + new Vector3(length, length, 0.0f);
-        _planePositions[3] = origin + new Vector3(0.0f, length, 0.0f);
+        positions[0] = origin;
+        positions[1] = origin + new Vector3(length, 0.0f, 0.0f);
+        positions[2] = origin + new Vector3(length, length, 0.0f);
+        positions[3] = origin + new Vector3(0.0f, length, 0.0f);
     }
 
     /// <summary>
@@ -290,7 +457,12 @@ public sealed class DirectEditPreviewRenderer
         _yArrow.Visibility = visibility;
         _zArrow.Visibility = visibility;
         _baseZArrow.Visibility = visibility;
+        _headBaseXArrow.Visibility = visibility;
+        _headBaseYArrow.Visibility = visibility;
+        _headTipBall.Visibility = visibility;
+        _modelBaseTipBall.Visibility = visibility;
         _xyPlane.Visibility = visibility;
+        _headBaseXyPlane.Visibility = visibility;
     }
 
     /// <summary>

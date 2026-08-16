@@ -74,6 +74,9 @@ public static class Program
         RunTest(failures, "Direct Edit moves a selected base to the build plate", ValidateDirectEditMovesBaseToBuildPlate);
         RunTest(failures, "Direct Edit source restoration reverses cumulative edits", ValidateDirectEditSourceRestorationReversesCumulativeEdits);
         RunTest(failures, "Direct Edit multi-selection preserves relative stem positions", ValidateDirectEditMultiSelectionPreservesRelativePositions);
+        RunTest(failures, "Direct Edit moves and restores a head contact", ValidateDirectEditMovesAndRestoresHeadContact);
+        RunTest(failures, "Direct Edit moves a model-base contact", ValidateDirectEditMovesModelBaseContact);
+        RunTest(failures, "Direct Edit reorients a branched head base", ValidateDirectEditReorientsBranchedHeadBase);
         RunTest(failures, "Selection cluster modifier ignores unselected supports", ValidateSelectionClusterModifierIgnoresUnselectedSupports);
         RunTest(failures, "Later selection cluster preserves existing clusters", ValidateLaterSelectionClusterPreservesExistingClusters);
         RunTest(failures, "Cumulative cluster modifier keeps Apply batches separate", ValidateCumulativeClusterModifierKeepsApplyBatchesSeparate);
@@ -4851,7 +4854,11 @@ public static class Program
             SupportBaseAttachmentKind.BuildPlate,
             Vector3.UnitZ,
             2.25f,
-            SupportDefaults.DefaultModelBaseHeight);
+            SupportDefaults.DefaultModelBaseHeight,
+            new Vector3(1.0f, 2.0f, 11.0f),
+            Vector3.Normalize(new Vector3(-1.0f, 0.0f, 2.0f)),
+            support.TipPosition,
+            support.HeadDirection);
         SupportModifierDefinition modifier = new SupportModifierDefinition(
             Guid.NewGuid(),
             SupportModifierKind.DirectEdit,
@@ -4917,6 +4924,35 @@ public static class Program
             {
                 throw new InvalidOperationException("Direct Edit model-base lengths did not survive persistence.");
             }
+
+            if (!loadedSettings.TipPosition.HasValue
+                || !loadedSettings.HeadDirection.HasValue
+                || !loadedSettings.OriginalTipPosition.HasValue
+                || !loadedSettings.OriginalHeadDirection.HasValue)
+            {
+                throw new InvalidOperationException("Direct Edit head geometry did not survive persistence.");
+            }
+
+            ValidateVectorNear(
+                settings.TipPosition!.Value,
+                loadedSettings.TipPosition.Value,
+                0.0001f,
+                "The edited Direct Edit head contact did not survive persistence.");
+            ValidateVectorNear(
+                settings.HeadDirection!.Value,
+                loadedSettings.HeadDirection.Value,
+                0.0001f,
+                "The edited Direct Edit head direction did not survive persistence.");
+            ValidateVectorNear(
+                settings.OriginalTipPosition!.Value,
+                loadedSettings.OriginalTipPosition.Value,
+                0.0001f,
+                "The original Direct Edit head contact did not survive persistence.");
+            ValidateVectorNear(
+                settings.OriginalHeadDirection!.Value,
+                loadedSettings.OriginalHeadDirection.Value,
+                0.0001f,
+                "The original Direct Edit head direction did not survive persistence.");
         }
         finally
         {
@@ -5705,6 +5741,168 @@ public static class Program
             edited[1].BasePosition - edited[0].BasePosition,
             0.0001f,
             "Direct Edit collapsed the relative spacing between selected stems.");
+    }
+
+    /// <summary>
+    /// Validates that a surface contact edit changes head geometry and modifier removal restores it.
+    /// </summary>
+    private static void ValidateDirectEditMovesAndRestoresHeadContact()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity source = CreateSupport(Vector3.Zero, new Vector3(0.0f, 0.0f, 12.0f), profile);
+        float stemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings start = new SupportDirectEditSettings(
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.Profile.ModelBaseHeight,
+            source.Profile.ModelBaseHeight,
+            source.TipPosition,
+            source.HeadDirection,
+            source.TipPosition,
+            source.HeadDirection);
+        Vector3 editedTip = new Vector3(1.5f, -0.5f, 11.5f);
+        Vector3 editedDirection = Vector3.Normalize(new Vector3(-1.0f, 0.0f, 2.0f));
+
+        if (!SupportDirectEditPlanner.TryCreateHeadContactDraggedSettings(
+            source,
+            start,
+            editedTip,
+            editedDirection,
+            out SupportDirectEditSettings editedSettings))
+        {
+            throw new InvalidOperationException("Expected Direct Edit to accept a valid head surface contact.");
+        }
+
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, editedSettings);
+        ValidateVectorNear(editedTip, edited.TipPosition, 0.0001f, "Direct Edit did not move the head contact.");
+        ValidateVectorNear(
+            editedDirection,
+            edited.HeadDirection,
+            0.0001f,
+            "Direct Edit did not update the head direction from the surface.");
+
+        SupportModifierDefinition modifier = new SupportModifierDefinition(
+            Guid.NewGuid(),
+            SupportModifierKind.DirectEdit,
+            true,
+            0,
+            null,
+            null,
+            null,
+            new[] { source.Id },
+            null,
+            0,
+            null,
+            null,
+            Guid.NewGuid(),
+            editedSettings);
+        IReadOnlyList<SupportEntity> restored = SupportModifierSourceRestorer.Restore(
+            new[] { edited },
+            new[] { modifier });
+        ValidateVectorNear(source.TipPosition, restored[0].TipPosition, 0.0001f, "Removing Direct Edit did not restore the head contact.");
+        ValidateVectorNear(source.HeadDirection, restored[0].HeadDirection, 0.0001f, "Removing Direct Edit did not restore the head direction.");
+    }
+
+    /// <summary>
+    /// Validates that a valid upward model hit relocates a model-connected base contact.
+    /// </summary>
+    private static void ValidateDirectEditMovesModelBaseContact()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity source = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 12.0f),
+            Vector3.Zero,
+            Vector3.UnitZ,
+            0.0f,
+            Vector3.UnitZ,
+            profile,
+            baseAttachmentKind: SupportBaseAttachmentKind.Model,
+            baseDirection: Vector3.UnitZ);
+        float stemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings start = new SupportDirectEditSettings(
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.Profile.ModelBaseHeight,
+            source.Profile.ModelBaseHeight);
+        Vector3 editedBase = new Vector3(1.0f, 2.0f, 0.5f);
+
+        if (!SupportDirectEditPlanner.TryCreateModelBaseContactDraggedSettings(
+            source,
+            start,
+            editedBase,
+            Vector3.UnitZ,
+            out SupportDirectEditSettings editedSettings))
+        {
+            throw new InvalidOperationException("Expected Direct Edit to accept a valid model-base surface contact.");
+        }
+
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, editedSettings);
+        ValidateVectorNear(editedBase, edited.BasePosition, 0.0001f, "Direct Edit did not move the model-base contact.");
+        ValidateVectorNear(Vector3.UnitZ, edited.BaseDirection, 0.0001f, "Direct Edit did not retain the model surface direction.");
+    }
+
+    /// <summary>
+    /// Validates that the head-base XY handle changes a branched head while retaining its tip contact.
+    /// </summary>
+    private static void ValidateDirectEditReorientsBranchedHeadBase()
+    {
+        SupportProfile profile = CreateAngledProfile(90.0f);
+        SupportEntity source = new SupportEntity(
+            Guid.NewGuid(),
+            new Vector3(0.0f, 0.0f, 12.0f),
+            Vector3.Zero,
+            Vector3.UnitZ,
+            2.0f,
+            Vector3.UnitZ,
+            profile);
+        float stemTopZ = SupportDirectEditPlanner.CalculateStemTop(source).Z;
+        SupportDirectEditSettings start = new SupportDirectEditSettings(
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.BasePosition,
+            stemTopZ,
+            source.BaseAttachmentKind,
+            source.BaseDirection,
+            source.Profile.ModelBaseHeight,
+            source.Profile.ModelBaseHeight,
+            source.TipPosition,
+            source.HeadDirection,
+            source.TipPosition,
+            source.HeadDirection);
+        Vector3 originalHeadBase = SupportDirectEditPlanner.CalculateHeadBase(source);
+        SupportDirectEditSettings editedSettings = SupportDirectEditPlanner.CreateHeadBaseDraggedSettings(
+            source,
+            start,
+            new Vector3(1.0f, 0.0f, 0.0f));
+        SupportEntity edited = SupportDirectEditPlanner.RebuildSupport(source, editedSettings);
+        Vector3 editedHeadBase = SupportDirectEditPlanner.CalculateHeadBase(edited);
+
+        ValidateVectorNear(source.TipPosition, edited.TipPosition, 0.0001f, "Head-base Direct Edit changed the model contact.");
+
+        if (MathF.Abs(editedHeadBase.X - originalHeadBase.X) <= 0.0001f)
+        {
+            throw new InvalidOperationException("Head-base Direct Edit did not reorient the branched head.");
+        }
+
+        if (edited.BranchLength <= 0.0f)
+        {
+            throw new InvalidOperationException("Head-base Direct Edit removed the support branch.");
+        }
     }
 
     /// <summary>

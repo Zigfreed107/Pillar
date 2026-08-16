@@ -72,7 +72,11 @@ public sealed class SupportDirectEditSettings
         SupportBaseAttachmentKind? originalBaseAttachmentKind,
         Vector3? originalBaseDirection,
         float? modelBaseLength = null,
-        float? originalModelBaseLength = null)
+        float? originalModelBaseLength = null,
+        Vector3? tipPosition = null,
+        Vector3? headDirection = null,
+        Vector3? originalTipPosition = null,
+        Vector3? originalHeadDirection = null)
     {
         ValidateGeometry(basePosition, stemTopZ, nameof(basePosition), nameof(stemTopZ));
         ValidateGeometry(originalBasePosition, originalStemTopZ, nameof(originalBasePosition), nameof(originalStemTopZ));
@@ -91,6 +95,16 @@ public sealed class SupportDirectEditSettings
         OriginalModelBaseLength = ValidateOptionalLength(
             originalModelBaseLength,
             nameof(originalModelBaseLength));
+        ValidateOptionalHeadGeometry(tipPosition, headDirection, nameof(tipPosition), nameof(headDirection));
+        ValidateOptionalHeadGeometry(
+            originalTipPosition,
+            originalHeadDirection,
+            nameof(originalTipPosition),
+            nameof(originalHeadDirection));
+        TipPosition = tipPosition;
+        HeadDirection = NormalizeOptionalDirection(headDirection);
+        OriginalTipPosition = originalTipPosition;
+        OriginalHeadDirection = NormalizeOptionalDirection(originalHeadDirection);
     }
 
     /// <summary>
@@ -144,6 +158,26 @@ public sealed class SupportDirectEditSettings
     public float? OriginalModelBaseLength { get; }
 
     /// <summary>
+    /// Gets the edited model contact for the support head, or null when the contact is unchanged.
+    /// </summary>
+    public Vector3? TipPosition { get; }
+
+    /// <summary>
+    /// Gets the edited direction from the head base toward its model contact.
+    /// </summary>
+    public Vector3? HeadDirection { get; }
+
+    /// <summary>
+    /// Gets the pre-gesture model contact used to reverse a head edit.
+    /// </summary>
+    public Vector3? OriginalTipPosition { get; }
+
+    /// <summary>
+    /// Gets the pre-gesture head direction used to reverse a head edit.
+    /// </summary>
+    public Vector3? OriginalHeadDirection { get; }
+
+    /// <summary>
     /// Creates a defensive copy for document and undo ownership.
     /// </summary>
     public SupportDirectEditSettings Clone()
@@ -158,7 +192,11 @@ public sealed class SupportDirectEditSettings
             OriginalBaseAttachmentKind,
             OriginalBaseDirection,
             ModelBaseLength,
-            OriginalModelBaseLength);
+            OriginalModelBaseLength,
+            TipPosition,
+            HeadDirection,
+            OriginalTipPosition,
+            OriginalHeadDirection);
     }
 
     /// <summary>
@@ -244,5 +282,58 @@ public sealed class SupportDirectEditSettings
         }
 
         return length;
+    }
+
+    /// <summary>
+    /// Validates one optional contact and direction pair while preserving null for legacy stem-only edits.
+    /// </summary>
+    private static void ValidateOptionalHeadGeometry(
+        Vector3? tipPosition,
+        Vector3? headDirection,
+        string tipParameterName,
+        string directionParameterName)
+    {
+        if (tipPosition.HasValue != headDirection.HasValue)
+        {
+            throw new ArgumentException(
+                "A Direct Edit head contact and direction must be stored together.",
+                tipPosition.HasValue ? directionParameterName : tipParameterName);
+        }
+
+        if (!tipPosition.HasValue)
+        {
+            return;
+        }
+
+        Vector3 position = tipPosition.Value;
+        Vector3 direction = headDirection!.Value;
+
+        if (!IsFinite(position))
+        {
+            throw new ArgumentException("A Direct Edit head contact must be finite.", tipParameterName);
+        }
+
+        if (!IsFinite(direction) || direction.LengthSquared() <= 0.0f)
+        {
+            throw new ArgumentException("A Direct Edit head direction must be finite and non-zero.", directionParameterName);
+        }
+    }
+
+    /// <summary>
+    /// Normalizes an optional validated direction.
+    /// </summary>
+    private static Vector3? NormalizeOptionalDirection(Vector3? direction)
+    {
+        return direction.HasValue ? Vector3.Normalize(direction.Value) : null;
+    }
+
+    /// <summary>
+    /// Tests whether all vector components are finite.
+    /// </summary>
+    private static bool IsFinite(Vector3 value)
+    {
+        return float.IsFinite(value.X)
+            && float.IsFinite(value.Y)
+            && float.IsFinite(value.Z);
     }
 }
