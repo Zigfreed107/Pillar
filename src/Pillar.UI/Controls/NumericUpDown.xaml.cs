@@ -13,6 +13,8 @@ namespace Pillar.UI.Controls;
 /// </summary>
 public partial class NumericUpDown : UserControl
 {
+    private const int MaximumDecimalPlaces = 15;
+
     public static readonly DependencyProperty ValueProperty =
         DependencyProperty.Register(
             nameof(Value),
@@ -29,31 +31,36 @@ public partial class NumericUpDown : UserControl
             nameof(Minimum),
             typeof(double),
             typeof(NumericUpDown),
-            new PropertyMetadata(0.0, OnRangePropertyChanged));
+            new PropertyMetadata(0.0, OnRangePropertyChanged),
+            IsFiniteDouble);
 
     public static readonly DependencyProperty MaximumProperty =
         DependencyProperty.Register(
             nameof(Maximum),
             typeof(double),
             typeof(NumericUpDown),
-            new PropertyMetadata(double.PositiveInfinity, OnRangePropertyChanged));
+            new PropertyMetadata(double.MaxValue, OnRangePropertyChanged),
+            IsFiniteDouble);
 
     public static readonly DependencyProperty IncrementProperty =
         DependencyProperty.Register(
             nameof(Increment),
             typeof(double),
             typeof(NumericUpDown),
-            new PropertyMetadata(1.0));
+            new PropertyMetadata(1.0),
+            IsPositiveFiniteDouble);
 
     public static readonly DependencyProperty DecimalPlacesProperty =
         DependencyProperty.Register(
             nameof(DecimalPlaces),
             typeof(int),
             typeof(NumericUpDown),
-            new PropertyMetadata(2, OnDecimalPlacesPropertyChanged));
+            new PropertyMetadata(2, OnDecimalPlacesPropertyChanged),
+            IsSupportedDecimalPlaces);
 
-    private bool _isSynchronizingText;
-    private bool _isCommittingTextInput;
+    private bool _isApplyingUserValue;
+    private bool _isSynchronizingRange;
+    private double _editStartValue;
 
     /// <summary>
     /// Creates a numeric up-down editor and synchronizes its initial text.
@@ -61,11 +68,11 @@ public partial class NumericUpDown : UserControl
     public NumericUpDown()
     {
         InitializeComponent();
-        UpdateTextFromValue();
+        UpdateTextFromValue(false);
     }
 
     /// <summary>
-    /// Raised when the numeric value changes after typing or spinner input.
+    /// Raised when the numeric value changes after a committed edit or stepping input.
     /// </summary>
     public event EventHandler? ValueChanged;
 
@@ -115,6 +122,33 @@ public partial class NumericUpDown : UserControl
     }
 
     /// <summary>
+    /// Accepts finite numeric bounds.
+    /// </summary>
+    private static bool IsFiniteDouble(object value)
+    {
+        double numericValue = (double)value;
+        return !double.IsNaN(numericValue) && !double.IsInfinity(numericValue);
+    }
+
+    /// <summary>
+    /// Accepts finite positive spinner increments.
+    /// </summary>
+    private static bool IsPositiveFiniteDouble(object value)
+    {
+        double numericValue = (double)value;
+        return numericValue > 0.0 && !double.IsNaN(numericValue) && !double.IsInfinity(numericValue);
+    }
+
+    /// <summary>
+    /// Keeps displayed precision within the meaningful range of a double.
+    /// </summary>
+    private static bool IsSupportedDecimalPlaces(object value)
+    {
+        int decimalPlaces = (int)value;
+        return decimalPlaces >= 0 && decimalPlaces <= MaximumDecimalPlaces;
+    }
+
+    /// <summary>
     /// Coerces the current value when callers update value or range properties.
     /// </summary>
     private static object CoerceValueProperty(DependencyObject dependencyObject, object baseValue)
@@ -137,10 +171,14 @@ public partial class NumericUpDown : UserControl
     {
         NumericUpDown numericUpDown = (NumericUpDown)dependencyObject;
 
-        if (numericUpDown.ValueTextBox != null
-            && (!numericUpDown._isCommittingTextInput || !numericUpDown.ValueTextBox.IsKeyboardFocusWithin))
+        if (numericUpDown.ValueTextBox != null && !numericUpDown._isApplyingUserValue)
         {
-            numericUpDown.UpdateTextFromValue();
+            numericUpDown.UpdateTextFromValue(false);
+
+            if (numericUpDown.ValueTextBox.IsKeyboardFocusWithin)
+            {
+                numericUpDown._editStartValue = numericUpDown.Value;
+            }
         }
 
         numericUpDown.ValueChanged?.Invoke(numericUpDown, EventArgs.Empty);
@@ -152,8 +190,33 @@ public partial class NumericUpDown : UserControl
     private static void OnRangePropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
     {
         NumericUpDown numericUpDown = (NumericUpDown)dependencyObject;
-        numericUpDown.CoerceValue(ValueProperty);
-        numericUpDown.UpdateTextFromValue();
+
+        if (numericUpDown._isSynchronizingRange)
+        {
+            return;
+        }
+
+        numericUpDown._isSynchronizingRange = true;
+
+        try
+        {
+            if (e.Property == MinimumProperty && numericUpDown.Minimum > numericUpDown.Maximum)
+            {
+                numericUpDown.SetCurrentValue(MaximumProperty, numericUpDown.Minimum);
+            }
+            else if (e.Property == MaximumProperty && numericUpDown.Maximum < numericUpDown.Minimum)
+            {
+                numericUpDown.SetCurrentValue(MinimumProperty, numericUpDown.Maximum);
+            }
+
+            numericUpDown.CoerceValue(ValueProperty);
+        }
+        finally
+        {
+            numericUpDown._isSynchronizingRange = false;
+        }
+
+        numericUpDown.UpdateTextFromValue(false);
     }
 
     /// <summary>
@@ -162,23 +225,25 @@ public partial class NumericUpDown : UserControl
     private static void OnDecimalPlacesPropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
     {
         NumericUpDown numericUpDown = (NumericUpDown)dependencyObject;
-        numericUpDown.UpdateTextFromValue();
+        numericUpDown.UpdateTextFromValue(false);
     }
 
     /// <summary>
-    /// Applies typed numeric input when the text parses as a valid number.
+    /// Captures the committed value so Escape can cancel the current text edit.
     /// </summary>
-    private void ValueTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void ValueTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         _ = sender;
         _ = e;
+        BeginTextEdit();
+    }
 
-        if (_isSynchronizingText)
-        {
-            return;
-        }
-
-        CommitTextToValue(false);
+    /// <summary>
+    /// Establishes the value restored when the user cancels this edit.
+    /// </summary>
+    private void BeginTextEdit()
+    {
+        _editStartValue = Value;
     }
 
     /// <summary>
@@ -187,13 +252,17 @@ public partial class NumericUpDown : UserControl
     private void ValueTextBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         _ = sender;
-        _ = e;
-        CommitTextToValue(true);
-        UpdateTextFromValue();
+
+        if (e.NewFocus is DependencyObject newFocus && IsAncestorOf(newFocus))
+        {
+            return;
+        }
+
+        CommitTextEdit();
     }
 
     /// <summary>
-    /// Commits Enter and cancels invalid partial text with Escape.
+    /// Commits Enter, cancels Escape, and supports standard arrow-key stepping.
     /// </summary>
     private void ValueTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -201,15 +270,40 @@ public partial class NumericUpDown : UserControl
 
         if (e.Key == Key.Enter)
         {
-            CommitTextToValue(true);
-            UpdateTextFromValue();
+            CommitTextEdit();
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
-            UpdateTextFromValue();
+            CancelTextEdit();
             e.Handled = true;
         }
+        else if (e.Key == Key.Up)
+        {
+            StepValue(1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Down)
+        {
+            StepValue(-1);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Steps with the mouse wheel only while the text editor owns keyboard focus.
+    /// </summary>
+    private void NumericUpDown_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        _ = sender;
+
+        if (!ValueTextBox.IsKeyboardFocusWithin || e.Delta == 0)
+        {
+            return;
+        }
+
+        StepValue(e.Delta > 0 ? 1 : -1);
+        e.Handled = true;
     }
 
     /// <summary>
@@ -219,7 +313,7 @@ public partial class NumericUpDown : UserControl
     {
         _ = sender;
         _ = e;
-        StepValue(Increment);
+        StepValue(1);
     }
 
     /// <summary>
@@ -229,79 +323,141 @@ public partial class NumericUpDown : UserControl
     {
         _ = sender;
         _ = e;
-        StepValue(-Increment);
+        StepValue(-1);
     }
 
     /// <summary>
-    /// Applies text to the value, optionally falling back to the nearest valid value.
+    /// Applies the current text once and establishes a new cancel baseline.
     /// </summary>
-    private void CommitTextToValue(bool coerceInvalidText)
+    private void CommitTextEdit()
+    {
+        double committedValue = ResolveTextValue();
+        ApplyUserValue(committedValue);
+        _editStartValue = Value;
+        UpdateTextFromValue(true);
+    }
+
+    /// <summary>
+    /// Restores the value that was present when the current edit began.
+    /// </summary>
+    private void CancelTextEdit()
+    {
+        ApplyUserValue(ClampValue(_editStartValue));
+        _editStartValue = Value;
+        UpdateTextFromValue(true);
+    }
+
+    /// <summary>
+    /// Resolves the editing buffer to a valid value without publishing an intermediate change.
+    /// </summary>
+    private double ResolveTextValue()
     {
         string text = ValueTextBox.Text.Trim();
         double parsedValue;
 
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue)
-            && IsFiniteValueInRange(parsedValue))
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out parsedValue)
+            && !double.IsNaN(parsedValue)
+            && !double.IsInfinity(parsedValue))
         {
-            _isCommittingTextInput = true;
-
-            try
-            {
-                Value = parsedValue;
-            }
-            finally
-            {
-                _isCommittingTextInput = false;
-            }
-
-            return;
+            return NormalizeUserValue(parsedValue);
         }
 
-        if (coerceInvalidText)
+        return Value;
+    }
+
+    /// <summary>
+    /// Moves the current or typed value by one increment and publishes only the final result.
+    /// </summary>
+    private void StepValue(int direction)
+    {
+        double baseValue = ResolveTextValue();
+        double steppedValue = AddIncrement(baseValue, direction);
+        ApplyUserValue(NormalizeUserValue(steppedValue));
+        _editStartValue = Value;
+        UpdateTextFromValue(false);
+    }
+
+    /// <summary>
+    /// Uses decimal arithmetic for ordinary UI values to avoid repeated binary increment drift.
+    /// </summary>
+    private double AddIncrement(double value, int direction)
+    {
+        try
         {
-            Value = ClampValue(Value);
+            decimal decimalValue = (decimal)value;
+            decimal decimalIncrement = (decimal)Increment;
+            return (double)(decimalValue + (decimalIncrement * direction));
+        }
+        catch (OverflowException)
+        {
+            double result = value + (Increment * direction);
+
+            if (double.IsPositiveInfinity(result))
+            {
+                return Maximum;
+            }
+
+            if (double.IsNegativeInfinity(result))
+            {
+                return Minimum;
+            }
+
+            return result;
         }
     }
 
     /// <summary>
-    /// Moves the current value by the requested delta and keeps the result in range.
+    /// Applies one user-originated value while allowing the caller to control text formatting.
     /// </summary>
-    private void StepValue(double delta)
+    private void ApplyUserValue(double value)
     {
-        CommitTextToValue(true);
-        double increment = Math.Abs(Increment);
+        _isApplyingUserValue = true;
 
-        if (increment <= 0.0 || double.IsNaN(increment) || double.IsInfinity(increment))
+        try
         {
-            increment = 1.0;
+            SetCurrentValue(ValueProperty, value);
         }
+        finally
+        {
+            _isApplyingUserValue = false;
+        }
+    }
 
-        double direction = delta < 0.0 ? -1.0 : 1.0;
-        Value = ClampValue(Value + (increment * direction));
-        UpdateTextFromValue();
+    /// <summary>
+    /// Clamps and rounds committed user input to the precision shown by the control.
+    /// </summary>
+    private double NormalizeUserValue(double value)
+    {
+        double clampedValue = ClampValue(value);
+        double roundedValue = Math.Round(clampedValue, DecimalPlaces, MidpointRounding.AwayFromZero);
+        return ClampValue(roundedValue);
     }
 
     /// <summary>
     /// Formats the current value into the text box without re-entering text parsing.
     /// </summary>
-    private void UpdateTextFromValue()
+    private void UpdateTextFromValue(bool moveCaretToEnd)
     {
         if (ValueTextBox == null)
         {
             return;
         }
 
-        _isSynchronizingText = true;
+        int selectionStart = ValueTextBox.SelectionStart;
+        int selectionLength = ValueTextBox.SelectionLength;
+        string format = "F" + DecimalPlaces.ToString(CultureInfo.InvariantCulture);
+        ValueTextBox.Text = Value.ToString(format, CultureInfo.CurrentCulture);
 
-        try
+        if (moveCaretToEnd)
         {
-            int decimalPlaces = Math.Max(0, DecimalPlaces);
-            string format = "F" + decimalPlaces.ToString(CultureInfo.InvariantCulture);
-            ValueTextBox.Text = Value.ToString(format, CultureInfo.InvariantCulture);
+            ValueTextBox.CaretIndex = ValueTextBox.Text.Length;
+            ValueTextBox.SelectionLength = 0;
         }
-        finally
+        else if (ValueTextBox.IsKeyboardFocusWithin)
         {
-            _isSynchronizingText = false;
+            int restoredSelectionStart = Math.Min(selectionStart, ValueTextBox.Text.Length);
+            int availableSelectionLength = ValueTextBox.Text.Length - restoredSelectionStart;
+            ValueTextBox.Select(restoredSelectionStart, Math.Min(selectionLength, availableSelectionLength));
         }
     }
 
@@ -319,18 +475,5 @@ public partial class NumericUpDown : UserControl
         }
 
         return Math.Min(maximum, Math.Max(minimum, value));
-    }
-
-    /// <summary>
-    /// Gets whether a typed value can safely become the committed numeric value.
-    /// </summary>
-    private bool IsFiniteValueInRange(double value)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value))
-        {
-            return false;
-        }
-
-        return value >= Minimum && value <= Maximum;
     }
 }

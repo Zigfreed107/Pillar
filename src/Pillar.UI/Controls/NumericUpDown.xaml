@@ -9,7 +9,58 @@
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
              MinWidth="92"
              MinHeight="24"
-             Focusable="False">
+             Focusable="False"
+             PreviewMouseWheel="NumericUpDown_PreviewMouseWheel">
+    <UserControl.Resources>
+        <Style x:Key="SpinnerButtonStyle"
+               TargetType="{x:Type primitives:RepeatButton}">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background"
+                    Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+            <Setter Property="Foreground"
+                    Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type primitives:RepeatButton}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" />
+                                <Setter Property="Foreground"
+                                        Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -21,7 +72,7 @@
                  MinHeight="24"
                  Padding="4,1"
                  VerticalContentAlignment="Center"
-                 TextChanged="ValueTextBox_TextChanged"
+                 GotKeyboardFocus="ValueTextBox_GotKeyboardFocus"
                  LostKeyboardFocus="ValueTextBox_LostKeyboardFocus"
                  PreviewKeyDown="ValueTextBox_PreviewKeyDown" />
 
@@ -32,32 +83,38 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <primitives:RepeatButton Grid.Row="0"
-                                     Style="{x:Null}"
-                                     MinWidth="0"
-                                     MinHeight="0"
-                                     Padding="0"
+            <primitives:RepeatButton x:Name="IncreaseButton"
+                                     Grid.Row="0"
+                                     Style="{StaticResource SpinnerButtonStyle}"
                                      HorizontalAlignment="Stretch"
                                      VerticalAlignment="Stretch"
-                                     HorizontalContentAlignment="Center"
-                                     VerticalContentAlignment="Center"
                                      Delay="300"
                                      Interval="70"
                                      Click="IncreaseButton_Click"
-                                     Content="+" />
-            <primitives:RepeatButton Grid.Row="1"
-                                     Style="{x:Null}"
-                                     MinWidth="0"
-                                     MinHeight="0"
-                                     Padding="0"
+                                     ToolTip="Increase value"
+                                     AutomationProperties.Name="Increase value">
+                <Path Width="7"
+                      Height="4"
+                      Stretch="Fill"
+                      Data="M 0,4 L 3.5,0 L 7,4 Z"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type primitives:RepeatButton}}}" />
+            </primitives:RepeatButton>
+            <primitives:RepeatButton x:Name="DecreaseButton"
+                                     Grid.Row="1"
+                                     Style="{StaticResource SpinnerButtonStyle}"
                                      HorizontalAlignment="Stretch"
                                      VerticalAlignment="Stretch"
-                                     HorizontalContentAlignment="Center"
-                                     VerticalContentAlignment="Center"
                                      Delay="300"
                                      Interval="70"
                                      Click="DecreaseButton_Click"
-                                     Content="-" />
+                                     ToolTip="Decrease value"
+                                     AutomationProperties.Name="Decrease value">
+                <Path Width="7"
+                      Height="4"
+                      Stretch="Fill"
+                      Data="M 0,0 L 3.5,4 L 7,0 Z"
+                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type primitives:RepeatButton}}}" />
+            </primitives:RepeatButton>
         </Grid>
     </Grid>
 </UserControl>
