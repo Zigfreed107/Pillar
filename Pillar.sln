@@ -83,6 +83,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Raft Tools", "Raft Tools", 
 		Tag.md = Tag.md
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Ideas", "Ideas", "{FCF80261-8920-4544-A505-395C5C301975}"
+	ProjectSection(SolutionItems) = preProject
+		Ideas.md = Ideas.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -130,6 +135,7 @@ Global
 		{E6E8E711-7624-4468-86A4-1C8BBDED9869} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 		{A5F9F35A-2B9F-4CDA-8A1B-121E1E92FD49} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 		{1F54A4A8-CE2D-42A4-8BE9-4A9945ACA4ED} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
+		{FCF80261-8920-4544-A505-395C5C301975} = {98639024-1FC6-45C3-B643-2FE6BDAFE387}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7E64CCF2-ED87-450F-B577-DE4EFDA32C5A}

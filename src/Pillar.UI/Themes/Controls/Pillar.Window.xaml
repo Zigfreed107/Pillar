@@ -1,0 +1,15 @@
+<!--
+    Pillar.Window.xaml
+    Defines the application-wide Window appearance for the Pillar workspace.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style TargetType="{x:Type Window}">
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background1}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Body}" />
+    </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,130 @@
+<!--
+    Pillar.Typography.xaml
+    Defines application-wide font families, type sizes, weights, and reusable text roles.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- Font families. Change these values to explore a different Pillar typeface. -->
+    <FontFamily x:Key="Pillar.FontFamily.UI">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="Pillar.FontFamily.Heading">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <FontFamily x:Key="Pillar.FontFamily.Monospace">Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="Pillar.FontFamily.Icons">Segoe Fluent Icons</FontFamily>
+
+    <!-- Type scale. These values are device-independent WPF units. -->
+    <sys:Double x:Key="Pillar.FontSize.Heading">16</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.ControlContent">13</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.Caption">11</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.Body">12</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.Label">12</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.Subheading">13</sys:Double>
+    <sys:Double x:Key="Pillar.FontSize.Title">20</sys:Double>
+
+    
+    
+    <!-- Reusable semantic text roles. -->
+    <Style x:Key="OverlayPanelTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="OverlayPanelTitleIconStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Icons}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="OverlayPanelSubheadingTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Subheading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="OverlayPanelContentStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    
+    
+    
+
+    <Style x:Key="PillarTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Title}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PillarHeadingTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PillarSubheadingTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Subheading}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PillarBodyTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PillarLabelTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Label}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Accent}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Compatibility names must follow the base styles used by StaticResource. -->
+    <Style x:Key="ModeOverlayBodyTextStyle"
+           BasedOn="{StaticResource PillarBodyTextStyle}"
+           TargetType="TextBlock" />
+    <Style x:Key="ModeOverlayLabelTextStyle"
+           BasedOn="{StaticResource PillarLabelTextStyle}"
+           TargetType="TextBlock" />
+
+    <Style x:Key="PillarCaptionTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Caption}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextMuted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="PillarCodeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Monospace}" />
+        <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Body}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+
+
+
+    <!-- Compatibility role retained for existing Pillar views. -->
+    <Style x:Key="PillarMutedTextStyle"
+           BasedOn="{StaticResource PillarCaptionTextStyle}"
+           TargetType="TextBlock" />
+</ResourceDictionary>

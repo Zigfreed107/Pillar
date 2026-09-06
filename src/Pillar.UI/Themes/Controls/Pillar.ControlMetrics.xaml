@@ -1,0 +1,12 @@
+<!--
+    Pillar.ControlMetrics.xaml
+    Defines shared geometry metrics consumed by multiple Pillar control styles.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Keep control geometry on a compact four-pixel rhythm for CAD workflows. -->
+    <CornerRadius x:Key="Pillar.CornerRadius.Control">4</CornerRadius>
+    <CornerRadius x:Key="Pillar.CornerRadius.Panel">8</CornerRadius>
+
+</ResourceDictionary>

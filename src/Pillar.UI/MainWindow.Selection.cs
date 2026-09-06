@@ -151,6 +151,12 @@ public partial class MainWindow
     {
         _ = sender;
 
+        if (string.Equals(e.PropertyName, nameof(LayerPanelViewModel.HasImportedModels), StringComparison.Ordinal))
+        {
+            UpdateClipRangeSliderVisibility();
+            return;
+        }
+
         if (!string.Equals(e.PropertyName, nameof(LayerPanelViewModel.SelectedLayer), StringComparison.Ordinal))
         {
             return;

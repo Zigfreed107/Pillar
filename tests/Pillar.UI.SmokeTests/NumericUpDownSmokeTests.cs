@@ -1,5 +1,5 @@
 // NumericUpDownSmokeTests.cs
-// Exercises committed numeric editing, validation, culture, cancellation, and precise spinner stepping.
+// Exercises numeric filtering, units, committed editing, culture, cancellation, and precise spinner stepping.
 using Pillar.UI.Controls;
 using System;
 using System.Collections.Generic;
@@ -37,6 +37,8 @@ internal static class NumericUpDownSmokeTests
         RunTest(failures, "Numeric value binding survives user input", ValidateValueBindingIsPreserved);
         RunTest(failures, "Numeric keyboard and focused wheel step", ValidateKeyboardAndFocusedWheelStepping);
         RunTest(failures, "Numeric spinner uses themed accessible buttons", ValidateSpinnerPresentation);
+        RunTest(failures, "Numeric input rejects non-numeric edits", ValidatePotentialInputFiltering);
+        RunTest(failures, "Numeric input displays an optional unit", ValidateUnitTextPresentation);
     }
 
     /// <summary>
@@ -375,6 +377,65 @@ internal static class NumericUpDownSmokeTests
     }
 
     /// <summary>
+    /// Confirms the edit filter accepts useful intermediate numeric states and rejects invalid characters.
+    /// </summary>
+    private static void ValidatePotentialInputFiltering()
+    {
+        NumericUpDown control = new NumericUpDown
+        {
+            Minimum = -10.0,
+            Maximum = 10.0,
+            DecimalPlaces = 2
+        };
+        string decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+
+        if (!InvokeBoolean(control, "IsPotentialNumericText", string.Empty)
+            || !InvokeBoolean(control, "IsPotentialNumericText", "-")
+            || !InvokeBoolean(control, "IsPotentialNumericText", "12" + decimalSeparator)
+            || !InvokeBoolean(control, "IsPotentialNumericText", "-1" + decimalSeparator + "5")
+            || InvokeBoolean(control, "IsPotentialNumericText", "1a")
+            || InvokeBoolean(control, "IsPotentialNumericText", "1e3")
+            || InvokeBoolean(control, "IsPotentialNumericText", "1" + decimalSeparator + "2" + decimalSeparator + "3"))
+        {
+            throw new InvalidOperationException("Expected culture-aware decimal edits while rejecting non-numeric text.");
+        }
+
+        control.Minimum = 0.0;
+
+        if (InvokeBoolean(control, "IsPotentialNumericText", "-1"))
+        {
+            throw new InvalidOperationException("Expected negative input to be rejected for a non-negative range.");
+        }
+
+        control.DecimalPlaces = 0;
+
+        if (InvokeBoolean(control, "IsPotentialNumericText", "1" + decimalSeparator + "5"))
+        {
+            throw new InvalidOperationException("Expected decimal input to be rejected when no decimal places are supported.");
+        }
+    }
+
+    /// <summary>
+    /// Confirms unit text is exposed independently from the numeric editing buffer.
+    /// </summary>
+    private static void ValidateUnitTextPresentation()
+    {
+        NumericUpDown control = new NumericUpDown
+        {
+            UnitText = "mm",
+            Value = 4.0
+        };
+        TextBox textBox = GetValueTextBox(control);
+        TextBlock unitTextBlock = control.FindName("UnitTextBlock") as TextBlock
+            ?? throw new InvalidOperationException("Expected NumericUpDown to expose its unit text element.");
+
+        if (unitTextBlock.Text != "mm" || textBox.Text.Contains("mm", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Expected unit text to display without entering the numeric edit buffer.");
+        }
+    }
+
+    /// <summary>
     /// Creates the WPF application resources required by the control when the harness runs alone.
     /// </summary>
     private static void EnsureApplication()
@@ -411,6 +472,26 @@ internal static class NumericUpDownSmokeTests
         try
         {
             method.Invoke(control, arguments);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException != null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    /// <summary>
+    /// Invokes one private boolean validation helper used by the input-filter smoke checks.
+    /// </summary>
+    private static bool InvokeBoolean(NumericUpDown control, string methodName, params object[] arguments)
+    {
+        MethodInfo method = typeof(NumericUpDown).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Expected NumericUpDown method '{methodName}'.");
+
+        try
+        {
+            return method.Invoke(control, arguments) is bool result
+                ? result
+                : throw new InvalidOperationException($"Expected NumericUpDown method '{methodName}' to return bool.");
         }
         catch (TargetInvocationException ex) when (ex.InnerException != null)
         {

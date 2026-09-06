@@ -11,18 +11,23 @@ The Face Set Selection Tool builds a temporary selection set of mesh faces and r
 1. Launch the helper from a client tool or a temporary development entry point.
 2. The floating tool panel opens.
 3. The session starts with the caller's current face selection set.
-4. The user adds to or removes from the set using Select, Line Select, or Angle Select.
-5. Undo, redo, and clear operate within the temporary session.
-6. Clicking OK returns the accepted face set to the caller.
+4. The user adds to or removes from the set using Select, Line Select, or Polygon Select.
+5. Angle Select can be toggled on to expand any of those operations through contiguous coplanar faces.
+6. Undo, redo, and clear operate within the temporary session.
+7. Clicking OK returns the accepted face set to the caller.
 
 ## Selection Operations
 
 - Select
   Click individual faces.
 - Line Select
-  Draw a screen-space polyline and collect front-most visible faces crossed by the line.
-- Angle Select
-  Pick a seed face and grow the selection through connected neighbors whose normal-angle difference is within the configured threshold.
+  Draw a screen-space polyline and collect front-most visible faces crossed by the line. Quick right-click or press Enter to finish the current line.
+- Polygon Select
+  Click screen-space vertices, then click the first vertex, quick right-click, or press Enter to close the polygon and collect front-most visible faces whose complete camera-projected triangle lies inside or on the polygon boundary.
+- Angle Select toggle
+  Expand every face found by Select, Line Select, or Polygon Select through connected neighbors whose normal-angle difference is within the configured threshold.
+
+Right-click and drag remains camera orbit. Escape cancels an unfinished line or polygon; pressing Escape again returns to ordinary Face Select.
 
 ## Domain Result
 

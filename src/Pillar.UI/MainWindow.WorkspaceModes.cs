@@ -151,17 +151,12 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies one support-operation toggle request from the ribbon-style mode panel.
+    /// Applies one support-operation request from the ribbon-style mode panel.
     /// </summary>
-    private void WorkflowModePanelOverlay_SupportOperationToggleRequested(object? sender, ModePanel.SupportOperationToggleRequestedEventArgs e)
+    private void WorkflowModePanelOverlay_SupportOperationRequested(object? sender, ModePanel.SupportOperationRequestedEventArgs e)
     {
         _ = sender;
-
-        ManualSupportOperationKind requestedOperation = e.IsEnabled
-            ? e.OperationKind
-            : ManualSupportOperationKind.None;
-
-        ApplyManualSupportOperationSelection(requestedOperation, e.IsEnabled);
+        ApplyManualSupportOperationSelection(e.OperationKind);
     }
 
     /// <summary>
@@ -712,7 +707,6 @@ public partial class MainWindow
         _toolManager.CancelActiveTool();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
         HideToolOptionsOverlay();
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
     }
 
     /// <summary>
@@ -798,7 +792,6 @@ public partial class MainWindow
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
 
         string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
         _activeToolStatusText = statusText;
@@ -813,7 +806,6 @@ public partial class MainWindow
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
 
         string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
         _activeToolStatusText = statusText;
@@ -828,7 +820,6 @@ public partial class MainWindow
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
 
         string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
         _activeToolStatusText = statusText;
@@ -843,7 +834,6 @@ public partial class MainWindow
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
 
         string statusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
         _activeToolStatusText = statusText;
@@ -857,7 +847,6 @@ public partial class MainWindow
     private void RestartRingSupportOperationWithPanelsVisible()
     {
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
         ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
         UpdateGeneratedSupportDeleteButtonState();
     }
@@ -971,7 +960,6 @@ public partial class MainWindow
             _lineSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditLineSupportGroup(supportLayerGroup);
-            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
             return;
         }
 
@@ -998,7 +986,6 @@ public partial class MainWindow
             _ringSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditRingSupportGroup(supportLayerGroup);
-            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
             return;
         }
 
@@ -1024,7 +1011,6 @@ public partial class MainWindow
             _contourSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_contourSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditContourSupportGroup(supportLayerGroup);
-            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Contour);
             return;
         }
 
@@ -1050,7 +1036,6 @@ public partial class MainWindow
             _areaSupportToolOptionsControl.SetSupportBaseGenerationMode(settings.BaseGenerationMode);
             ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
             _manualSupportTool.EditAreaSupportGroup(supportLayerGroup);
-            SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Area);
             return;
         }
 
@@ -1708,7 +1693,6 @@ public partial class MainWindow
     private void ActivateNormalSelectionForSupportClusterTool(Guid supportLayerGroupId)
     {
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
         _selectTool.SetSelectionFilter(SelectionFilter.SupportsInLayer(supportLayerGroupId));
         _selectTool.PruneSelectionToActiveFilter();
         _toolManager.SetTool(_selectTool);
@@ -3109,12 +3093,9 @@ public partial class MainWindow
     /// <summary>
     /// Applies one manual support operation selection from the permanent ribbon-style mode panel.
     /// </summary>
-    private void ApplyManualSupportOperationSelection(ManualSupportOperationKind operationKind, bool activateMode)
+    private void ApplyManualSupportOperationSelection(ManualSupportOperationKind operationKind)
     {
-        if (activateMode)
-        {
-            SetActiveMode(WorkspaceModeId.ManualSupport);
-        }
+        SetActiveMode(WorkspaceModeId.ManualSupport);
 
         if (_activeModeId != WorkspaceModeId.ManualSupport)
         {
@@ -3131,16 +3112,7 @@ public partial class MainWindow
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(statusText);
         _manualSupportTool.SetActiveOperation(operationKind, true);
-        SynchronizeWorkflowModePanelSupportOperation(operationKind);
         RestoreViewportToolForActiveMode();
-    }
-
-    /// <summary>
-    /// Keeps the permanent ribbon-style support buttons aligned with the active support operation.
-    /// </summary>
-    private void SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind operationKind)
-    {
-        WorkflowModePanelOverlay.SetSelectedSupportOperation(operationKind);
     }
 
     /// <summary>
@@ -3172,11 +3144,6 @@ public partial class MainWindow
         _toolManager.SetTool(GetViewportToolForMode(mode));
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(statusText);
-        SynchronizeWorkflowModePanelSupportOperation(
-            modeId == WorkspaceModeId.ManualSupport
-                ? _manualSupportTool.ActiveOperationKind
-                : ManualSupportOperationKind.None);
-
         if (modeId == WorkspaceModeId.Select)
         {
             HideToolOptionsOverlay();
@@ -3257,7 +3224,6 @@ public partial class MainWindow
     {
         HideToolOptionsOverlay();
         _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.None, true);
-        SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.None);
         _activeToolStatusText = GetManualSupportStatusText(ManualSupportOperationKind.None);
         _viewModel.SetStatusText(statusText);
         _viewModel.SetToolPanelText(_activeToolStatusText);

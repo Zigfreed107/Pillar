@@ -263,7 +263,7 @@ Manual Support Workflow
 
 4. User chooses a support operation
    Mode Panel Supports tab
-     -> SupportOperationToggleRequested event
+     -> SupportOperationRequested event
      -> MainWindow.ApplyManualSupportOperationSelection(...)
      -> ManualSupportTool.SetActiveOperation(...)
      -> ToolManager routes viewport input to ManualSupportTool

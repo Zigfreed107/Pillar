@@ -7,9 +7,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
         <StackPanel>
-            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+            <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}"
                        Text="Scale Options" />
 
             <Grid Margin="0,14,0,0">
@@ -34,19 +43,19 @@
                            Grid.Column="1"
                            Margin="0,0,0,4"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="Scale %" />
+                           Text="Scale (%)" />
                 <TextBlock Grid.Row="0"
                            Grid.Column="3"
                            Margin="0,0,0,4"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="Size" />
+                           Text="Size (mm)" />
 
                 <TextBlock Grid.Row="1"
                            Grid.Column="0"
                            Margin="0,4,8,0"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="X"
-                           Foreground="Red" />
+                           Foreground="{DynamicResource RotationXAxisBrush}" />
                 <controls:NumericUpDown x:Name="ScaleXNumericUpDown"
                                         Grid.Row="1"
                                         Grid.Column="1"
@@ -71,7 +80,7 @@
                            Margin="0,8,8,0"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="Y"
-                           Foreground="Lime" />
+                           Foreground="{DynamicResource RotationYAxisBrush}" />
                 <controls:NumericUpDown x:Name="ScaleYNumericUpDown"
                                         Grid.Row="2"
                                         Grid.Column="1"
@@ -98,7 +107,7 @@
                            Margin="0,8,8,0"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="Z"
-                           Foreground="Blue" />
+                           Foreground="{DynamicResource RotationZAxisBrush}" />
                 <controls:NumericUpDown x:Name="ScaleZNumericUpDown"
                                         Grid.Row="3"
                                         Grid.Column="1"
@@ -131,6 +140,8 @@
                 </Canvas>
 
                 <primitives:ToggleButton x:Name="ScaleLockToggleButton"
+                                         Style="{DynamicResource PillarToggleButtonStyle}"
+                                         Padding="0"
                                          Grid.Row="1"
                                          Grid.RowSpan="3"
                                          Grid.Column="5"
@@ -140,19 +151,23 @@
                                          VerticalAlignment="Center"
                                          Checked="ScaleLockToggleButton_Checked"
                                          Unchecked="ScaleLockToggleButton_Unchecked"
-                                         Content="L"
+                                         FontFamily="Segoe Fluent Icons"
+                                         FontWeight="Regular"
+                                         Content="&#xE72E;"
                                          ToolTip="Lock scale axes" />
 
                 <Button Grid.Row="4"
+                        Style="{DynamicResource PillarButtonStyle}"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Margin="0,14,0,0"
+                        Margin="0,28,0,0"
                         MinHeight="30"
                         HorizontalAlignment="Stretch"
                         Click="ResetScaleButton_Click"
                         Content="Reset" />
 
                 <Button Grid.Row="5"
+                        Style="{DynamicResource PillarButtonAccentStyle}"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Margin="0,16,0,0"

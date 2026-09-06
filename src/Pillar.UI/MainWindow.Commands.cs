@@ -95,12 +95,26 @@ public partial class MainWindow
             }
         }
 
+        if (e.Key == Key.Enter)
+        {
+            if (IsKeyboardFocusInsideEditableControl())
+            {
+                return;
+            }
+
+            if (TryHandleFaceSetSelectionFinish())
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key != Key.Escape)
         {
             return;
         }
 
-        if (TryExitFaceSetLineSelectionTool())
+        if (TryHandleFaceSetSelectionEscape())
         {
             e.Handled = true;
             return;

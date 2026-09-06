@@ -8,7 +8,9 @@ using Pillar.UI.Modes;
 using Pillar.UI.Properties;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace Pillar.UI;
@@ -73,6 +75,7 @@ public partial class MainWindow
         tool.CoplanarThresholdDegrees = panel.CoplanarThresholdDegrees;
         panel.ToolKindChanged += FaceSetSelectionPanel_ToolKindChanged;
         panel.ModifierChanged += FaceSetSelectionPanel_ModifierChanged;
+        panel.CoplanarExpansionChanged += FaceSetSelectionPanel_CoplanarExpansionChanged;
         panel.CoplanarThresholdChanged += FaceSetSelectionPanel_CoplanarThresholdChanged;
         panel.ClearRequested += FaceSetSelectionPanel_ClearRequested;
         panel.UndoRequested += FaceSetSelectionPanel_UndoRequested;
@@ -85,6 +88,7 @@ public partial class MainWindow
         };
         tool.StateChanged += FaceSetSelectionTool_StateChanged;
         tool.LineSelectionPreviewChanged += FaceSetSelectionTool_LineSelectionPreviewChanged;
+        tool.PolygonSelectionPreviewChanged += FaceSetSelectionTool_PolygonSelectionPreviewChanged;
 
         _faceSetSelectionTool = tool;
         _faceSetSelectionToolPanel = panel;
@@ -117,7 +121,6 @@ public partial class MainWindow
                 SetActiveMode(WorkspaceModeId.ManualSupport);
                 _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Area);
                 ShowToolOptionsControl(_areaSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
-                SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Area);
             },
             false);
     }
@@ -144,7 +147,6 @@ public partial class MainWindow
                 SetActiveMode(WorkspaceModeId.ManualSupport);
                 _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Ring);
                 ShowToolOptionsControl(_ringSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
-                SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Ring);
             },
             false);
     }
@@ -171,7 +173,6 @@ public partial class MainWindow
                 SetActiveMode(WorkspaceModeId.ManualSupport);
                 _manualSupportTool.SetActiveOperation(ManualSupportOperationKind.Line);
                 ShowToolOptionsControl(_lineSupportToolOptionsControl, ToolSessionPanelSet.SupportPresets);
-                SynchronizeWorkflowModePanelSupportOperation(ManualSupportOperationKind.Line);
             },
             false);
     }
@@ -210,6 +211,7 @@ public partial class MainWindow
         {
             _faceSetSelectionToolPanel.ToolKindChanged -= FaceSetSelectionPanel_ToolKindChanged;
             _faceSetSelectionToolPanel.ModifierChanged -= FaceSetSelectionPanel_ModifierChanged;
+            _faceSetSelectionToolPanel.CoplanarExpansionChanged -= FaceSetSelectionPanel_CoplanarExpansionChanged;
             _faceSetSelectionToolPanel.CoplanarThresholdChanged -= FaceSetSelectionPanel_CoplanarThresholdChanged;
             _faceSetSelectionToolPanel.ClearRequested -= FaceSetSelectionPanel_ClearRequested;
             _faceSetSelectionToolPanel.UndoRequested -= FaceSetSelectionPanel_UndoRequested;
@@ -220,6 +222,7 @@ public partial class MainWindow
         {
             _faceSetSelectionTool.StateChanged -= FaceSetSelectionTool_StateChanged;
             _faceSetSelectionTool.LineSelectionPreviewChanged -= FaceSetSelectionTool_LineSelectionPreviewChanged;
+            _faceSetSelectionTool.PolygonSelectionPreviewChanged -= FaceSetSelectionTool_PolygonSelectionPreviewChanged;
             _faceSetSelectionTool.Cancel();
         }
 
@@ -228,6 +231,7 @@ public partial class MainWindow
         FaceSetSelectionToolHostOverlay.Content = null;
         FaceSetSelectionToolHostOverlay.Visibility = Visibility.Collapsed;
         HideFaceSetLineSelectionPreview();
+        HideFaceSetPolygonSelectionPreview();
 
         if (_toolManager.ActiveTool is FaceSetSelectionTool)
         {
@@ -249,6 +253,14 @@ public partial class MainWindow
     private void FaceSetSelectionPanel_ModifierChanged(FaceSetSelectionModifier modifier)
     {
         _faceSetSelectionTool?.SetModifier(modifier);
+    }
+
+    /// <summary>
+    /// Routes the shared contiguous coplanar expansion toggle into the active helper.
+    /// </summary>
+    private void FaceSetSelectionPanel_CoplanarExpansionChanged(bool isEnabled)
+    {
+        _faceSetSelectionTool?.SetCoplanarExpansionEnabled(isEnabled);
     }
 
     /// <summary>
@@ -321,6 +333,44 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Draws or hides the Polygon Select screen-space preview over the viewport.
+    /// </summary>
+    private void FaceSetSelectionTool_PolygonSelectionPreviewChanged(FaceSetPolygonSelectionPreviewState previewState)
+    {
+        if (!previewState.IsVisible || previewState.Vertices.Count == 0)
+        {
+            HideFaceSetPolygonSelectionPreview();
+            return;
+        }
+
+        PointCollection previewPoints = FaceSetPolygonSelectionPreview.Points;
+        previewPoints.Clear();
+
+        for (int i = 0; i < previewState.Vertices.Count; i++)
+        {
+            previewPoints.Add(new Point(previewState.Vertices[i].X, previewState.Vertices[i].Y));
+        }
+
+        previewPoints.Add(new Point(previewState.PreviewPoint.X, previewState.PreviewPoint.Y));
+        FaceSetPolygonSelectionPreview.Visibility = Visibility.Visible;
+
+        Vector2 startPoint = previewState.Vertices[0];
+        Canvas.SetLeft(FaceSetPolygonStartPointPreview, startPoint.X - (FaceSetPolygonStartPointPreview.Width * 0.5));
+        Canvas.SetTop(FaceSetPolygonStartPointPreview, startPoint.Y - (FaceSetPolygonStartPointPreview.Height * 0.5));
+        FaceSetPolygonStartPointPreview.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Hides and clears the Polygon Select overlay geometry.
+    /// </summary>
+    private void HideFaceSetPolygonSelectionPreview()
+    {
+        FaceSetPolygonSelectionPreview.Visibility = Visibility.Collapsed;
+        FaceSetPolygonSelectionPreview.Points.Clear();
+        FaceSetPolygonStartPointPreview.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
     /// Copies active helper state into the floating panel.
     /// </summary>
     private void UpdateFaceSetSelectionPanelState()
@@ -332,6 +382,7 @@ public partial class MainWindow
 
         _faceSetSelectionToolPanel.SetToolKind(_faceSetSelectionTool.ToolKind);
         _faceSetSelectionToolPanel.SetModifier(_faceSetSelectionTool.Modifier);
+        _faceSetSelectionToolPanel.SetCoplanarExpansionEnabled(_faceSetSelectionTool.IsCoplanarExpansionEnabled);
         _faceSetSelectionToolPanel.UpdateState(
             _faceSetSelectionTool.SelectedFaceCount,
             _faceSetSelectionTool.CanUndo,
@@ -359,22 +410,58 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Exits the face helper's Line Select operation without closing the full face-selection session.
+    /// Finishes an active Line Select or Polygon Select drawing from Enter or a quick right-click.
     /// </summary>
-    private bool TryExitFaceSetLineSelectionTool()
+    private bool TryHandleFaceSetSelectionFinish()
+    {
+        if (_faceSetSelectionTool == null || !_faceSetSelectionTool.IsDrawingInProgress)
+        {
+            return false;
+        }
+
+        FaceSetSelectionToolKind toolKind = _faceSetSelectionTool.ToolKind;
+        bool didFinish = _faceSetSelectionTool.FinishActiveDrawing();
+
+        if (!didFinish)
+        {
+            _viewModel.SetStatusText("Polygon Select requires at least three vertices");
+            return true;
+        }
+
+        string statusText = toolKind == FaceSetSelectionToolKind.LineSelect
+            ? "Line face selection finished"
+            : "Polygon face selection applied";
+        _viewModel.SetStatusText(statusText);
+        return true;
+    }
+
+    /// <summary>
+    /// Cancels an unfinished drawing, or returns the active drawing operation to ordinary Face Select.
+    /// </summary>
+    private bool TryHandleFaceSetSelectionEscape()
     {
         if (_faceSetSelectionTool == null)
         {
             return false;
         }
 
-        if (_faceSetSelectionTool.ToolKind != FaceSetSelectionToolKind.LineSelect)
+        FaceSetSelectionToolKind toolKind = _faceSetSelectionTool.ToolKind;
+
+        if (_faceSetSelectionTool.CancelActiveDrawing())
+        {
+            string statusText = toolKind == FaceSetSelectionToolKind.LineSelect
+                ? "Line face selection drawing canceled"
+                : "Polygon face selection canceled";
+            _viewModel.SetStatusText(statusText);
+            return true;
+        }
+
+        if (toolKind == FaceSetSelectionToolKind.Select)
         {
             return false;
         }
 
         _faceSetSelectionTool.SetToolKind(FaceSetSelectionToolKind.Select);
-        HideFaceSetLineSelectionPreview();
         _viewModel.SetStatusText("Face Select tool active");
         return true;
     }

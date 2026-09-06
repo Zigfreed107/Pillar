@@ -93,6 +93,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ConfigureViewportRightClickCompletionGesture();
         _selectionWindowOverlay = new SelectionWindowOverlayController(this, SelectionWindowOverlay);
         _ringSupportToolOptionsControl = new RingSupportToolOptionsControl();
         _lineSupportToolOptionsControl = new LineSupportToolOptionsControl();
@@ -350,7 +351,7 @@ public partial class MainWindow : Window
         LayerPanelOverlay.DataContext = _layerPanelViewModel;
         WorkflowModePanelOverlay.DataContext = _layerPanelViewModel;
         _layerPanelViewModel.PropertyChanged += LayerPanelViewModel_PropertyChanged;
-        WorkflowModePanelOverlay.SupportOperationToggleRequested += WorkflowModePanelOverlay_SupportOperationToggleRequested;
+        WorkflowModePanelOverlay.SupportOperationRequested += WorkflowModePanelOverlay_SupportOperationRequested;
         WorkflowModePanelOverlay.ToolSelected += WorkflowModePanelOverlay_ToolSelected;
         _ringSupportToolOptionsControl.OptionsChanged += RingSupportToolOptionsControl_OptionsChanged;
         _ringSupportToolOptionsControl.SelectFacesRequested += RingSupportToolOptionsControl_SelectFacesRequested;

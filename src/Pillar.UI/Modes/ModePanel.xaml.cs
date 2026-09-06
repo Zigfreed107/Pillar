@@ -12,8 +12,6 @@ namespace Pillar.UI.Modes;
 /// </summary>
 public partial class ModePanel : UserControl
 {
-    private bool _isSynchronizingSupportOperationButtons;
-
     /// <summary>
     /// Describes a tool selection made from the ribbon panel.
     /// </summary>
@@ -34,34 +32,28 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
-    /// Describes a support operation toggle change requested from the ribbon panel.
+    /// Describes a support operation requested from the ribbon panel.
     /// </summary>
-    public sealed class SupportOperationToggleRequestedEventArgs : EventArgs
+    public sealed class SupportOperationRequestedEventArgs : EventArgs
     {
         /// <summary>
-        /// Creates event data for one support operation toggle request.
+        /// Creates event data for one support operation request.
         /// </summary>
-        public SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind operationKind, bool isEnabled)
+        public SupportOperationRequestedEventArgs(ManualSupportOperationKind operationKind)
         {
             OperationKind = operationKind;
-            IsEnabled = isEnabled;
         }
 
         /// <summary>
         /// Gets the support operation affected by the toggle request.
         /// </summary>
         public ManualSupportOperationKind OperationKind { get; }
-
-        /// <summary>
-        /// Gets whether the ribbon requested that the operation be enabled or disabled.
-        /// </summary>
-        public bool IsEnabled { get; }
     }
 
     /// <summary>
-    /// Raised when the ribbon support-operation toggles request a workflow change.
+    /// Raised when a ribbon support-operation button requests a workflow change.
     /// </summary>
-    public event EventHandler<SupportOperationToggleRequestedEventArgs>? SupportOperationToggleRequested;
+    public event EventHandler<SupportOperationRequestedEventArgs>? SupportOperationRequested;
 
     /// <summary>
     /// Raised when any visible ribbon tool is selected and its options panel should be shown.
@@ -77,50 +69,17 @@ public partial class ModePanel : UserControl
     }
 
     /// <summary>
-    /// Synchronizes ribbon toggle state with the shell-owned active support operation.
+    /// Selects the point-support operation and shows its options.
     /// </summary>
-    public void SetSelectedSupportOperation(ManualSupportOperationKind operationKind)
-    {
-        _isSynchronizingSupportOperationButtons = true;
-        PointSupportButton.IsChecked = operationKind == ManualSupportOperationKind.Point;
-        _isSynchronizingSupportOperationButtons = false;
-    }
-
-    /// <summary>
-    /// Requests point-support activation when the point toggle is turned on.
-    /// </summary>
-    private void PointSupportButton_Checked(object sender, RoutedEventArgs e)
+    private void PointSupportButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
 
-        if (_isSynchronizingSupportOperationButtons)
-        {
-            return;
-        }
-
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Point, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.Point));
         RaiseToolSelected("Point Support");
-    }
-
-    /// <summary>
-    /// Requests point-support deactivation when the point toggle is turned off.
-    /// </summary>
-    private void PointSupportButton_Unchecked(object sender, RoutedEventArgs e)
-    {
-        _ = sender;
-        _ = e;
-
-        if (_isSynchronizingSupportOperationButtons)
-        {
-            return;
-        }
-
-        SupportOperationToggleRequested?.Invoke(
-            this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Point, false));
     }
 
     /// <summary>
@@ -170,9 +129,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Line, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.Line));
         RaiseToolSelected("Line Support");
     }
 
@@ -183,9 +142,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Ring, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.Ring));
         RaiseToolSelected("Ring Support");
     }
 
@@ -196,9 +155,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Contour, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.Contour));
         RaiseToolSelected("Contour Support");
     }
 
@@ -209,9 +168,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.Area, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.Area));
         RaiseToolSelected("Area Support");
     }
 
@@ -222,9 +181,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.None));
         RaiseToolSelected("Cluster Supports");
     }
 
@@ -235,9 +194,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.None));
         RaiseToolSelected("Brace Supports");
     }
 
@@ -251,9 +210,9 @@ public partial class ModePanel : UserControl
     {
         _ = sender;
         _ = e;
-        SupportOperationToggleRequested?.Invoke(
+        SupportOperationRequested?.Invoke(
             this,
-            new SupportOperationToggleRequestedEventArgs(ManualSupportOperationKind.None, true));
+            new SupportOperationRequestedEventArgs(ManualSupportOperationKind.None));
         RaiseToolSelected("Direct Edit Supports");
     }
 

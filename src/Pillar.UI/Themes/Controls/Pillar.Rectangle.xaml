@@ -1,0 +1,23 @@
+<!--
+    Pillar.Rectangle.xaml
+    Defines transient Rectangle overlays used for viewport selection feedback.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SolidColorBrush x:Key="SelectionWindowStrokeBrush"
+                     Color="{StaticResource Pillar.Color.Accent}" />
+    <SolidColorBrush x:Key="SelectionWindowFillBrush"
+                     Color="#3335C2B2" />
+    <DoubleCollection x:Key="SelectionWindowSolidDashArray" />
+    <DoubleCollection x:Key="SelectionWindowDottedDashArray">8,4</DoubleCollection>
+
+    <Style x:Key="SelectionWindowOverlayStyle" TargetType="Rectangle">
+        <Setter Property="Fill" Value="{DynamicResource SelectionWindowFillBrush}" />
+        <Setter Property="Stroke" Value="{DynamicResource SelectionWindowStrokeBrush}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Visibility" Value="Collapsed" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,50 @@
+<!--
+    Pillar.NumericUpDown.xaml
+    Defines the shared appearance and default style for NumericUpDown editors.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:Pillar.UI.Controls">
+
+    <!-- Numeric editors share sizing, typography, colours, and focus feedback throughout the UI. -->
+    <Style x:Key="PillarNumericUpDownStyle"
+           TargetType="{x:Type controls:NumericUpDown}">
+        <Setter Property="MinWidth" Value="92" />
+        <Setter Property="MinHeight" Value="24" />
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Element1}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
+        <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <!-- The control's own rounded Border draws its chrome; suppress Fluent's square UserControl border. -->
+                <ControlTemplate TargetType="{x:Type controls:NumericUpDown}">
+                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      ContentSource="Content"
+                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Accent}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextMuted}" />
+                <Setter Property="Opacity" Value="0.48" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Apply the named numeric style by default so every NumericUpDown stays consistent. -->
+    <Style BasedOn="{StaticResource PillarNumericUpDownStyle}"
+           TargetType="{x:Type controls:NumericUpDown}" />
+
+</ResourceDictionary>

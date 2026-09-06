@@ -6,9 +6,18 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinWidth="240">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="SupportPresetPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="SupportPresetPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource SupportPresetPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource SupportPresetPanelBorderBrush}">
         <StackPanel>
-            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+            <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}"
                        Text="Support Preset" />
 
             <ComboBox x:Name="PresetComboBox"
@@ -18,9 +27,9 @@
 
             <Border Height="112"
                     Margin="0,12,0,0"
-                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                    BorderBrush="{DynamicResource Pillar.Brush.Border}"
                     BorderThickness="1"
-                    Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}" />
+                    Background="{DynamicResource Pillar.Brush.Element1}" />
 
             <Button Margin="0,12,0,0"
                     Padding="10,4"

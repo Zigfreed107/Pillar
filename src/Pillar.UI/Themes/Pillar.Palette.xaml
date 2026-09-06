@@ -1,0 +1,130 @@
+<!--
+    Pillar.Palette.xaml
+    Defines application-wide color tokens and semantic brushes for Pillar's dark CAD interface.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Core palette. Change these values to explore a different Pillar colorway. -->
+
+    <Color x:Key="Pillar.Color.Background1">#FF0D1218</Color> <!--Behind Viewer, SOLID-->
+    <Color x:Key="Pillar.Color.Background2">#F21A232D</Color> <!--Toolbar & Status Bar-->
+    <Color x:Key="Pillar.Color.BackgroundTransparent">#F2181f27</Color> <!--Can be layered-->
+    <Color x:Key="Pillar.Color.3DViewportBG">#FF171D23</Color>
+    
+    <Color x:Key="Pillar.Color.Border">#FF3A4A59</Color>
+    <Color x:Key="Pillar.Color.BorderStrong">#FF556979</Color>
+    
+     <Color x:Key="Pillar.Color.TextPrimary">#FFF2F6F8</Color>
+    <Color x:Key="Pillar.Color.TextSecondary">#FFB5C1CB</Color>
+    <Color x:Key="Pillar.Color.TextMuted">#FF81909D</Color>
+
+    <Color x:Key="Pillar.Color.Element1">#FF262B34</Color>    <!--Buttons, controls etc-->
+    <Color x:Key="Pillar.Color.Element2">#FF3B4D5E</Color>
+    <!--Buttons, controls etc-->
+
+
+
+
+    <Color x:Key="Pillar.Color.Accent">#FF35C2B2</Color>
+    <Color x:Key="Pillar.Color.AccentDark">#FF228075</Color>
+    <Color x:Key="Pillar.Color.AccentHover">#FF58D8C9</Color>
+    <Color x:Key="Pillar.Color.AccentSubtleTransparent">#3D35C2B2</Color>
+    <Color x:Key="Pillar.Color.AccentSubtle">#3D35C2B2</Color>
+
+    <Color x:Key="Pillar.Color.Success">#FF65C995</Color>
+    <Color x:Key="Pillar.Color.Warning">#FFF0B45A</Color>
+    <Color x:Key="Pillar.Color.Danger">#FFF07178</Color>
+    <Color x:Key="Pillar.Color.Info">#FF006FC5</Color>
+
+
+    <!-- Application-wide semantic brushes. -->
+    <SolidColorBrush x:Key="Pillar.Brush.Background1"
+                     Color="{DynamicResource Pillar.Color.Background1}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Background2"
+                     Color="{DynamicResource Pillar.Color.Background2}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.BackgroundTransparent"
+                     Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />    
+    <SolidColorBrush x:Key="Pillar.Brush.3DViewportBG"
+                     Color="{DynamicResource Pillar.Color.3DViewportBG}" />
+    
+    <SolidColorBrush x:Key="Pillar.Brush.Element1"
+                     Color="{DynamicResource Pillar.Color.Element1}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Element2"
+                     Color="{DynamicResource Pillar.Color.Element2}" />
+
+
+
+
+
+    <SolidColorBrush x:Key="Pillar.Brush.Border"
+                     Color="{DynamicResource Pillar.Color.Border}" />
+    <SolidColorBrush x:Key="Pillar.Brush.BorderStrong"
+                     Color="{DynamicResource Pillar.Color.BorderStrong}" />
+    <SolidColorBrush x:Key="Pillar.Brush.TextPrimary"
+                     Color="{DynamicResource Pillar.Color.TextPrimary}" />
+    <SolidColorBrush x:Key="Pillar.Brush.TextSecondary"
+                     Color="{DynamicResource Pillar.Color.TextSecondary}" />
+    <SolidColorBrush x:Key="Pillar.Brush.TextMuted"
+                     Color="{DynamicResource Pillar.Color.TextMuted}" />
+    
+    <SolidColorBrush x:Key="Pillar.Brush.Accent"
+                     Color="{DynamicResource Pillar.Color.Accent}" />
+    <SolidColorBrush x:Key="Pillar.Brush.AccentDark"
+                     Color="{DynamicResource Pillar.Color.AccentDark}" />
+    <SolidColorBrush x:Key="Pillar.Brush.AccentHover"
+                     Color="{DynamicResource Pillar.Color.AccentHover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.AccentSubtle"
+                     Color="#1E4446" />
+    <SolidColorBrush x:Key="Pillar.Brush.AccentSubtleTransparent"
+                     Color="{DynamicResource Pillar.Color.AccentSubtleTransparent}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Success"
+                     Color="{DynamicResource Pillar.Color.Success}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Warning"
+                     Color="{DynamicResource Pillar.Color.Warning}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Danger"
+                     Color="{DynamicResource Pillar.Color.Danger}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Info"
+                     Color="{DynamicResource Pillar.Color.Info}" />
+
+    <!-- Standard button roles. These keep all button states under Pillar's palette control. -->
+    <SolidColorBrush x:Key="Pillar.Brush.Button.Background"
+                     Color="{DynamicResource Pillar.Color.Element1}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.Border"
+                     Color="{DynamicResource Pillar.Color.BorderStrong}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.Foreground"
+                     Color="{DynamicResource Pillar.Color.TextPrimary}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.HoverBackground"
+                     Color="{DynamicResource Pillar.Color.AccentSubtleTransparent}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.HoverBorder"
+                     Color="{DynamicResource Pillar.Color.AccentHover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.HoverForeground"
+                     Color="{DynamicResource Pillar.Color.TextPrimary}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.PressedBackground"
+                     Color="{DynamicResource Pillar.Color.AccentDark}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.PressedBorder"
+                     Color="{DynamicResource Pillar.Color.Accent}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.PressedForeground"
+                     Color="{DynamicResource Pillar.Color.TextPrimary}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.DisabledBackground"
+                     Color="{DynamicResource Pillar.Color.Background2}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.DisabledBorder"
+                     Color="{DynamicResource Pillar.Color.Border}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.DisabledForeground"
+                     Color="{DynamicResource Pillar.Color.TextMuted}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Button.FocusBorder"
+                     Color="{DynamicResource Pillar.Color.Accent}" />
+    
+    <!-- Shared overlay typography and axis colors. -->
+    <SolidColorBrush x:Key="ModeOverlayBodyBrush"
+                     Color="{DynamicResource Pillar.Color.TextSecondary}" />
+    <SolidColorBrush x:Key="RotationXAxisBrush" Color="#FFF07178" />
+    <SolidColorBrush x:Key="RotationYAxisBrush" Color="#FF65C995" />
+    <SolidColorBrush x:Key="RotationZAxisBrush" Color="#FF62A8F5" />
+
+    <!-- Viewport lighting tokens stay visual-only and do not enter rendering domain types. -->
+    <Color x:Key="ViewportAmbientLightColor">#FF555D64</Color>
+    <Color x:Key="ViewportKeyLightColor">#FFB9C0C5</Color>
+    <Color x:Key="ViewportFillLightColor">#FF87919A</Color>
+</ResourceDictionary>

@@ -5,6 +5,7 @@ using Pillar.UI.Controls;
 using System;
 using System.ComponentModel;
 using System.Numerics;
+using System.Windows;
 using System.Windows.Media;
 
 namespace Pillar.UI;
@@ -25,7 +26,18 @@ public partial class MainWindow
             _printableVolumeDefinition.ZDistance,
             0.0,
             _printableVolumeDefinition.ZDistance);
+        UpdateClipRangeSliderVisibility();
         UpdateSelectedModelBoundsClipIndicator();
+    }
+
+    /// <summary>
+    /// Shows clipping controls whenever the document contains at least one imported model.
+    /// </summary>
+    private void UpdateClipRangeSliderVisibility()
+    {
+        ClipRangeSliderOverlay.Visibility = _layerPanelViewModel.HasImportedModels
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     /// <summary>

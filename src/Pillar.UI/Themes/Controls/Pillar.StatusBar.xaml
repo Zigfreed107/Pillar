@@ -1,0 +1,17 @@
+<!--
+    Pillar.StatusBar.xaml
+    Defines the application status-bar appearance.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Style x:Key="PillarStatusBarStyle" TargetType="StatusBar">
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background2}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+
+</ResourceDictionary>

@@ -22,7 +22,7 @@ public enum FaceSetSelectionToolKind
 {
     Select,
     LineSelect,
-    AngleSelect
+    PolygonSelect
 }
 
 /// <summary>
@@ -66,14 +66,53 @@ public readonly struct FaceSetLineSelectionPreviewState
 }
 
 /// <summary>
+/// Describes the screen-space Polygon Select preview drawn by the WPF shell.
+/// </summary>
+public readonly struct FaceSetPolygonSelectionPreviewState
+{
+    /// <summary>
+    /// Creates immutable preview state for the active Polygon Select gesture.
+    /// </summary>
+    public FaceSetPolygonSelectionPreviewState(
+        bool isVisible,
+        IReadOnlyList<Vector2> vertices,
+        Vector2 previewPoint)
+    {
+        IsVisible = isVisible;
+        Vertices = vertices;
+        PreviewPoint = previewPoint;
+    }
+
+    /// <summary>
+    /// Gets whether the polygon preview should be visible.
+    /// </summary>
+    public bool IsVisible { get; }
+
+    /// <summary>
+    /// Gets the committed screen-space polygon vertices.
+    /// </summary>
+    public IReadOnlyList<Vector2> Vertices { get; }
+
+    /// <summary>
+    /// Gets the current cursor point appended to the committed vertices for preview.
+    /// </summary>
+    public Vector2 PreviewPoint { get; }
+}
+
+/// <summary>
 /// Edits a temporary set of mesh faces and returns that set to the launcher only when accepted.
 /// </summary>
 public sealed class FaceSetSelectionTool : ITool
 {
+    private const float PolygonCloseDistancePixels = 10.0f;
+
+    private readonly CadDocument _document;
     private readonly SceneManager _scene;
     private readonly HashSet<FaceSelectionKey> _selectedFaces = new HashSet<FaceSelectionKey>();
-    private readonly List<FaceSelectionKey> _candidateFaces = new List<FaceSelectionKey>(256);
+    private readonly HashSet<FaceSelectionKey> _candidateFaces = new HashSet<FaceSelectionKey>();
     private readonly List<int> _candidateTriangleIndices = new List<int>(256);
+    private readonly Dictionary<Guid, HashSet<int>> _candidateTriangleIndicesByMeshId = new Dictionary<Guid, HashSet<int>>();
+    private readonly List<Vector2> _polygonSelectVertices = new List<Vector2>(16);
     private readonly Stack<HashSet<FaceSelectionKey>> _undoHistory = new Stack<HashSet<FaceSelectionKey>>();
     private readonly Stack<HashSet<FaceSelectionKey>> _redoHistory = new Stack<HashSet<FaceSelectionKey>>();
     private readonly Color4 _selectionColor;
@@ -88,7 +127,7 @@ public sealed class FaceSetSelectionTool : ITool
         IReadOnlyCollection<FaceSelectionKey> initialSelection,
         Color4 selectionColor)
     {
-        _ = document ?? throw new ArgumentNullException(nameof(document));
+        _document = document ?? throw new ArgumentNullException(nameof(document));
         _scene = scene ?? throw new ArgumentNullException(nameof(scene));
         _selectionColor = selectionColor;
 
@@ -112,6 +151,11 @@ public sealed class FaceSetSelectionTool : ITool
     /// Raised when Line Select needs the shell to show or hide its screen-space segment preview.
     /// </summary>
     public event Action<FaceSetLineSelectionPreviewState>? LineSelectionPreviewChanged;
+
+    /// <summary>
+    /// Raised when Polygon Select needs the shell to update its screen-space outline and fill.
+    /// </summary>
+    public event Action<FaceSetPolygonSelectionPreviewState>? PolygonSelectionPreviewChanged;
 
     /// <summary>
     /// Gets the active face selection operation.
@@ -153,6 +197,23 @@ public sealed class FaceSetSelectionTool : ITool
     public double CoplanarThresholdDegrees { get; set; } = 15.0;
 
     /// <summary>
+    /// Gets whether every picked face expands through contiguous coplanar neighbours.
+    /// </summary>
+    public bool IsCoplanarExpansionEnabled { get; private set; }
+
+    /// <summary>
+    /// Gets whether Line Select or Polygon Select currently has an unfinished drawing.
+    /// </summary>
+    public bool IsDrawingInProgress
+    {
+        get
+        {
+            return (ToolKind == FaceSetSelectionToolKind.LineSelect && _lineSelectPreviousPoint.HasValue)
+                || (ToolKind == FaceSetSelectionToolKind.PolygonSelect && _polygonSelectVertices.Count > 0);
+        }
+    }
+
+    /// <summary>
     /// Changes the active face selection operation and resets transient line-select state.
     /// </summary>
     public void SetToolKind(FaceSetSelectionToolKind toolKind)
@@ -164,12 +225,27 @@ public sealed class FaceSetSelectionTool : ITool
                 ClearLineSelectionPreview();
                 RaiseStateChanged();
             }
+            else if (toolKind == FaceSetSelectionToolKind.PolygonSelect)
+            {
+                ClearPolygonSelectionPreview();
+                RaiseStateChanged();
+            }
 
             return;
         }
 
         ClearLineSelectionPreview();
+        ClearPolygonSelectionPreview();
         ToolKind = toolKind;
+        RaiseStateChanged();
+    }
+
+    /// <summary>
+    /// Changes whether all selection operations expand through contiguous coplanar faces.
+    /// </summary>
+    public void SetCoplanarExpansionEnabled(bool isEnabled)
+    {
+        IsCoplanarExpansionEnabled = isEnabled;
         RaiseStateChanged();
     }
 
@@ -195,13 +271,13 @@ public sealed class FaceSetSelectionTool : ITool
             return;
         }
 
-        if (ToolKind == FaceSetSelectionToolKind.AngleSelect)
+        if (ToolKind == FaceSetSelectionToolKind.LineSelect)
         {
-            ApplyAngleSelection(screenPosition, effectiveModifier);
+            ApplyLineSelectionPoint(screenPosition, effectiveModifier);
             return;
         }
 
-        ApplyLineSelectionPoint(screenPosition, effectiveModifier);
+        ApplyPolygonSelectionPoint(screenPosition);
     }
 
     /// <summary>
@@ -209,14 +285,23 @@ public sealed class FaceSetSelectionTool : ITool
     /// </summary>
     public void OnMouseMove(Vector2 screenPosition)
     {
-        if (ToolKind != FaceSetSelectionToolKind.LineSelect || !_lineSelectPreviousPoint.HasValue)
+        if (ToolKind == FaceSetSelectionToolKind.LineSelect && _lineSelectPreviousPoint.HasValue)
+        {
+            LineSelectionPreviewChanged?.Invoke(new FaceSetLineSelectionPreviewState(
+                true,
+                _lineSelectPreviousPoint.Value,
+                screenPosition));
+            return;
+        }
+
+        if (ToolKind != FaceSetSelectionToolKind.PolygonSelect || _polygonSelectVertices.Count == 0)
         {
             return;
         }
 
-        LineSelectionPreviewChanged?.Invoke(new FaceSetLineSelectionPreviewState(
+        PolygonSelectionPreviewChanged?.Invoke(new FaceSetPolygonSelectionPreviewState(
             true,
-            _lineSelectPreviousPoint.Value,
+            _polygonSelectVertices,
             screenPosition));
     }
 
@@ -234,7 +319,65 @@ public sealed class FaceSetSelectionTool : ITool
     public void Cancel()
     {
         ClearLineSelectionPreview();
+        ClearPolygonSelectionPreview();
         _scene.ClearFaceSelection();
+    }
+
+    /// <summary>
+    /// Finishes the active multi-point drawing while keeping its selection operation active.
+    /// </summary>
+    public bool FinishActiveDrawing()
+    {
+        if (ToolKind == FaceSetSelectionToolKind.LineSelect && _lineSelectPreviousPoint.HasValue)
+        {
+            ClearLineSelectionPreview();
+            return true;
+        }
+
+        if (ToolKind == FaceSetSelectionToolKind.PolygonSelect)
+        {
+            return CompletePolygonSelection();
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Cancels the unfinished line anchor or polygon without leaving its selection operation.
+    /// </summary>
+    public bool CancelActiveDrawing()
+    {
+        if (ToolKind == FaceSetSelectionToolKind.LineSelect && _lineSelectPreviousPoint.HasValue)
+        {
+            ClearLineSelectionPreview();
+            return true;
+        }
+
+        if (ToolKind == FaceSetSelectionToolKind.PolygonSelect && _polygonSelectVertices.Count > 0)
+        {
+            ClearPolygonSelectionPreview();
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Closes and applies the active polygon when it contains at least three vertices.
+    /// </summary>
+    public bool CompletePolygonSelection()
+    {
+        if (_polygonSelectVertices.Count < 3)
+        {
+            return false;
+        }
+
+        _candidateFaces.Clear();
+        _scene.FillVisibleMeshFacesInsideScreenPolygon(_polygonSelectVertices, _candidateFaces);
+        ExpandCandidateFacesIfEnabled();
+        ClearPolygonSelectionPreview();
+        ApplyCandidateFaces(_candidateFaces, GetEffectiveModifier());
+        return true;
     }
 
     /// <summary>
@@ -302,29 +445,28 @@ public sealed class FaceSetSelectionTool : ITool
 
         _candidateFaces.Clear();
         _candidateFaces.Add(new FaceSelectionKey(mesh.Id, triangleIndex));
+        ExpandCandidateFacesIfEnabled();
         ApplyCandidateFaces(_candidateFaces, modifier);
     }
 
     /// <summary>
-    /// Grows selection through neighbouring faces whose normal difference is inside the configured threshold.
+    /// Adds one polygon vertex or closes the polygon when the user returns to its starting point.
     /// </summary>
-    private void ApplyAngleSelection(Vector2 screenPosition, FaceSetSelectionModifier modifier)
+    private void ApplyPolygonSelectionPoint(Vector2 screenPosition)
     {
-        if (!_scene.TryHitMeshFace(screenPosition, out MeshEntity mesh, out int triangleIndex))
+        if (_polygonSelectVertices.Count >= 3
+            && Vector2.DistanceSquared(screenPosition, _polygonSelectVertices[0])
+                <= PolygonCloseDistancePixels * PolygonCloseDistancePixels)
         {
+            CompletePolygonSelection();
             return;
         }
 
-        _candidateTriangleIndices.Clear();
-        FaceSetSelectionAnalyzer.FillConnectedCoplanarTriangles(mesh, triangleIndex, CoplanarThresholdDegrees, _candidateTriangleIndices);
-        _candidateFaces.Clear();
-
-        for (int i = 0; i < _candidateTriangleIndices.Count; i++)
-        {
-            _candidateFaces.Add(new FaceSelectionKey(mesh.Id, _candidateTriangleIndices[i]));
-        }
-
-        ApplyCandidateFaces(_candidateFaces, modifier);
+        _polygonSelectVertices.Add(screenPosition);
+        PolygonSelectionPreviewChanged?.Invoke(new FaceSetPolygonSelectionPreviewState(
+            true,
+            _polygonSelectVertices,
+            screenPosition));
     }
 
     /// <summary>
@@ -345,6 +487,7 @@ public sealed class FaceSetSelectionTool : ITool
             screenPosition,
             _candidateFaces);
 
+        ExpandCandidateFacesIfEnabled();
         ApplyCandidateFaces(_candidateFaces, modifier);
         _lineSelectPreviousPoint = screenPosition;
         HideLineSelectionPreview();
@@ -353,7 +496,7 @@ public sealed class FaceSetSelectionTool : ITool
     /// <summary>
     /// Applies candidate faces to the temporary selection using add or remove semantics.
     /// </summary>
-    private void ApplyCandidateFaces(IReadOnlyList<FaceSelectionKey> candidateFaces, FaceSetSelectionModifier modifier)
+    private void ApplyCandidateFaces(IReadOnlyCollection<FaceSelectionKey> candidateFaces, FaceSetSelectionModifier modifier)
     {
         if (candidateFaces.Count == 0)
         {
@@ -363,15 +506,15 @@ public sealed class FaceSetSelectionTool : ITool
         PushUndoSnapshot();
         bool didChangeSelection = false;
 
-        for (int i = 0; i < candidateFaces.Count; i++)
+        foreach (FaceSelectionKey candidateFace in candidateFaces)
         {
             if (modifier == FaceSetSelectionModifier.Remove)
             {
-                didChangeSelection |= _selectedFaces.Remove(candidateFaces[i]);
+                didChangeSelection |= _selectedFaces.Remove(candidateFace);
                 continue;
             }
 
-            didChangeSelection |= _selectedFaces.Add(candidateFaces[i]);
+            didChangeSelection |= _selectedFaces.Add(candidateFace);
         }
 
         if (!didChangeSelection)
@@ -418,6 +561,68 @@ public sealed class FaceSetSelectionTool : ITool
     }
 
     /// <summary>
+    /// Replaces base candidates with their union of connected coplanar face regions when enabled.
+    /// </summary>
+    private void ExpandCandidateFacesIfEnabled()
+    {
+        if (!IsCoplanarExpansionEnabled || _candidateFaces.Count == 0)
+        {
+            return;
+        }
+
+        _candidateTriangleIndicesByMeshId.Clear();
+
+        foreach (FaceSelectionKey candidateFace in _candidateFaces)
+        {
+            if (!_candidateTriangleIndicesByMeshId.TryGetValue(candidateFace.MeshEntityId, out HashSet<int>? triangleIndices))
+            {
+                triangleIndices = new HashSet<int>();
+                _candidateTriangleIndicesByMeshId.Add(candidateFace.MeshEntityId, triangleIndices);
+            }
+
+            triangleIndices.Add(candidateFace.TriangleIndex);
+        }
+
+        foreach (KeyValuePair<Guid, HashSet<int>> candidateGroup in _candidateTriangleIndicesByMeshId)
+        {
+            MeshEntity? mesh = FindMeshEntity(candidateGroup.Key);
+
+            if (mesh == null)
+            {
+                continue;
+            }
+
+            _candidateTriangleIndices.Clear();
+            FaceSetSelectionAnalyzer.FillConnectedCoplanarTriangles(
+                mesh,
+                candidateGroup.Value,
+                CoplanarThresholdDegrees,
+                _candidateTriangleIndices);
+
+            for (int i = 0; i < _candidateTriangleIndices.Count; i++)
+            {
+                _candidateFaces.Add(new FaceSelectionKey(mesh.Id, _candidateTriangleIndices[i]));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds one imported mesh by stable face-selection identity.
+    /// </summary>
+    private MeshEntity? FindMeshEntity(Guid meshEntityId)
+    {
+        for (int i = 0; i < _document.Entities.Count; i++)
+        {
+            if (_document.Entities[i] is MeshEntity mesh && mesh.Id == meshEntityId)
+            {
+                return mesh;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Reads keyboard overrides so Shift temporarily adds and Alt temporarily removes faces.
     /// </summary>
     private FaceSetSelectionModifier GetEffectiveModifier()
@@ -450,6 +655,18 @@ public sealed class FaceSetSelectionTool : ITool
     private void HideLineSelectionPreview()
     {
         LineSelectionPreviewChanged?.Invoke(new FaceSetLineSelectionPreviewState(false, Vector2.Zero, Vector2.Zero));
+    }
+
+    /// <summary>
+    /// Clears committed polygon vertices and hides the screen-space preview.
+    /// </summary>
+    private void ClearPolygonSelectionPreview()
+    {
+        _polygonSelectVertices.Clear();
+        PolygonSelectionPreviewChanged?.Invoke(new FaceSetPolygonSelectionPreviewState(
+            false,
+            _polygonSelectVertices,
+            Vector2.Zero));
     }
 
     /// <summary>

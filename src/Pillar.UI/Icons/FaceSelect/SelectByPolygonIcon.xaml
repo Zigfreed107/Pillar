@@ -1,0 +1,28 @@
+<!--
+    ShadedSphereIcon.xaml
+    Defines the reusable faceted shaded-sphere icon for the shaded viewport mode.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Viewbox x:Key="SelectByPolygonIcon"
+             x:Shared="False"
+             Stretch="Uniform" Margin="2">
+        <Canvas Width="104" Height="104" >
+
+            <Path Data="M50,80 L12,70 L12,10 L50,20 L100,10 L80,70 " StrokeDashArray="1,1"
+                  Stroke="{DynamicResource Pillar.Brush.Accent}"
+                  StrokeThickness="10" 
+                  />
+            <Ellipse Width="24" Height ="24" Canvas.Left="0" Canvas.Top="60" StrokeThickness="8" Stroke="{DynamicResource Pillar.Brush.Accent}" Fill="{DynamicResource Pillar.Brush.AccentDark}"/>
+            <Ellipse Width="24" Height="24" Canvas.Left="0" Canvas.Top="0" StrokeThickness="7" Stroke="{DynamicResource Pillar.Brush.Accent}" Fill="{DynamicResource Pillar.Brush.AccentDark}"/>
+            <Ellipse Width="24" Height="24" Canvas.Left="35" Canvas.Top="8" StrokeThickness="7" Stroke="{DynamicResource Pillar.Brush.Accent}" Fill="{DynamicResource Pillar.Brush.AccentDark}"/>
+            <Ellipse Width="24" Height="24" Canvas.Left="85" Canvas.Top="0" StrokeThickness="7" Stroke="{DynamicResource Pillar.Brush.Accent}" Fill="{DynamicResource Pillar.Brush.AccentDark}"/>
+            <Path Data="M50,40 L100,80 L70,80 L50,100 Z" 
+                  Stroke="{DynamicResource Pillar.Brush.AccentDark}"
+                  StrokeThickness="7" StrokeLineJoin="Round"
+                  />
+        </Canvas>
+    </Viewbox>
+
+</ResourceDictionary>

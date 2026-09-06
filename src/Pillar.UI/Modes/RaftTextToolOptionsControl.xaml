@@ -7,10 +7,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls"
              MinWidth="290">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
         <Grid>
             <StackPanel x:Name="OptionsPanel">
-                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Raft Text" />
+                <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}" Text="Raft Text" />
 
                 <TextBlock Margin="0,10,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Text" />
                 <TextBox x:Name="RaftTextBox" Margin="0,4,0,0" TextChanged="AnyTextOption_Changed" />
@@ -62,7 +71,7 @@
             <StackPanel x:Name="PlacementInstructionsPanel"
                         VerticalAlignment="Center"
                         Visibility="Collapsed">
-                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Place Raft Text" />
+                <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}" Text="Place Raft Text" />
                 <TextBlock Margin="0,10,0,0"
                            Style="{StaticResource ModeOverlayBodyTextStyle}"
                            Text="Move the mouse in the viewer to choose the text's location. Click to place the text." />

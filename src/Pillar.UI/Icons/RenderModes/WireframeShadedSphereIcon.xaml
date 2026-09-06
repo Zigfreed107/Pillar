@@ -1,0 +1,42 @@
+<!--
+    WireframeShadedSphereIcon.xaml
+    Defines the reusable faceted sphere with wireframe lines for the combined viewport mode.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Viewbox x:Key="WireframeShadedSphereIcon"
+             x:Shared="False"
+             Width="18"
+             Height="18"
+             Stretch="Uniform">
+        <Grid>
+            <Grid>
+                <Path Data="M0,50 A50,50 0 1 1 100,50 A50,50 0 1 1 0,50"
+                    Fill="{DynamicResource Pillar.Brush.AccentDark}"/>
+                
+                <Path Data="M0,50 
+                  A50,50 0 1 1 100,50 
+                  A50,50 0 1 1 0,50"
+                  Fill="Transparent"  
+                  Stroke="{DynamicResource Pillar.Brush.Accent}"
+                  StrokeThickness="10" />
+
+                <Path Data="M0,50 
+                  A50,15 0 1 0 100,50"
+                  Fill="Transparent"  
+                  Stroke="{DynamicResource 
+                  Pillar.Brush.Accent}"
+                  StrokeThickness="10" />
+
+                <Path Data="M50,0 
+                  A15,50 0 1 0 50,100"
+                  Fill="Transparent"  
+                  Stroke="{DynamicResource 
+                  Pillar.Brush.Accent}"
+                  StrokeThickness="10" />
+            </Grid>
+        </Grid>
+    </Viewbox>
+
+</ResourceDictionary>

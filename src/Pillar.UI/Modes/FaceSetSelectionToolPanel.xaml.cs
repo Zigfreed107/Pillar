@@ -35,6 +35,11 @@ public partial class FaceSetSelectionToolPanel : UserControl
     public event Action<FaceSetSelectionModifier>? ModifierChanged;
 
     /// <summary>
+    /// Raised when the user enables or disables contiguous coplanar expansion.
+    /// </summary>
+    public event Action<bool>? CoplanarExpansionChanged;
+
+    /// <summary>
     /// Raised when the coplanar threshold changes.
     /// </summary>
     public event Action<double>? CoplanarThresholdChanged;
@@ -60,7 +65,7 @@ public partial class FaceSetSelectionToolPanel : UserControl
     public event Action? Accepted;
 
     /// <summary>
-    /// Gets or sets the numeric coplanar threshold shown in the angle-select flyout.
+    /// Gets or sets the numeric coplanar threshold shown in the main panel.
     /// </summary>
     public double CoplanarThresholdDegrees
     {
@@ -79,8 +84,25 @@ public partial class FaceSetSelectionToolPanel : UserControl
         {
             SelectToolButton.IsChecked = toolKind == FaceSetSelectionToolKind.Select;
             LineSelectToolButton.IsChecked = toolKind == FaceSetSelectionToolKind.LineSelect;
-            AngleSelectToolButton.IsChecked = toolKind == FaceSetSelectionToolKind.AngleSelect;
+            PolygonSelectToolButton.IsChecked = toolKind == FaceSetSelectionToolKind.PolygonSelect;
             ToolPromptTextBlock.Text = GetPromptText(toolKind);
+        }
+        finally
+        {
+            _isSynchronizingControls = false;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the shared contiguous coplanar expansion setting into its independent toggle.
+    /// </summary>
+    public void SetCoplanarExpansionEnabled(bool isEnabled)
+    {
+        _isSynchronizingControls = true;
+
+        try
+        {
+            AngleSelectCheckBox.IsChecked = isEnabled;
         }
         finally
         {
@@ -111,9 +133,6 @@ public partial class FaceSetSelectionToolPanel : UserControl
     /// </summary>
     public void UpdateState(int selectedFaceCount, bool canUndo, bool canRedo)
     {
-        SelectionCountTextBlock.Text = selectedFaceCount == 1
-            ? "1 face"
-            : $"{selectedFaceCount} faces";
         UndoFaceSelectionButton.IsEnabled = canUndo;
         RedoFaceSelectionButton.IsEnabled = canRedo;
     }
@@ -139,34 +158,29 @@ public partial class FaceSetSelectionToolPanel : UserControl
     }
 
     /// <summary>
-    /// Selects the connected coplanar angle-grow operation.
+    /// Selects the camera-view polygon operation.
     /// </summary>
-    private void AngleSelectToolButton_Click(object sender, RoutedEventArgs e)
+    private void PolygonSelectToolButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        PublishToolKind(FaceSetSelectionToolKind.AngleSelect);
+        PublishToolKind(FaceSetSelectionToolKind.PolygonSelect);
     }
 
     /// <summary>
-    /// Opens or closes the angle-select settings flyout.
+    /// Toggles connected coplanar expansion independently of the active selection operation.
     /// </summary>
-    private void AngleSelectSettingsButton_Click(object sender, RoutedEventArgs e)
+    private void AngleSelectToggleButton_Click(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
-        AngleSelectSettingsPopup.IsOpen = !AngleSelectSettingsPopup.IsOpen;
-        AngleSelectSettingsButton.IsChecked = AngleSelectSettingsPopup.IsOpen;
-    }
 
-    /// <summary>
-    /// Keeps the flyout arrow visual state synchronized when the popup closes externally.
-    /// </summary>
-    private void AngleSelectSettingsPopup_Closed(object? sender, EventArgs e)
-    {
-        _ = sender;
-        _ = e;
-        AngleSelectSettingsButton.IsChecked = false;
+        if (_isSynchronizingControls)
+        {
+            return;
+        }
+
+        CoplanarExpansionChanged?.Invoke(AngleSelectCheckBox.IsChecked == true);
     }
 
     /// <summary>
@@ -280,7 +294,12 @@ public partial class FaceSetSelectionToolPanel : UserControl
     {
         if (toolKind == FaceSetSelectionToolKind.LineSelect)
         {
-            return "Press ESC to finish";
+            return "Click points to draw a line; right-click or Enter finishes; Esc cancels";
+        }
+
+        if (toolKind == FaceSetSelectionToolKind.PolygonSelect)
+        {
+            return "Click points to draw a polygon; right-click or Enter finishes; Esc cancels";
         }
 
         return "Click on a face";

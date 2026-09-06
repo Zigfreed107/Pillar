@@ -6,9 +6,18 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
         <StackPanel>
-            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+            <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}"
                        Text="Rotate Options" />
 
             <StackPanel Margin="0,14,0,0">

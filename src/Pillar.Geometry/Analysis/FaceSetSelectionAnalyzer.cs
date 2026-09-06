@@ -112,9 +112,30 @@ public static class FaceSetSelectionAnalyzer
         double thresholdDegrees,
         ICollection<int> selectedTriangleIndices)
     {
+        FillConnectedCoplanarTriangles(
+            mesh,
+            new[] { seedTriangleIndex },
+            thresholdDegrees,
+            selectedTriangleIndices);
+    }
+
+    /// <summary>
+    /// Fills the union of connected coplanar regions reached from multiple seed triangles.
+    /// </summary>
+    public static void FillConnectedCoplanarTriangles(
+        MeshEntity mesh,
+        IReadOnlyCollection<int> seedTriangleIndices,
+        double thresholdDegrees,
+        ICollection<int> selectedTriangleIndices)
+    {
         if (mesh == null)
         {
             throw new ArgumentNullException(nameof(mesh));
+        }
+
+        if (seedTriangleIndices == null)
+        {
+            throw new ArgumentNullException(nameof(seedTriangleIndices));
         }
 
         if (selectedTriangleIndices == null)
@@ -124,7 +145,7 @@ public static class FaceSetSelectionAnalyzer
 
         int triangleCount = mesh.TriangleIndices.Count / 3;
 
-        if (seedTriangleIndex < 0 || seedTriangleIndex >= triangleCount)
+        if (triangleCount == 0 || seedTriangleIndices.Count == 0)
         {
             return;
         }
@@ -136,8 +157,18 @@ public static class FaceSetSelectionAnalyzer
         double clampedThresholdDegrees = Math.Min(180.0, Math.Max(0.0, thresholdDegrees));
         float minimumDot = MathF.Cos((float)(clampedThresholdDegrees * Math.PI / 180.0));
 
-        includedTriangles[seedTriangleIndex] = true;
-        openTriangles.Enqueue(seedTriangleIndex);
+        foreach (int seedTriangleIndex in seedTriangleIndices)
+        {
+            if (seedTriangleIndex < 0
+                || seedTriangleIndex >= triangleCount
+                || includedTriangles[seedTriangleIndex])
+            {
+                continue;
+            }
+
+            includedTriangles[seedTriangleIndex] = true;
+            openTriangles.Enqueue(seedTriangleIndex);
+        }
 
         while (openTriangles.Count > 0)
         {
@@ -165,6 +196,137 @@ public static class FaceSetSelectionAnalyzer
                 openTriangles.Enqueue(nextTriangleIndex);
             }
         }
+    }
+
+    /// <summary>
+    /// Tests whether one screen point lies inside or on the boundary of a screen-space polygon.
+    /// </summary>
+    public static bool IsPointInsideScreenPolygon(Vector2 point, IReadOnlyList<Vector2> polygonVertices)
+    {
+        if (polygonVertices == null)
+        {
+            throw new ArgumentNullException(nameof(polygonVertices));
+        }
+
+        if (polygonVertices.Count < 3)
+        {
+            return false;
+        }
+
+        bool isInside = false;
+        int previousIndex = polygonVertices.Count - 1;
+
+        for (int currentIndex = 0; currentIndex < polygonVertices.Count; currentIndex++)
+        {
+            Vector2 current = polygonVertices[currentIndex];
+            Vector2 previous = polygonVertices[previousIndex];
+            double cross = Cross(previous, current, point);
+
+            if (IsPointOnSegment(previous, current, point, cross))
+            {
+                return true;
+            }
+
+            bool crossesHorizontalRay = (current.Y > point.Y) != (previous.Y > point.Y);
+
+            if (crossesHorizontalRay)
+            {
+                float intersectionX = ((previous.X - current.X) * (point.Y - current.Y) / (previous.Y - current.Y)) + current.X;
+
+                if (point.X < intersectionX)
+                {
+                    isInside = !isInside;
+                }
+            }
+
+            previousIndex = currentIndex;
+        }
+
+        return isInside;
+    }
+
+    /// <summary>
+    /// Tests whether an entire projected triangle is contained by a screen-space polygon.
+    /// </summary>
+    public static bool IsScreenTriangleEntirelyInsidePolygon(
+        Vector2 a,
+        Vector2 b,
+        Vector2 c,
+        IReadOnlyList<Vector2> polygonVertices)
+    {
+        if (polygonVertices == null)
+        {
+            throw new ArgumentNullException(nameof(polygonVertices));
+        }
+
+        if (!IsPointInsideScreenPolygon(a, polygonVertices)
+            || !IsPointInsideScreenPolygon(b, polygonVertices)
+            || !IsPointInsideScreenPolygon(c, polygonVertices)
+            || !IsPointInsideScreenPolygon(Vector2.Lerp(a, b, 0.5f), polygonVertices)
+            || !IsPointInsideScreenPolygon(Vector2.Lerp(b, c, 0.5f), polygonVertices)
+            || !IsPointInsideScreenPolygon(Vector2.Lerp(c, a, 0.5f), polygonVertices))
+        {
+            return false;
+        }
+
+        return !DoesScreenSegmentCrossPolygonBoundary(a, b, polygonVertices)
+            && !DoesScreenSegmentCrossPolygonBoundary(b, c, polygonVertices)
+            && !DoesScreenSegmentCrossPolygonBoundary(c, a, polygonVertices);
+    }
+
+    /// <summary>
+    /// Tests whether the interior of a segment crosses any polygon boundary edge.
+    /// </summary>
+    private static bool DoesScreenSegmentCrossPolygonBoundary(
+        Vector2 segmentStart,
+        Vector2 segmentEnd,
+        IReadOnlyList<Vector2> polygonVertices)
+    {
+        int previousIndex = polygonVertices.Count - 1;
+
+        for (int currentIndex = 0; currentIndex < polygonVertices.Count; currentIndex++)
+        {
+            if (SegmentsCrossInsideFirstSegment(
+                segmentStart,
+                segmentEnd,
+                polygonVertices[previousIndex],
+                polygonVertices[currentIndex]))
+            {
+                return true;
+            }
+
+            previousIndex = currentIndex;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tests whether two non-parallel segments intersect away from the first segment's endpoints.
+    /// </summary>
+    private static bool SegmentsCrossInsideFirstSegment(
+        Vector2 firstStart,
+        Vector2 firstEnd,
+        Vector2 secondStart,
+        Vector2 secondEnd)
+    {
+        Vector2 firstDirection = firstEnd - firstStart;
+        Vector2 secondDirection = secondEnd - secondStart;
+        double denominator = (firstDirection.X * secondDirection.Y) - (firstDirection.Y * secondDirection.X);
+
+        if (Math.Abs(denominator) <= LineIntersectionTolerance)
+        {
+            return false;
+        }
+
+        Vector2 startDifference = secondStart - firstStart;
+        double firstParameter = ((startDifference.X * secondDirection.Y) - (startDifference.Y * secondDirection.X)) / denominator;
+        double secondParameter = ((startDifference.X * firstDirection.Y) - (startDifference.Y * firstDirection.X)) / denominator;
+
+        return firstParameter > LineIntersectionTolerance
+            && firstParameter < 1.0 - LineIntersectionTolerance
+            && secondParameter >= -LineIntersectionTolerance
+            && secondParameter <= 1.0 + LineIntersectionTolerance;
     }
 
     /// <summary>

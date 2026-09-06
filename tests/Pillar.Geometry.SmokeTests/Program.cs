@@ -176,6 +176,7 @@ public static class Program
         RunTest(failures, "Horizontal face angle classifier uses mesh transforms", ValidateHorizontalFaceAngleClassifierUsesMeshTransform);
 
         IndexedMeshSmokeTests.Run(failures);
+        FaceSetSelectionAnalyzerSmokeTests.Run(failures);
         IslandDetectionSmokeTests.Run(failures);
         SupportLayerDeletionSmokeTests.Run(failures);
         RaftSmokeTests.Run(failures);

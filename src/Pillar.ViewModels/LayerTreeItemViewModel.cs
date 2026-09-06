@@ -182,7 +182,7 @@ public partial class LayerTreeItemViewModel : ObservableObject
     /// </summary>
     public string VisibilityToggleLabel
     {
-        get { return IsVisible ? "V" : "H"; }
+        get { return IsVisible ? "\uE7B3" : "\uED1A"; }
     }
 
     /// <summary>

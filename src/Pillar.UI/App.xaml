@@ -6,66 +6,33 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml"
-             ThemeMode="Light">
+             ThemeMode="Dark">
     <Application.Resources>
-        <SolidColorBrush x:Key="ModeOverlayBackgroundBrush" Color="#F8FFFFFF" />
-        <SolidColorBrush x:Key="ModeOverlayBorderBrush" Color="#66000000" />
-        <SolidColorBrush x:Key="ModeOverlayTitleBrush" Color="#FF1F2933" />
-        <SolidColorBrush x:Key="ModeOverlayBodyBrush" Color="#FF3E4C59" />
-        <SolidColorBrush x:Key="ModeOverlayLabelBrush" Color="#FF007ACC" />
-        <SolidColorBrush x:Key="RotationXAxisBrush" Color="Red" />
-        <SolidColorBrush x:Key="RotationYAxisBrush" Color="Green" />
-        <SolidColorBrush x:Key="RotationZAxisBrush" Color="Blue" />
-        <SolidColorBrush x:Key="ClipSliderOverlayBackgroundBrush" Color="#F8FFFFFF" />
-        <SolidColorBrush x:Key="ClipSliderTrackBrush" Color="#33000000" />
-        <SolidColorBrush x:Key="ClipSliderRangeBrush" Color="#55007ACC" />
-        <SolidColorBrush x:Key="ClipSliderHandleBrush" Color="#FFFFFFFF" />
-        <SolidColorBrush x:Key="ClipSliderHandleBorderBrush" Color="#FF007ACC" />
-        <SolidColorBrush x:Key="ClipSliderTextBrush" Color="#FF1F2933" />
-        <Color x:Key="ViewportAmbientLightColor">#646464</Color>
-        <Color x:Key="ViewportKeyLightColor">#afafaf</Color>
-        <Color x:Key="ViewportFillLightColor">#7d7d7d</Color>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Pillar.Palette.xaml" />
+                <ResourceDictionary Source="Themes/Pillar.Typography.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.ControlMetrics.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.Window.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.Border.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.StatusBar.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.TextBlock.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.Button.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.ToggleButton.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.CheckBox.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.NumericUpDown.xaml" />
+                <ResourceDictionary Source="Themes/Controls/Pillar.Rectangle.xaml" />
+                <ResourceDictionary Source="Icons/RenderModes/ShadedSphereIcon.xaml" />
+                <ResourceDictionary Source="Icons/RenderModes/WireframeShadedSphereIcon.xaml" />
+                <ResourceDictionary Source="Icons/RenderModes/WireframeSphereIcon.xaml" />
+                <ResourceDictionary Source="Icons/FaceSelect/SelectByClickIcon.xaml" />
+                <ResourceDictionary Source="Icons/FaceSelect/SelectByLineIcon.xaml" />
+                <ResourceDictionary Source="Icons/FaceSelect/SelectByPolygonIcon.xaml" />
+                <ResourceDictionary Source="Icons/FaceSelect/AdditionSelectionIcon.xaml" />
+                <ResourceDictionary Source="Icons/FaceSelect/SubtractionSelectionIcon.xaml" />
 
-        <Style x:Key="ModeOverlayTitleTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource ModeOverlayTitleBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
 
-        <Style x:Key="ModeOverlayBodyTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Foreground" Value="{StaticResource ModeOverlayBodyBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="ModeOverlayLabelTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource ModeOverlayLabelBrush}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-        
-        <Style x:Key="ViewportOverlayPanelStyle" TargetType="Border">
-            <Setter Property="MinWidth" Value="260" />
-            <Setter Property="MaxWidth" Value="360" />
-            <Setter Property="Padding" Value="12" />
-            <Setter Property="Background" Value="{DynamicResource LayerOnMicaBaseAltFillColorTertiaryBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource ModeOverlayBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="SnapsToDevicePixels" Value="True" />
-        </Style>
-
-        <Style x:Key="ClipSliderOverlayPanelStyle" TargetType="Border">
-            <Setter Property="Width" Value="96" />
-            <Setter Property="Padding" Value="10" />
-            <Setter Property="Background" Value="{StaticResource ClipSliderOverlayBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource ModeOverlayBorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="SnapsToDevicePixels" Value="True" />
-        </Style>
-        
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -11,13 +11,110 @@
              MinWidth="260">
 
     <UserControl.Resources>
+        <!-- Layer panel header button chrome. Glyph foregrounds remain set on each button. -->
+        <SolidColorBrush x:Key="LayerPanelHeaderButtonBackgroundBrush"
+                         Color="Transparent" />
+        <SolidColorBrush x:Key="LayerPanelHeaderButtonBorderBrush"
+                         Color="Transparent" />
+
         <layers:SupportLayerColorToBrushConverter x:Key="SupportLayerColorToBrushConverter" />
 
-        <Style x:Key="LayerPanelEmptyButtonStyle" TargetType="Button">
-            <Setter Property="Visibility" Value="Visible" />
+        <Style x:Key="LayerPanelHeaderButtonStyle" TargetType="Button">
+            <Setter Property="MinWidth" Value="30" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Background"
+                    Value="{DynamicResource LayerPanelHeaderButtonBackgroundBrush}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource LayerPanelHeaderButtonBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonChrome"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.Element1}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Border}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.Element1}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Border}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.AccentSubtleTransparent}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="LayerPanelEmptyButtonStyle" TargetType="Button" BasedOn="{StaticResource PillarButtonStyle}">
+            <Setter Property="Margin" Value="0,8,0,0" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Element2}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonChrome"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource Pillar.CornerRadius.Control}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.AccentSubtleTransparent}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasImportedModels}" Value="True">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -31,7 +128,7 @@
             <Setter Property="MinHeight" Value="120" />
             <Setter Property="MaxHeight" Value="360" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="{DynamicResource ControlStrongFillColorDisabledBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Element1}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasImportedModels}" Value="True">
                     <Setter Property="Visibility" Value="Visible" />
@@ -39,21 +136,194 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="LayerTreeExpanderStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="19" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}">
+                            <TextBlock x:Name="Chevron"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontFamily="Segoe Fluent Icons"
+                                       FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       RenderTransformOrigin="0.5,0.5"
+                                       Text="&#xE76C;">
+                                <TextBlock.RenderTransform>
+                                    <RotateTransform Angle="0" />
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chevron" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="90" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="LayerTreeItemContainerStyle" TargetType="TreeViewItem">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="Padding" Value="4" />
+            <!-- Base background, text colour, font family, and font size for every tree entry. -->
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.BackgroundTransparent}" />
+            <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+            <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
+            <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <!-- This local template prevents Fluent's blue selection chrome from being drawn. -->
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
+                                    Margin="{TemplateBinding Margin}"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="3">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ToggleButton x:Name="Expander"
+                                                  Grid.Column="0"
+                                                  ClickMode="Press"
+                                                  IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Style="{StaticResource LayerTreeExpanderStyle}" />
+
+                                    <ContentPresenter x:Name="PART_Header"
+                                                      Grid.Column="1"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="Center"
+                                                      ContentSource="Header" />
+                                </Grid>
+                            </Border>
+
+                            <ItemsPresenter x:Name="ItemsHost"
+                                            Grid.Row="1"
+                                            Margin="19,0,0,0"
+                                            Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background"
+                            Value="{DynamicResource Pillar.Brush.AccentSubtleTransparent}" />
+                    <Setter Property="Foreground"
+                            Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True" />
+                        <Condition Property="primitives:Selector.IsSelectionActive" Value="False" />
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background"
+                            Value="{DynamicResource Pillar.Brush.Element1}" />
+                    <Setter Property="Foreground"
+                            Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+                </MultiTrigger>
+            </Style.Triggers>
         </Style>
+
+        <Style x:Key="LayerTreeEntryTextStyle"
+               BasedOn="{StaticResource OverlayPanelContentStyle}"
+               TargetType="TextBlock" />
 
         <Style x:Key="LayerVisibilityToggleButtonStyle" TargetType="ToggleButton">
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="22" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Padding" Value="0" />
+            <Setter Property="Background"
+                    Value="{DynamicResource LayerPanelHeaderButtonBackgroundBrush}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource LayerPanelHeaderButtonBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            <Setter Property="FontSize" Value="18" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Visibility" Value="Collapsed" />
             <Setter Property="IsChecked" Value="{Binding IsVisibilityToggleChecked, Mode=OneWay}" />
             <Setter Property="Content" Value="{Binding VisibilityToggleLabel}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ButtonChrome"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.Element1}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Border}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.Element1}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Border}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome"
+                                        Property="Background"
+                                        Value="{DynamicResource Pillar.Brush.AccentSubtleTransparent}" />
+                                <Setter TargetName="ButtonChrome"
+                                        Property="BorderBrush"
+                                        Value="{DynamicResource Pillar.Brush.Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CanToggleVisibility}" Value="True">
                     <Setter Property="Visibility" Value="Visible" />
@@ -66,9 +336,20 @@
             <Setter Property="Height" Value="18" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderThickness" Value="2" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CanPickColor}" Value="True">
                     <Setter Property="Visibility" Value="Visible" />
@@ -76,9 +357,13 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="SupportGroupEditButtonStyle" TargetType="Button">
+        <Style x:Key="SupportGroupEditButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource LayerPanelHeaderButtonStyle}">
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="22" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
             <Setter Property="Margin" Value="8,0,0,0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -104,6 +389,7 @@
                          Text="{Binding EditingName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                 <Grid x:Name="LayerRowPanel"
+                      Background="Transparent"
                       VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -114,7 +400,7 @@
 
                     <ToggleButton Style="{StaticResource LayerVisibilityToggleButtonStyle}"
                                   Grid.Column="0"
-                                  ToolTip="Toggle layer visibility"
+                                  ToolTip="Toggle layer visibility" Foreground="{DynamicResource Pillar.Brush.TextMuted}" FontWeight="Bold"
                                   Click="LayerVisibilityToggleButton_Click" />
 
                     <Button Style="{StaticResource LayerColorButtonStyle}"
@@ -125,6 +411,7 @@
 
                     <TextBlock x:Name="LayerNameTextBlock"
                                Grid.Column="2"
+                               Style="{StaticResource LayerTreeEntryTextStyle}"
                                VerticalAlignment="Center"
                                Text="{Binding Name}">
                         <TextBlock.ContextMenu>
@@ -163,9 +450,12 @@
                     </TextBlock>
                     <Button Grid.Column="3"
                             Style="{StaticResource SupportGroupEditButtonStyle}"
-                            ToolTip="Edit"
+                            ToolTip="Edit" Foreground="{DynamicResource Pillar.Brush.TextMuted}"
                             Click="SupportGroupEditButton_Click"
-                            Content="E" />
+                            Content="&#xE90F;" 
+                            FontFamily="Segoe Fluent Icons"
+                            FontWeight="Bold" 
+                            FontSize="16"/>
                 </Grid>
             </Grid>
 
@@ -174,56 +464,79 @@
                     <Setter TargetName="RenameTextBox" Property="Visibility" Value="Visible" />
                     <Setter TargetName="LayerRowPanel" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type TreeViewItem}}, Path=(primitives:Selector.IsSelectionActive)}"
+                                   Value="True" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="LayerNameTextBlock"
+                            Property="Foreground"
+                            Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected}" Value="True" />
+                        <Condition Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type TreeViewItem}}, Path=(primitives:Selector.IsSelectionActive)}"
+                                   Value="False" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="LayerNameTextBlock"
+                            Property="Foreground"
+                            Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+                </MultiDataTrigger>
             </HierarchicalDataTemplate.Triggers>
         </HierarchicalDataTemplate>
     </UserControl.Resources>
 
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource Pillar.Brush.BackgroundTransparent}"
+            BorderBrush="{DynamicResource Pillar.Brush.Border}">
         <StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Margin="10,0,0,0"
+            <Grid Background="{DynamicResource Pillar.Brush.BackgroundTransparent}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Margin="10,0,0,0" Grid.Column="0"
                            VerticalAlignment="Center"
-                           Style="{StaticResource ModeOverlayTitleTextStyle}"
+                           Style="{StaticResource OverlayPanelTitleIconStyle}"
                            FontFamily="Segoe Fluent Icons"
                            Text="&#xE81E;"
                            ToolBar.OverflowMode="Never" />
-                <TextBlock Margin="10,0,10,0"
+                <TextBlock Margin="10,0,10,0" Grid.Column="1"
                            VerticalAlignment="Center"
                            FontFamily="Segoe UI"
-                           Style="{StaticResource ModeOverlayTitleTextStyle}"
+                           Style="{StaticResource OverlayPanelTitleTextStyle}"
                            Text="Layers"
                            ToolBar.OverflowMode="Never" />
-            </StackPanel>
-            <ToolBarTray DockPanel.Dock="Top"
-                         Margin="0,10,0,0"
-                         IsLocked="True">
-                <ToolBar FontFamily="Segoe Fluent Icons">
-                    <ToolBar.Resources>
-                        <Style TargetType="{x:Type primitives:Thumb}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                        </Style>
-                    </ToolBar.Resources>
-                    <Button x:Name="AddModelButton"
-                            MinWidth="28"
-                            Content="&#xF164;"
+                <Button x:Name="AddModelButton" Grid.Column="2"
+                            Style="{StaticResource LayerPanelHeaderButtonStyle}"
+                            Content="&#xECC8;" 
+                            FontWeight="Bold"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="16"
                             ToolTip="Import model"
-                            Foreground="Green"
+                            Foreground="{DynamicResource Pillar.Brush.Success}"
                             IsEnabled="{Binding CanAddModel}"
                             Click="AddModelButton_Click"
                             ToolBar.OverflowMode="Never" />
-                    <Button x:Name="RemoveModelButton"
-                            MinWidth="28"
-                            Content="&#xF166;"
+                <Button x:Name="RemoveModelButton" Grid.Column="3"
+                            Style="{StaticResource LayerPanelHeaderButtonStyle}"
+                            Content="&#xECC9;" 
+                            FontWeight="Bold"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="16"
                             ToolTip="Remove selected item"
-                            Foreground="Red"
+                            Foreground="{DynamicResource Pillar.Brush.Danger}"
                             IsEnabled="{Binding CanRemoveSelectedLayer}"
                             Click="RemoveButton_Click"
                             ToolBar.OverflowMode="Never" />
-                </ToolBar>
-            </ToolBarTray>
+            </Grid>
 
             <Grid>
-                <Button Content="Import a Model"
+                <Button Content="Import a Model" Margin="0,30,0,0"
                         Style="{StaticResource LayerPanelEmptyButtonStyle}"
                         Click="ImportModelButton_Click" />
 

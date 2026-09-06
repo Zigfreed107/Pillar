@@ -58,6 +58,13 @@ public partial class NumericUpDown : UserControl
             new PropertyMetadata(2, OnDecimalPlacesPropertyChanged),
             IsSupportedDecimalPlaces);
 
+    public static readonly DependencyProperty UnitTextProperty =
+        DependencyProperty.Register(
+            nameof(UnitText),
+            typeof(string),
+            typeof(NumericUpDown),
+            new PropertyMetadata(string.Empty));
+
     private bool _isApplyingUserValue;
     private bool _isSynchronizingRange;
     private double _editStartValue;
@@ -119,6 +126,15 @@ public partial class NumericUpDown : UserControl
     {
         get { return (int)GetValue(DecimalPlacesProperty); }
         set { SetValue(DecimalPlacesProperty, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the optional unit suffix shown beside the editable numeric value.
+    /// </summary>
+    public string UnitText
+    {
+        get { return (string)GetValue(UnitTextProperty); }
+        set { SetValue(UnitTextProperty, value); }
     }
 
     /// <summary>
@@ -288,6 +304,97 @@ public partial class NumericUpDown : UserControl
             StepValue(-1);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Rejects typed text that would make the current editing buffer non-numeric.
+    /// </summary>
+    private void ValueTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        _ = sender;
+        string proposedText = BuildProposedText(e.Text);
+        e.Handled = !IsPotentialNumericText(proposedText);
+    }
+
+    /// <summary>
+    /// Rejects clipboard content that would make the current editing buffer non-numeric.
+    /// </summary>
+    private void ValueTextBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        _ = sender;
+
+        if (!e.SourceDataObject.GetDataPresent(DataFormats.UnicodeText, true)
+            || e.SourceDataObject.GetData(DataFormats.UnicodeText, true) is not string pastedText
+            || !IsPotentialNumericText(BuildProposedText(pastedText)))
+        {
+            e.CancelCommand();
+        }
+    }
+
+    /// <summary>
+    /// Produces the text that would result from replacing the current selection.
+    /// </summary>
+    private string BuildProposedText(string insertedText)
+    {
+        string currentText = ValueTextBox.Text;
+        int selectionStart = Math.Clamp(ValueTextBox.SelectionStart, 0, currentText.Length);
+        int maximumSelectionLength = currentText.Length - selectionStart;
+        int selectionLength = Math.Clamp(ValueTextBox.SelectionLength, 0, maximumSelectionLength);
+        return currentText.Remove(selectionStart, selectionLength).Insert(selectionStart, insertedText);
+    }
+
+    /// <summary>
+    /// Accepts culture-aware decimal text and the temporary sign or separator states needed while editing.
+    /// </summary>
+    private bool IsPotentialNumericText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return true;
+        }
+
+        NumberFormatInfo numberFormat = CultureInfo.CurrentCulture.NumberFormat;
+        string negativeSign = numberFormat.NegativeSign;
+        string positiveSign = numberFormat.PositiveSign;
+        string decimalSeparator = numberFormat.NumberDecimalSeparator;
+        bool allowsNegativeValues = Minimum < 0.0;
+        bool startsWithNegativeSign = !string.IsNullOrEmpty(negativeSign)
+            && text.StartsWith(negativeSign, StringComparison.Ordinal);
+
+        if (startsWithNegativeSign && !allowsNegativeValues)
+        {
+            return false;
+        }
+
+        if (text == negativeSign)
+        {
+            return allowsNegativeValues;
+        }
+
+        if (text == positiveSign)
+        {
+            return true;
+        }
+
+        if (DecimalPlaces == 0
+            && !string.IsNullOrEmpty(decimalSeparator)
+            && text.Contains(decimalSeparator, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (DecimalPlaces > 0
+            && (text == decimalSeparator
+                || text == positiveSign + decimalSeparator
+                || (allowsNegativeValues && text == negativeSign + decimalSeparator)))
+        {
+            return true;
+        }
+
+        const NumberStyles allowedStyles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
+        return double.TryParse(text, allowedStyles, CultureInfo.CurrentCulture, out double parsedValue)
+            && !double.IsNaN(parsedValue)
+            && !double.IsInfinity(parsedValue);
     }
 
     /// <summary>

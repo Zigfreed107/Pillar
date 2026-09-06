@@ -88,3 +88,7 @@ These overlays are transient visuals and should not become durable document stat
 - Properties Panel edits the selected entity.
 
 Keeping those roles clear will prevent the shell from becoming confusing as more tools are added.
+
+## Visual System
+
+Shared panel surfaces, typography, spacing, and colors follow `Documentation/UI/Design-System.md`. Panel views should consume semantic design resources instead of introducing local palette values.

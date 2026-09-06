@@ -9,7 +9,14 @@
              Focusable="False"
              MinHeight="300"
              MinWidth="96">
-    <Border Style="{StaticResource ClipSliderOverlayPanelStyle}">
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Width="96"
+            MinWidth="96"
+            MaxWidth="96"
+            Padding="10"
+            Background="{DynamicResource Pillar.Brush.BackgroundTransparent}"
+            BorderBrush="{DynamicResource Pillar.Brush.Border}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -17,19 +24,32 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-
-            <TextBlock Grid.Row="0"
-                       HorizontalAlignment="Center"
-                       FontSize="12"
-                       FontWeight="SemiBold"
-                       Foreground="{StaticResource ClipSliderTextBrush}"
-                       Text="Z Clip" />
-
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Margin="0,0,10,0" 
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource OverlayPanelTitleTextStyle}"
+                               FontFamily="Segoe Fluent Icons"
+                               Text="&#xE78A;"
+                               ToolBar.OverflowMode="Never">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90"/>
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
+                <TextBlock Grid.Row="0"  Grid.Column="1"
+                           HorizontalAlignment="Center"
+                           Style="{StaticResource OverlayPanelTitleTextStyle}"
+                           Text="Cut" />
+            </Grid>
             <Canvas x:Name="SliderCanvas"
                     Grid.Row="1"
                     Width="76"
                     MinHeight="240"
-                    Margin="0,8"
+                    Margin="0,16"
                     SizeChanged="SliderCanvas_SizeChanged">
                 <Rectangle x:Name="SelectedModelBoundsRectangle"
                            Width="18"
@@ -43,21 +63,21 @@
                            Width="8"
                            RadiusX="4"
                            RadiusY="4"
-                           Fill="{StaticResource ClipSliderTrackBrush}"
+                           Fill="{StaticResource Pillar.Brush.Element1}"
                            IsHitTestVisible="False" />
 
                 <Rectangle x:Name="VisibleRangeRectangle"
                            Width="8"
                            RadiusX="4"
                            RadiusY="4"
-                           Fill="{StaticResource ClipSliderRangeBrush}"
+                           Fill="{StaticResource Pillar.Brush.AccentSubtleTransparent}"
                            IsHitTestVisible="False" />
 
                 <Border x:Name="UpperHandle"
                         Width="54"
                         Height="14"
-                        Background="{StaticResource ClipSliderHandleBrush}"
-                        BorderBrush="{StaticResource ClipSliderHandleBorderBrush}"
+                        Background="{StaticResource Pillar.Brush.Element1}"
+                        BorderBrush="{StaticResource Pillar.Brush.Accent}"
                         BorderThickness="1"
                         CornerRadius="2"
                         Cursor="SizeNS"
@@ -67,8 +87,8 @@
                 <Border x:Name="LowerHandle"
                         Width="54"
                         Height="14"
-                        Background="{StaticResource ClipSliderHandleBrush}"
-                        BorderBrush="{StaticResource ClipSliderHandleBorderBrush}"
+                        Background="{StaticResource Pillar.Brush.Element1}"
+                        BorderBrush="{StaticResource Pillar.Brush.Accent}"
                         BorderThickness="1"
                         CornerRadius="2"
                         Cursor="SizeNS"
@@ -80,13 +100,14 @@
                        Grid.Row="2"
                        HorizontalAlignment="Center"
                        FontSize="11"
-                       Foreground="{StaticResource ClipSliderTextBrush}"
                        TextAlignment="Center"
+                       Style="{StaticResource OverlayPanelContentStyle}" 
                        TextWrapping="Wrap" />
 
             <Button Grid.Row="3"
                     Margin="0,8,0,0"
                     HorizontalAlignment="Stretch"
+                    Style="{StaticResource PillarButtonStyle}"
                     Click="ResetButton_Click"
                     Content="Reset"
                     ToolTip="Reset clipping to the full print volume" />

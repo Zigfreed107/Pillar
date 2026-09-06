@@ -17,7 +17,11 @@ public static class Program
     public static int Main()
     {
         List<string> failures = new List<string>();
+        AppResourceSmokeTests.Run(failures);
+        FaceHitMappingSmokeTests.Run(failures);
+        FaceSetSelectionToolPanelSmokeTests.Run(failures);
         NumericUpDownSmokeTests.Run(failures);
+        ViewportRightClickGestureSmokeTests.Run(failures);
 
         if (failures.Count > 0)
         {

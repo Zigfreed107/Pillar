@@ -79,6 +79,9 @@ public class SceneManager
     private readonly float _selectionOutlineSize;
     private readonly PhongMaterial _highlightMaterial;
     private readonly Dictionary<Guid, List<int>> _faceSelectionByMeshId = new Dictionary<Guid, List<int>>();
+    private List<HitTestResult> _meshFaceHitTestBuffer = new List<HitTestResult>(8);
+    private Vector2[] _facePolygonProjectedVertexBuffer = Array.Empty<Vector2>();
+    private bool[] _facePolygonProjectedVertexValidityBuffer = Array.Empty<bool>();
     private bool _isFaceAngleHighlightEnabled;
     private bool _isSupportAngleHighlightEnabled;
     private double _supportAngleHighlightThresholdDegrees;
@@ -1289,16 +1292,31 @@ public class SceneManager
     /// </summary>
     public bool TryHitMeshFace(Vector2 screenPosition, out MeshEntity mesh, out int triangleIndex)
     {
-        IList<HitTestResult> hits = _viewport.FindHits(new Point(screenPosition.X, screenPosition.Y));
+        _meshFaceHitTestBuffer.Clear();
+        HelixToolkit.SharpDX.IViewportExtensions.FindHits(
+            (IViewport3DX)_viewport,
+            screenPosition,
+            ref _meshFaceHitTestBuffer);
 
-        for (int i = 0; i < hits.Count; i++)
+        for (int i = 0; i < _meshFaceHitTestBuffer.Count; i++)
         {
-            if (hits[i].ModelHit is not Element3D hitModel || GetEntityFromVisual(hitModel) is not MeshEntity hitMesh || !IsEntityVisible(hitMesh))
+            HitTestResult hit = _meshFaceHitTestBuffer[i];
+
+            if (hit.ModelHit is not Element3D hitModel || GetEntityFromVisual(hitModel) is not MeshEntity hitMesh || !IsEntityVisible(hitMesh))
             {
                 continue;
             }
 
-            Vector3 hitPosition = new Vector3(hits[i].PointHit.X, hits[i].PointHit.Y, hits[i].PointHit.Z);
+            int triangleCount = hitMesh.TriangleIndices.Count / 3;
+
+            if (TryMapFlatShadedHitToTriangleIndex(hit, triangleCount, out triangleIndex))
+            {
+                mesh = hitMesh;
+                return true;
+            }
+
+            // Keep a correctness-first fallback for any alternate Helix geometry that does not expose render indices.
+            Vector3 hitPosition = new Vector3(hit.PointHit.X, hit.PointHit.Y, hit.PointHit.Z);
 
             if (FaceSetSelectionAnalyzer.TryFindContainingTriangleIndex(hitMesh, hitPosition, out triangleIndex))
             {
@@ -1310,6 +1328,41 @@ public class SceneManager
         mesh = null!;
         triangleIndex = -1;
         return false;
+    }
+
+    /// <summary>
+    /// Maps Helix's expanded flat-shaded render vertices back to Pillar's authoritative triangle ordinal.
+    /// </summary>
+    private static bool TryMapFlatShadedHitToTriangleIndex(
+        HitTestResult hit,
+        int triangleCount,
+        out int triangleIndex)
+    {
+        Tuple<int, int, int>? renderVertexIndices = hit.TriangleIndices;
+
+        if (renderVertexIndices == null)
+        {
+            triangleIndex = -1;
+            return false;
+        }
+
+        int firstTriangleIndex = renderVertexIndices.Item1 / 3;
+        int secondTriangleIndex = renderVertexIndices.Item2 / 3;
+        int thirdTriangleIndex = renderVertexIndices.Item3 / 3;
+
+        if (renderVertexIndices.Item1 < 0
+            || renderVertexIndices.Item2 < 0
+            || renderVertexIndices.Item3 < 0
+            || firstTriangleIndex != secondTriangleIndex
+            || firstTriangleIndex != thirdTriangleIndex
+            || firstTriangleIndex >= triangleCount)
+        {
+            triangleIndex = -1;
+            return false;
+        }
+
+        triangleIndex = firstTriangleIndex;
+        return true;
     }
 
     /// <summary>
@@ -1341,6 +1394,197 @@ public class SceneManager
             Vector2 samplePoint = Vector2.Lerp(screenStart, screenEnd, t);
             AddVisibleMeshFaceAtScreenPoint(samplePoint, selectedFaces);
         }
+    }
+
+    /// <summary>
+    /// Projects mesh triangles once and fills visible faces whose complete projection is contained by the polygon.
+    /// </summary>
+    public void FillVisibleMeshFacesInsideScreenPolygon(
+        IReadOnlyList<Vector2> polygonVertices,
+        ICollection<FaceSelectionKey> selectedFaces)
+    {
+        if (polygonVertices == null)
+        {
+            throw new ArgumentNullException(nameof(polygonVertices));
+        }
+
+        if (selectedFaces == null)
+        {
+            throw new ArgumentNullException(nameof(selectedFaces));
+        }
+
+        if (polygonVertices.Count < 3)
+        {
+            return;
+        }
+
+        float minimumX = polygonVertices[0].X;
+        float maximumX = minimumX;
+        float minimumY = polygonVertices[0].Y;
+        float maximumY = minimumY;
+
+        for (int i = 1; i < polygonVertices.Count; i++)
+        {
+            minimumX = MathF.Min(minimumX, polygonVertices[i].X);
+            maximumX = MathF.Max(maximumX, polygonVertices[i].X);
+            minimumY = MathF.Min(minimumY, polygonVertices[i].Y);
+            maximumY = MathF.Max(maximumY, polygonVertices[i].Y);
+        }
+
+        minimumX = MathF.Max(0.0f, minimumX);
+        minimumY = MathF.Max(0.0f, minimumY);
+        maximumX = MathF.Min((float)_viewport.ActualWidth, maximumX);
+        maximumY = MathF.Min((float)_viewport.ActualHeight, maximumY);
+
+        if (minimumX > maximumX || minimumY > maximumY)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<CadEntity, GroupModel3D> visualPair in _entityToVisual)
+        {
+            if (visualPair.Key is not MeshEntity mesh || !IsEntityVisible(mesh))
+            {
+                continue;
+            }
+
+            ProjectMeshVerticesForPolygonSelection(mesh);
+            FillContainedVisibleMeshFaces(
+                mesh,
+                polygonVertices,
+                minimumX,
+                maximumX,
+                minimumY,
+                maximumY,
+                selectedFaces);
+        }
+    }
+
+    /// <summary>
+    /// Projects every vertex of one mesh once into reusable buffers for the current camera pose.
+    /// </summary>
+    private void ProjectMeshVerticesForPolygonSelection(MeshEntity mesh)
+    {
+        EnsureFacePolygonProjectionCapacity(mesh.Vertices.Count);
+        Matrix4x4 worldTransform = mesh.WorldTransform;
+
+        for (int vertexIndex = 0; vertexIndex < mesh.Vertices.Count; vertexIndex++)
+        {
+            Vector3 worldPoint = Vector3.Transform(mesh.Vertices[vertexIndex], worldTransform);
+            Vector2 projectedPoint = HelixToolkit.SharpDX.IViewportExtensions.Project(
+                (IViewport3DX)_viewport,
+                worldPoint);
+            bool isValid = float.IsFinite(projectedPoint.X) && float.IsFinite(projectedPoint.Y);
+            _facePolygonProjectedVertexValidityBuffer[vertexIndex] = isValid;
+
+            if (isValid)
+            {
+                _facePolygonProjectedVertexBuffer[vertexIndex] = projectedPoint;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Grows reusable projection buffers only when a larger imported mesh requires them.
+    /// </summary>
+    private void EnsureFacePolygonProjectionCapacity(int vertexCount)
+    {
+        if (_facePolygonProjectedVertexBuffer.Length >= vertexCount)
+        {
+            return;
+        }
+
+        int newCapacity = global::System.Math.Max(vertexCount, _facePolygonProjectedVertexBuffer.Length * 2);
+        Array.Resize(ref _facePolygonProjectedVertexBuffer, newCapacity);
+        Array.Resize(ref _facePolygonProjectedVertexValidityBuffer, newCapacity);
+    }
+
+    /// <summary>
+    /// Filters one projected mesh to completely contained triangles that remain visible from the camera.
+    /// </summary>
+    private void FillContainedVisibleMeshFaces(
+        MeshEntity mesh,
+        IReadOnlyList<Vector2> polygonVertices,
+        float minimumX,
+        float maximumX,
+        float minimumY,
+        float maximumY,
+        ICollection<FaceSelectionKey> selectedFaces)
+    {
+        int triangleCount = mesh.TriangleIndices.Count / 3;
+
+        for (int triangleIndex = 0; triangleIndex < triangleCount; triangleIndex++)
+        {
+            int baseIndex = triangleIndex * 3;
+            int firstVertexIndex = mesh.TriangleIndices[baseIndex];
+            int secondVertexIndex = mesh.TriangleIndices[baseIndex + 1];
+            int thirdVertexIndex = mesh.TriangleIndices[baseIndex + 2];
+
+            if (!_facePolygonProjectedVertexValidityBuffer[firstVertexIndex]
+                || !_facePolygonProjectedVertexValidityBuffer[secondVertexIndex]
+                || !_facePolygonProjectedVertexValidityBuffer[thirdVertexIndex])
+            {
+                continue;
+            }
+
+            Vector2 a = _facePolygonProjectedVertexBuffer[firstVertexIndex];
+            Vector2 b = _facePolygonProjectedVertexBuffer[secondVertexIndex];
+            Vector2 c = _facePolygonProjectedVertexBuffer[thirdVertexIndex];
+
+            if (!IsProjectedTriangleInsideBounds(a, b, c, minimumX, maximumX, minimumY, maximumY)
+                || !FaceSetSelectionAnalyzer.IsScreenTriangleEntirelyInsidePolygon(a, b, c, polygonVertices)
+                || !IsProjectedFaceVisible(mesh.Id, triangleIndex, a, b, c))
+            {
+                continue;
+            }
+
+            selectedFaces.Add(new FaceSelectionKey(mesh.Id, triangleIndex));
+        }
+    }
+
+    /// <summary>
+    /// Applies a cheap polygon-bounds rejection before the more detailed containment test.
+    /// </summary>
+    private static bool IsProjectedTriangleInsideBounds(
+        Vector2 a,
+        Vector2 b,
+        Vector2 c,
+        float minimumX,
+        float maximumX,
+        float minimumY,
+        float maximumY)
+    {
+        return a.X >= minimumX && a.X <= maximumX && a.Y >= minimumY && a.Y <= maximumY
+            && b.X >= minimumX && b.X <= maximumX && b.Y >= minimumY && b.Y <= maximumY
+            && c.X >= minimumX && c.X <= maximumX && c.Y >= minimumY && c.Y <= maximumY;
+    }
+
+    /// <summary>
+    /// Confirms that at least one stable interior point of a projected face is front-most in the viewport.
+    /// </summary>
+    private bool IsProjectedFaceVisible(Guid meshEntityId, int triangleIndex, Vector2 a, Vector2 b, Vector2 c)
+    {
+        Vector2 centroid = (a + b + c) / 3.0f;
+
+        if (DoesScreenPointHitFace(centroid, meshEntityId, triangleIndex))
+        {
+            return true;
+        }
+
+        const float vertexSampleWeight = 0.65f;
+        return DoesScreenPointHitFace(Vector2.Lerp(centroid, a, vertexSampleWeight), meshEntityId, triangleIndex)
+            || DoesScreenPointHitFace(Vector2.Lerp(centroid, b, vertexSampleWeight), meshEntityId, triangleIndex)
+            || DoesScreenPointHitFace(Vector2.Lerp(centroid, c, vertexSampleWeight), meshEntityId, triangleIndex);
+    }
+
+    /// <summary>
+    /// Tests one projected interior sample against the front-most authoritative mesh face identity.
+    /// </summary>
+    private bool DoesScreenPointHitFace(Vector2 screenPosition, Guid meshEntityId, int triangleIndex)
+    {
+        return TryHitMeshFace(screenPosition, out MeshEntity hitMesh, out int hitTriangleIndex)
+            && hitMesh.Id == meshEntityId
+            && hitTriangleIndex == triangleIndex;
     }
 
     /// <summary>

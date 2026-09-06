@@ -8,40 +8,34 @@
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
              MinWidth="340">
     <UserControl.Resources>
-        <Style x:Key="ModePanelToolButtonStyle" TargetType="Button">
-            <Setter Property="MinWidth" Value="96" />
-            <Setter Property="MinHeight" Value="84" />
-            <Setter Property="Margin" Value="0,0,8,8" />
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="VerticalContentAlignment" Value="Stretch" />
-        </Style>
+        <SolidColorBrush x:Key="ModePanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ModePanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+        <SolidColorBrush x:Key="ModePanelTabPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ModePanelTabPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+        <SolidColorBrush x:Key="ModePanelTabBackgroundBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="ModePanelTabHoverBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.Element1}" />
+        <SolidColorBrush x:Key="ModePanelTabSelectedBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.AccentSubtleTransparent}" />
+        <SolidColorBrush x:Key="ModePanelTabBorderBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="ModePanelTabSelectedBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Accent}" />
+        <SolidColorBrush x:Key="ModePanelTabForegroundBrush"
+                         Color="{DynamicResource Pillar.Color.TextSecondary}" />
+        <SolidColorBrush x:Key="ModePanelTabSelectedForegroundBrush"
+                         Color="{DynamicResource Pillar.Color.TextPrimary}" />
 
-        <Style x:Key="ModePanelToolToggleButtonStyle" TargetType="ToggleButton">
-            <Setter Property="MinWidth" Value="96" />
-            <Setter Property="MinHeight" Value="84" />
-            <Setter Property="Margin" Value="0,0,8,8" />
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="VerticalContentAlignment" Value="Stretch" />
-        </Style>
+        <Style x:Key="ModePanelToolTitleTextStyle"
+               BasedOn="{StaticResource PillarToolTitleTextStyle}"
+               TargetType="TextBlock" />
 
-        <Style x:Key="ModePanelToolTitleTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="TextAlignment" Value="Center" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
-
-        <Style x:Key="ModePanelToolDescriptionTextStyle" TargetType="TextBlock">
-            <Setter Property="Margin" Value="0,6,0,0" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{StaticResource ModeOverlayBodyBrush}" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="TextAlignment" Value="Center" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-        </Style>
+        <Style x:Key="ModePanelToolDescriptionTextStyle"
+               BasedOn="{StaticResource PillarToolDescriptionTextStyle}"
+               TargetType="TextBlock" />
 
         <Style x:Key="ModePanelImportPromptStyle" TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed" />
@@ -66,8 +60,64 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="ModePanelTabItemStyle" TargetType="TabItem">
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Background"
+                    Value="{DynamicResource ModePanelTabBackgroundBrush}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource ModePanelTabBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground"
+                    Value="{DynamicResource ModePanelTabForegroundBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <!-- Own the tab chrome so Fluent cannot replace Pillar's selected-state colours. -->
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabChrome"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4,4,0,0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ContentSource="Header" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background"
+                            Value="{DynamicResource ModePanelTabHoverBackgroundBrush}" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Panel.ZIndex" Value="1" />
+                    <Setter Property="Background"
+                            Value="{DynamicResource ModePanelTabSelectedBackgroundBrush}" />
+                    <Setter Property="BorderBrush"
+                            Value="{DynamicResource ModePanelTabSelectedBorderBrush}" />
+                    <Setter Property="Foreground"
+                            Value="{DynamicResource ModePanelTabSelectedForegroundBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="ModePanelTabsStyle" TargetType="TabControl">
             <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="Background"
+                    Value="{DynamicResource ModePanelTabPanelBackgroundBrush}" />
+            <Setter Property="BorderBrush"
+                    Value="{DynamicResource ModePanelTabPanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="ItemContainerStyle"
+                    Value="{StaticResource ModePanelTabItemStyle}" />
             <Style.Triggers>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -108,6 +158,7 @@
 
         <Style x:Key="ModePanelEditSupportSelectionPromptStyle" TargetType="TextBlock">
             <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Warning}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding CanUseSupportEditingTools}" Value="False">
                     <Setter Property="Visibility" Value="Visible" />
@@ -116,7 +167,9 @@
         </Style>
     </UserControl.Resources>
 
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ModePanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ModePanelBorderBrush}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -125,36 +178,50 @@
             <StackPanel Grid.Row="0"
                         VerticalAlignment="Center"
                         Style="{StaticResource ModePanelImportPromptStyle}">
-                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
-                           Text="Mode Panel" />
+                <Grid>
+                    <TextBlock Style="{StaticResource OverlayPanelTitleIconStyle}"
+                           Text="&#xF167;" FontSize="20" FontWeight="Normal" Foreground="{DynamicResource Pillar.Brush.Info}" />
+                    <TextBlock Style="{StaticResource OverlayPanelTitleIconStyle}"
+                           FontSize="20" FontWeight="Normal"
+                           Text="&#xE946;" />
+                </Grid>
                 <TextBlock Margin="0,8,0,0"
-                           Style="{StaticResource ModeOverlayBodyTextStyle}"
-                           Text="Import a model first to unlock transform and support workflows." />
+                           Style="{StaticResource OverlayPanelContentStyle}">
+                    <Run Text="Import a model via the "/>
+                    <Run Text="File " Foreground="{DynamicResource Pillar.Brush.Warning}"/>
+                    <Run Text="menu or the "/>
+                    <Run Text="Layers Panel" Foreground="{DynamicResource Pillar.Brush.Warning}"/>
+                    <Run Text="."/>
+                </TextBlock>
             </StackPanel>
 
             <StackPanel Grid.Row="0"
                         VerticalAlignment="Center"
                         Style="{StaticResource ModePanelSelectionPromptStyle}">
-                <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
-                           Text="Mode Panel" />
+                <Grid>
+                    <TextBlock Style="{StaticResource OverlayPanelTitleIconStyle}"
+                           Text="&#xF167;" FontSize="20" FontWeight="Normal" Foreground="{DynamicResource Pillar.Brush.Info}" />
+                    <TextBlock Style="{StaticResource OverlayPanelTitleIconStyle}"
+                           FontSize="20" FontWeight="Normal"
+                           Text="&#xE946;" />
+                </Grid>
                 <TextBlock Margin="0,8,0,0"
-                           Style="{StaticResource ModeOverlayBodyTextStyle}"
-                           Text="Select a model in the Layers panel before editing it or adding supports." />
+                           Style="{StaticResource OverlayPanelContentStyle}"
+                           Text="Select a model in the Viewer or Layers panel to edit it or add supports." />
             </StackPanel>
 
             <TabControl Grid.Row="0"
                         Style="{StaticResource ModePanelTabsStyle}">
                 <TabItem>
                     <TabItem.Header>
-                        <TextBlock FontWeight="SemiBold"
+                        <TextBlock Style="{StaticResource OverlayPanelSubheadingTextStyle}"
                                    Text="Transform" />
                     </TabItem.Header>
 
-                    <StackPanel Margin="0,10,0,0">
+                    <StackPanel Margin="0,10,0,0" HorizontalAlignment="Center">
 
-                        <primitives:UniformGrid Margin="0,0,0,0"
-                                                Columns="3">
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                        <primitives:UniformGrid Margin="0,0,0,0" Columns="3">
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     Click="TranslateButton_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -164,7 +231,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     Click="RotateButton_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -174,7 +241,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     Click="ScaleButton_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -184,7 +251,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     Click="MoveToPlateButton_Click">
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -196,10 +263,9 @@
                         </primitives:UniformGrid>
                     </StackPanel>
                 </TabItem>
-
                 <TabItem>
                     <TabItem.Header>
-                        <TextBlock FontWeight="SemiBold"
+                        <TextBlock Style="{StaticResource OverlayPanelSubheadingTextStyle}"
                                    Text="Supports" />
                     </TabItem.Header>
 
@@ -213,19 +279,17 @@
 
                             <primitives:UniformGrid Margin="0,10,0,0"
                                                     Columns="3">
-                                <ToggleButton x:Name="PointSupportButton"
-                                              Style="{StaticResource ModePanelToolToggleButtonStyle}"
-                                              Checked="PointSupportButton_Checked"
-                                              Unchecked="PointSupportButton_Unchecked">
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
+                                        Click="PointSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
                                                    Text="Point" />
                                         <TextBlock Style="{StaticResource ModePanelToolDescriptionTextStyle}"
                                                    Text="Place a single support at a picked point" />
                                     </StackPanel>
-                                </ToggleButton>
+                                </Button>
 
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="LineSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -235,7 +299,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="RingSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -245,7 +309,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="ContourSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -255,7 +319,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="AreaSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -278,10 +342,9 @@
                         </StackPanel>
                     </Grid>
                 </TabItem>
-
                 <TabItem>
                     <TabItem.Header>
-                        <TextBlock FontWeight="SemiBold"
+                        <TextBlock Style="{StaticResource OverlayPanelSubheadingTextStyle}"
                                    Text="Edit Supports" />
                     </TabItem.Header>
 
@@ -290,13 +353,12 @@
                             <TextBlock Style="{StaticResource ModeOverlayLabelTextStyle}"
                                        Text="Support Editing" />
                             <TextBlock Margin="0,8,0,0"
-                                       Foreground="Red"
                                        Style="{StaticResource ModePanelEditSupportSelectionPromptStyle}"
                                        Text="You must one support layer to use these tools." />
 
                             <primitives:UniformGrid Margin="0,10,0,0"
                                                     Columns="3">
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="ClusterSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -306,7 +368,7 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="BraceSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -315,7 +377,7 @@
                                                    Text="Add braces and buttresses" />
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                                <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                         Click="DirectEditSupportButton_Click">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource ModePanelToolTitleTextStyle}"
@@ -330,11 +392,12 @@
                 </TabItem>
                 <TabItem>
                     <TabItem.Header>
-                        <TextBlock FontWeight="SemiBold" Text="Rafts" />
+                        <TextBlock Style="{StaticResource OverlayPanelSubheadingTextStyle}"
+                                   Text="Rafts" />
                     </TabItem.Header>
                     <StackPanel Margin="0,12,0,0">
                         <primitives:UniformGrid Columns="3">
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     IsEnabled="{Binding CanGenerateRaft}"
                                     Click="RaftButton_Click">
                                 <StackPanel>
@@ -357,7 +420,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     IsEnabled="{Binding CanAddTag}"
                                     Click="TagButton_Click">
                                 <StackPanel>
@@ -379,7 +442,7 @@
                                     </TextBlock>
                                 </StackPanel>
                             </Button>
-                            <Button Style="{StaticResource ModePanelToolButtonStyle}"
+                            <Button Style="{StaticResource PillarModePanelToolButtonStyle}"
                                     IsEnabled="{Binding CanAddRaftText}"
                                     Click="RaftTextButton_Click">
                                 <StackPanel>

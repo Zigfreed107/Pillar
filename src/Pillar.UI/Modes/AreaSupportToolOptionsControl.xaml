@@ -7,9 +7,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls"
              xmlns:modes="clr-namespace:Pillar.UI.Modes">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
         <StackPanel>
-            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}"
+            <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}"
                        Text="Select faces to support" />
 
             <modes:SupportBaseGenerationOptionsControl x:Name="SupportBaseGenerationOptions"

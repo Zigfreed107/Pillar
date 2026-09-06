@@ -7,9 +7,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls"
              MinWidth="290">
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
+                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
+                         Color="{DynamicResource Pillar.Color.Border}" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
+            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
+            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
         <StackPanel>
-            <TextBlock Style="{StaticResource ModeOverlayTitleTextStyle}" Text="Raft" />
+            <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}" Text="Raft" />
             <TextBlock Margin="0,10,0,0" Style="{StaticResource ModeOverlayLabelTextStyle}" Text="Raft Type" />
             <ComboBox x:Name="RaftTypeComboBox" Margin="0,4,0,0" SelectedIndex="0" SelectionChanged="RaftTypeComboBox_SelectionChanged">
                 <ComboBoxItem Content="Footprint" />
