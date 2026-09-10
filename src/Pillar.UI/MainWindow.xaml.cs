@@ -403,6 +403,7 @@ public partial class MainWindow : Window
         _translateToolOptionsControl.FinishRequested += TranslateToolOptionsControl_FinishRequested;
         _scaleToolOptionsControl.OptionsChanged += ScaleToolOptionsControl_OptionsChanged;
         _scaleToolOptionsControl.FinishRequested += ScaleToolOptionsControl_FinishRequested;
+        _scaleToolOptionsControl.CancelRequested += ScaleToolOptionsControl_CancelRequested;
         _rotationToolOptionsControl.OptionsChanged += RotationToolOptionsControl_OptionsChanged;
         _rotationToolOptionsControl.CoordinateSpaceChanged += RotationToolOptionsControl_CoordinateSpaceChanged;
         _rotationToolOptionsControl.ResetRequested += RotationToolOptionsControl_ResetRequested;

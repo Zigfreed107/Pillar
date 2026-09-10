@@ -8,9 +8,9 @@
     <Style x:Key="PillarStatusBarStyle" TargetType="StatusBar">
         <Setter Property="MinHeight" Value="28" />
         <Setter Property="Padding" Value="8,2" />
-        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background2}" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Framing.Opaque.BG.Default}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Default}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Framing.Opaque.Border.Default}" />
         <Setter Property="BorderThickness" Value="0,1,0,0" />
     </Style>
 

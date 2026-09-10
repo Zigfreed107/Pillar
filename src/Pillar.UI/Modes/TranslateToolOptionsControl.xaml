@@ -7,6 +7,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls">
     <UserControl.Resources>
+        <!-- Border chrome for this viewport overlay. -->
+        <Style x:Key="ViewportOverlayPanelStyle" TargetType="Border">
+            <Setter Property="MaxWidth" Value="360" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background2}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Pillar.CornerRadius.Panel}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
         <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
                          Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
         <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"

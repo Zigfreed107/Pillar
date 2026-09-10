@@ -8,20 +8,25 @@
              xmlns:controls="clr-namespace:Pillar.UI.Controls"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
     <UserControl.Resources>
-        <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
-                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
-        <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
-                         Color="{DynamicResource Pillar.Color.Border}" />
+        <!-- Border chrome for this viewport overlay. -->
+        <Style x:Key="ViewportOverlayPanelStyle" TargetType="Border">
+            <Setter Property="MaxWidth" Value="360" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Framing.Standard.BG.Default}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Framing.Standard.Border.Default}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Pillar.CornerRadius.Panel}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
     </UserControl.Resources>
 
-    <Border Style="{StaticResource ViewportOverlayPanelStyle}"
-            Background="{DynamicResource ToolOptionsPanelBackgroundBrush}"
-            BorderBrush="{DynamicResource ToolOptionsPanelBorderBrush}">
+    <Border Style="{StaticResource ViewportOverlayPanelStyle}">
         <StackPanel>
             <TextBlock Style="{StaticResource OverlayPanelTitleTextStyle}"
                        Text="Scale Options" />
 
-            <Grid Margin="0,14,0,0">
+            <Grid Margin="0,32,0,0" HorizontalAlignment="Center">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="36" />
@@ -49,7 +54,6 @@
                            Margin="0,0,0,4"
                            Style="{StaticResource ModeOverlayLabelTextStyle}"
                            Text="Size (mm)" />
-
                 <TextBlock Grid.Row="1"
                            Grid.Column="0"
                            Margin="0,4,8,0"
@@ -156,25 +160,43 @@
                                          Content="&#xE72E;"
                                          ToolTip="Lock scale axes" />
 
-                <Button Grid.Row="4"
+                <Button x:Name="ResetScaleButton"
+                        Grid.Row="4"
                         Style="{DynamicResource PillarButtonStyle}"
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
-                        Margin="0,28,0,0"
+                        Width="80"
+                        Margin="0,16,0,0"
                         MinHeight="30"
                         HorizontalAlignment="Stretch"
                         Click="ResetScaleButton_Click"
                         Content="Reset" />
 
-                <Button Grid.Row="5"
-                        Style="{DynamicResource PillarButtonAccentStyle}"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="6"
-                        Margin="0,16,0,0"
-                        MinHeight="30"
-                        HorizontalAlignment="Stretch"
-                        Click="FinishScaleButton_Click"
-                        Content="Finish" />
+                <Grid Grid.Row="5"
+                      Grid.Column="0"
+                      Grid.ColumnSpan="6"
+                      Margin="0,32,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button x:Name="CancelScaleButton"
+                            Grid.Column="0"
+                            Style="{DynamicResource PillarButtonStyle}"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="CancelScaleButton_Click"
+                            Content="Cancel" />
+                    <Button x:Name="FinishScaleButton"
+                            Grid.Column="2"
+                            Style="{DynamicResource PillarButtonAccentStyle}"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="FinishScaleButton_Click"
+                            Content="Finish" />
+                </Grid>
             </Grid>
         </StackPanel>
     </Border>

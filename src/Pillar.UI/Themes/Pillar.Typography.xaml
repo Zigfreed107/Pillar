@@ -28,28 +28,28 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Title}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style x:Key="OverlayPanelTitleIconStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Icons}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Title}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style x:Key="OverlayPanelSubheadingTextStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Subheading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Subtitle}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style x:Key="OverlayPanelContentStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Default}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     
@@ -60,7 +60,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Title}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Title}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -68,7 +68,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Heading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Color.Text.Accent}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -76,7 +76,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Heading}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Subheading}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Default}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -84,7 +84,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Body}" />
         <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Default}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -92,7 +92,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Label}" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Accent}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Accent}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -108,7 +108,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Caption}" />
         <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextMuted}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Subtle}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -116,7 +116,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Pillar.FontFamily.Monospace}" />
         <Setter Property="FontSize" Value="{StaticResource Pillar.FontSize.Body}" />
         <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Default}" />
         <Setter Property="TextWrapping" Value="NoWrap" />
     </Style>
 

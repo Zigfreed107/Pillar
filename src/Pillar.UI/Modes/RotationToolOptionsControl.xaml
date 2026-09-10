@@ -7,6 +7,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:Pillar.UI.Controls">
     <UserControl.Resources>
+        <!-- Border chrome for this viewport overlay. -->
+        <Style x:Key="ViewportOverlayPanelStyle" TargetType="Border">
+            <Setter Property="MaxWidth" Value="360" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background2}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Pillar.CornerRadius.Panel}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
         <SolidColorBrush x:Key="ToolOptionsPanelBackgroundBrush"
                          Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
         <SolidColorBrush x:Key="ToolOptionsPanelBorderBrush"
@@ -37,59 +48,110 @@
                                  Content="Local"
                                  ToolTip="Rotate around the model's own axes" />
                 </StackPanel>
+
+                <StackPanel Orientation="Horizontal"></StackPanel>
                 <TextBlock Margin="0,5,0,0"
                            Style="{StaticResource ModeOverlayBodyTextStyle}"
                            Text="World uses the scene axes. Local uses the model axes."
                            TextWrapping="Wrap" />
 
-                <TextBlock Margin="0,14,0,0"
-                           Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="X (degrees)"
-                           Foreground="{StaticResource RotationXAxisBrush}" />
-                <controls:NumericUpDown x:Name="RotationXNumericUpDown"
-                                        Margin="0,4,0,0"
-                                        Minimum="-360"
-                                        Maximum="360"
-                                        Increment="1"
-                                        DecimalPlaces="2"
-                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <TextBlock Margin="0,10,0,0"
-                           Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="Y (degrees)"
-                           Foreground="{StaticResource RotationYAxisBrush}" />
-                <controls:NumericUpDown x:Name="RotationYNumericUpDown"
-                                        Margin="0,4,0,0"
-                                        Minimum="-360"
-                                        Maximum="360"
-                                        Increment="1"
-                                        DecimalPlaces="2"
-                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Grid.Row="0"  Grid.Column="0">
+                        <TextBlock Margin="0,0,0,0" 
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource ModeOverlayLabelTextStyle}"
+                                   Text="X Axis"
+                                   Foreground="{StaticResource RotationXAxisBrush}" />
+                        <controls:NumericUpDown x:Name="RotationXNumericUpDown"
+                                                UnitText="&#x00B0;"
+                                                Margin="14,0,0,0"
+                                                Minimum="-360"
+                                                Maximum="360"
+                                                Increment="1"
+                                                DecimalPlaces="2"
+                                                ValueChanged="RotationNumericUpDown_ValueChanged" />
+                    </StackPanel>
 
-                <TextBlock Margin="0,10,0,0"
-                           Style="{StaticResource ModeOverlayLabelTextStyle}"
-                           Text="Z (degrees)"
-                           Foreground="{StaticResource RotationZAxisBrush}" />
-                <controls:NumericUpDown x:Name="RotationZNumericUpDown"
-                                        Margin="0,4,0,0"
-                                        Minimum="-360"
-                                        Maximum="360"
-                                        Increment="1"
-                                        DecimalPlaces="2"
-                                        ValueChanged="RotationNumericUpDown_ValueChanged" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"  Grid.Row="1" Grid.Column="0">
+                        <TextBlock Margin="0,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource ModeOverlayLabelTextStyle}"
+                                   Text="Y Axis"
+                                   Foreground="{StaticResource RotationYAxisBrush}" />
+                        <controls:NumericUpDown x:Name="RotationYNumericUpDown"
+                                                UnitText="&#x00B0;"
+                                                Margin="14,0,0,0"
+                                                Minimum="-360"
+                                                Maximum="360"
+                                                Increment="1"
+                                                DecimalPlaces="2"
+                                                ValueChanged="RotationNumericUpDown_ValueChanged" />
+                    </StackPanel>
 
-                <Button Margin="0,14,0,0"
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"  Grid.Row="2" Grid.Column="0">
+                        <TextBlock Margin="0,0,0,0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource ModeOverlayLabelTextStyle}"
+                            Text="Z Axis"
+                            Foreground="{StaticResource RotationZAxisBrush}" />
+                    <controls:NumericUpDown x:Name="RotationZNumericUpDown"
+                                            UnitText="&#x00B0;"
+                                            Margin="14,0,0,0"
+                                            Minimum="-360"
+                                            Maximum="360"
+                                            Increment="1"
+                                            DecimalPlaces="2"
+                                            ValueChanged="RotationNumericUpDown_ValueChanged" />
+
+                    </StackPanel>
+
+                    <Button x:Name="ResetScaleButton"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Style="{DynamicResource PillarButtonStyle}"
+                        Width="80"
+                        Margin="0,16,0,0"
                         MinHeight="30"
+                        HorizontalAlignment="Stretch"
                         Click="ResetButton_Click"
                         Content="Reset" />
-                <Button Margin="0,10,0,0"
-                        MinHeight="30"
-                        Click="FinishButton_Click"
-                        Content="Finish" />
-                <Button Margin="0,10,0,0"
-                        MinHeight="30"
-                        Click="CancelButton_Click"
-                        Content="Cancel" />
+                    
+                </Grid>
+                
+
+
+                <Grid Margin="0,32,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button x:Name="CancelScaleButton"
+                            Grid.Column="0"
+                            Style="{DynamicResource PillarButtonStyle}"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="CancelButton_Click"
+                            Content="Cancel" />
+                    <Button x:Name="FinishScaleButton"
+                            Grid.Column="2"
+                            Style="{DynamicResource PillarButtonAccentStyle}"
+                            MinHeight="30"
+                            HorizontalAlignment="Stretch"
+                            Click="FinishButton_Click"
+                            Content="Finish" />
+                </Grid>
             </StackPanel>
         </StackPanel>
     </Border>

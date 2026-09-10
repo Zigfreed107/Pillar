@@ -14,7 +14,6 @@
                 <ResourceDictionary Source="Themes/Pillar.Typography.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Pillar.ControlMetrics.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Pillar.Window.xaml" />
-                <ResourceDictionary Source="Themes/Controls/Pillar.Border.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Pillar.StatusBar.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Pillar.TextBlock.xaml" />
                 <ResourceDictionary Source="Themes/Controls/Pillar.Button.xaml" />

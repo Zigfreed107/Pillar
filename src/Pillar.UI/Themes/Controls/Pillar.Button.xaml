@@ -8,12 +8,12 @@
     <!-- Standard buttons own their chrome and states without relying on the WPF theme. -->
     <Style x:Key="PillarButtonStyle" TargetType="Button">
         <Setter Property="Padding" Value="11,5,11,6" />
-        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.Background}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.Border}" />
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Control.Standard.BG.Default}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Standard.Border.Default}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
-        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.Foreground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Title}" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -41,30 +41,26 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.FocusBorder}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Standard.Border.Enabled}" />
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.HoverBackground}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.HoverBorder}" />
-                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.HoverForeground}" />
+                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Control.Standard.BG.Hover}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Standard.Border.Hover}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
                 <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.PressedBackground}" />
                 <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.PressedBorder}" />
-                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.PressedForeground}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.DisabledBackground}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.DisabledBorder}" />
-                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.DisabledForeground}" />
+                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Text.Disabled}" />
             </Trigger>
         </Style.Triggers>
     </Style>
 
     <Style x:Key="PillarButtonAccentStyle" TargetType="Button">
         <Setter Property="Padding" Value="11,5,11,6" />
-        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.HoverBackground}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.HoverBorder}" />
+        <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Control.Accent.BG.Default}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Accent.Border.Default}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="FontFamily" Value="{DynamicResource Pillar.FontFamily.UI}" />
         <Setter Property="FontSize" Value="{DynamicResource Pillar.FontSize.ControlContent}" />
@@ -96,21 +92,17 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.FocusBorder}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Accent.Border.Enabled}" />
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.HoverBackground}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.HoverBorder}" />
-                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.HoverForeground}" />
+                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Control.Accent.BG.Hover}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Accent.Border.Hover}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.PressedBackground}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.PressedBorder}" />
-                <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.PressedForeground}" />
+                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Control.Accent.BG.Pressed}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Control.Accent.Border.Pressed}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Button.DisabledBackground}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Button.DisabledBorder}" />
                 <Setter Property="Foreground" Value="{DynamicResource Pillar.Brush.Button.DisabledForeground}" />
             </Trigger>
         </Style.Triggers>

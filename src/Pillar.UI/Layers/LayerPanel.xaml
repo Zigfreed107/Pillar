@@ -11,6 +11,17 @@
              MinWidth="260">
 
     <UserControl.Resources>
+        <!-- Border chrome for this viewport overlay. -->
+        <Style x:Key="ViewportOverlayPanelStyle" TargetType="Border">
+            <Setter Property="MaxWidth" Value="360" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Background2}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Pillar.CornerRadius.Panel}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
         <!-- Layer panel header button chrome. Glyph foregrounds remain set on each button. -->
         <SolidColorBrush x:Key="LayerPanelHeaderButtonBackgroundBrush"
                          Color="Transparent" />
@@ -518,7 +529,7 @@
                             FontFamily="Segoe Fluent Icons"
                             FontSize="16"
                             ToolTip="Import model"
-                            Foreground="{DynamicResource Pillar.Brush.Success}"
+                            Foreground="{DynamicResource Pillar.Brush.Y}"
                             IsEnabled="{Binding CanAddModel}"
                             Click="AddModelButton_Click"
                             ToolBar.OverflowMode="Never" />
@@ -529,7 +540,7 @@
                             FontFamily="Segoe Fluent Icons"
                             FontSize="16"
                             ToolTip="Remove selected item"
-                            Foreground="{DynamicResource Pillar.Brush.Danger}"
+                            Foreground="{DynamicResource Pillar.Brush.X}"
                             IsEnabled="{Binding CanRemoveSelectedLayer}"
                             Click="RemoveButton_Click"
                             ToolBar.OverflowMode="Never" />

@@ -19,8 +19,43 @@
         KeyDown="Window_KeyDown"
         KeyUp="Window_KeyUp">
     <Window.Resources>
+        <!-- Border styles used by the application shell. -->
+        <Style x:Key="PillarTopChromeStyle" TargetType="Border">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Framing.Opaque.BG.Default}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Framing.Opaque.Border.Default}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="PillarDividerStyle" TargetType="Border">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Framing.Opaque.Border.Default}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="PillarPopupSurfaceStyle" TargetType="Border">
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.Framing.Standard.BG.Default}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Framing.Standard.Border.Default}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Pillar.CornerRadius.Control}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="PillarViewportFrameStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Pillar.Brush.BG.3DViewport}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Pillar.Brush.Border.3DViewport}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="ClipToBounds" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
         <SolidColorBrush x:Key="RenderButtonBackgroundBrush"
-                         Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />
+                         Color="{DynamicResource Pillar.Color.DEBUG}" />
     </Window.Resources>
     <DockPanel LastChildFill="True" >
         <!--Top Menu-->
@@ -127,11 +162,6 @@
                         </primitives:Popup>
                     </Grid>
 
-                    <Border Width="1"
-                            Height="24"
-                            Margin="12,0"
-                            Style="{StaticResource PillarDividerStyle}" />
-
                     <Button x:Name="FaceSetSelectionLaunchButton"
                             MinHeight="28"
                             Margin="0,0,12,0"
@@ -225,7 +255,7 @@
                 <Grid>
                     <hx:Viewport3DX x:Name="Viewport"
                                     Background="{DynamicResource Pillar.Brush.3DViewportBG}"
-                                    BackgroundColor="{StaticResource Pillar.Color.3DViewportBG}"
+                                    BackgroundColor="{StaticResource Pillar.Color.BG.3DViewport}"
                                     EffectsManager="{Binding ElementName=RootWindow, Path=EffectsManager}"
                                     IsViewCubeEdgeClicksEnabled="True"
                                     ModelUpDirection="0,0,1"

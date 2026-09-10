@@ -21,6 +21,7 @@ public static class Program
         FaceHitMappingSmokeTests.Run(failures);
         FaceSetSelectionToolPanelSmokeTests.Run(failures);
         NumericUpDownSmokeTests.Run(failures);
+        ScaleToolOptionsControlSmokeTests.Run(failures);
         ViewportRightClickGestureSmokeTests.Run(failures);
 
         if (failures.Count > 0)

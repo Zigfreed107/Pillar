@@ -103,6 +103,17 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Discards the live preview, restores the session-start transform, and closes the tool.
+    /// </summary>
+    private void ScaleToolOptionsControl_CancelRequested(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        HideToolOptionsOverlay();
+        _viewModel.SetStatusText("Cancelled model scaling");
+    }
+
+    /// <summary>
     /// Refreshes the active scale UI when selection changes while the tool is open.
     /// </summary>
     private void RefreshTransformScaleToolForSelection()
@@ -122,6 +133,7 @@ public partial class MainWindow
 
         if (!_activeTransformScaleModelId.HasValue || _activeTransformScaleModelId.Value != selectedMesh.Id)
         {
+            ClearTransformScaleToolState();
             ShowTransformScaleTool();
             return;
         }

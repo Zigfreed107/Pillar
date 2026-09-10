@@ -5,12 +5,167 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <Color x:Key="Pillar.Color.DEBUG">Magenta</Color>
+    <!--Status Bar, Toolbar-->
+
+
+    <Color x:Key="Pillar.Color.Framing.Opaque.BG.Default">#F21A232D</Color> <!--Status Bar, Toolbar-->
+    <Color x:Key="Pillar.Color.Framing.Opaque.Border.Default">#FF3A4A59</Color>
+    
+    <Color x:Key="Pillar.Color.Framing.Standard.BG.Default">#F2181f27</Color> <!--Panels-->
+    <Color x:Key="Pillar.Color.Framing.Standard.Border.Default">#FF3A4A59</Color>  <!--Panels-->
+
+    <Color x:Key="Pillar.Color.Framing.Accent.BG.Default">Magenta</Color>
+    <Color x:Key="Pillar.Color.Framing.Accent.Border.Default">Magenta</Color>
+    
+    <Color x:Key="Pillar.Color.Framing.Subtle.BG.Default">#FF0D1218</Color> <!--Behind Viewer-->
+    <Color x:Key="Pillar.Color.Framing.Subtle.Border.Default">#FF3A4A59</Color>
+
+    <Color x:Key="Pillar.Color.BG.3DViewport">#FF171D23</Color>
+    <Color x:Key="Pillar.Color.Border.3DViewport">#FF3A4A59</Color>
+
+    <Color x:Key="Pillar.Color.Control.Standard.BG.Default">#FF262B34</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.BG.Hover">#1558D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.BG.Enabled">#5558D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.BG.Pressed">#AA58D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.Border.Default">#FF3A4A59</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.Border.Hover">#AA58D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.Border.Enabled">#AA58D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Standard.Border.Pressed">#FF58D8C9</Color>
+
+    <Color x:Key="Pillar.Color.Control.Accent.BG.Default">#25D80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.BG.Hover">#55D80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.BG.Enabled">#55D80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.BG.Pressed">#AAD80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.Border.Default">#78D80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.Border.Hover">#AAD80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.Border.Enabled">#FFD80019</Color>
+    <Color x:Key="Pillar.Color.Control.Accent.Border.Pressed">#FFD80019</Color>
+    
+    <Color x:Key="Pillar.Color.Control.Subtle.BG.Default">#FF0D1218</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.BG.Hover">#FF0D1218</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.BG.Enabled">#FF3B4044</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.BG.Pressed">#FF4A4E52</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.Border.Default">#FF0D1218</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.Border.Hover">#FF3B4044</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.Border.Enabled">#FF3B4044</Color>
+    <Color x:Key="Pillar.Color.Control.Subtle.Border.Pressed">#FF3B4044</Color>
+    
+    <Color x:Key="Pillar.Color.Control.Opaque.BG.Default">#FF0D1218</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.BG.Hover">#FF0D1218</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.BG.Enabled">#FF1E4446</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.BG.Pressed">#FF486769</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.Border.Default">#5558D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.Border.Hover">#FF58D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.Border.Enabled">#FF58D8C9</Color>
+    <Color x:Key="Pillar.Color.Control.Opaque.Border.Pressed">#FF58D8C9</Color>
+
+    <Color x:Key="Pillar.Color.Text.Default">#FFB5C1CB</Color>
+    <Color x:Key="Pillar.Color.Text.Accent">#FF58D8C9</Color>
+    <Color x:Key="Pillar.Color.Text.Subtle">#FF81909D</Color>
+    <Color x:Key="Pillar.Color.Text.Title">#FFF2F6F8</Color>
+    <Color x:Key="Pillar.Color.Text.Subtitle">#FFB5C1CB</Color>
+    <Color x:Key="Pillar.Color.Text.Disabled">#28B5C1CB</Color>
+
+    
+    
+    
+    
+
+
+    <!--Main UI Elements-->
+    <SolidColorBrush x:Key="Pillar.Brush.DEBUG" Color="{DynamicResource Pillar.Color.DEBUG}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Opaque.BG.Default" Color="{DynamicResource Pillar.Color.Framing.Opaque.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Opaque.Border.Default" Color="{DynamicResource Pillar.Color.Framing.Opaque.Border.Default}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Standard.BG.Default" Color="{DynamicResource Pillar.Color.Framing.Standard.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Standard.Border.Default" Color="{DynamicResource Pillar.Color.Framing.Standard.Border.Default}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Accent.BG.Default" Color="{DynamicResource Pillar.Color.Framing.Accent.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Accent.Border.Default" Color="{DynamicResource Pillar.Color.Framing.Accent.Border.Default}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Subtle.BG.Default" Color="{DynamicResource Pillar.Color.Framing.Subtle.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Framing.Subtle.Border.Default" Color="{DynamicResource Pillar.Color.Framing.Subtle.Border.Default}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.BG.3DViewport" Color="{DynamicResource Pillar.Color.BG.3DViewport}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Border.3DViewport" Color="{DynamicResource Pillar.Color.Border.3DViewport}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.BG.Default" Color="{DynamicResource Pillar.Color.Control.Standard.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.BG.Hover" Color="{DynamicResource Pillar.Color.Control.Standard.BG.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.BG.Enabled" Color="{DynamicResource Pillar.Color.Control.Standard.BG.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.BG.Pressed" Color="{DynamicResource Pillar.Color.Control.Standard.BG.Pressed}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.Border.Default" Color="{DynamicResource Pillar.Color.Control.Standard.Border.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.Border.Hover" Color="{DynamicResource Pillar.Color.Control.Standard.Border.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.Border.Enabled" Color="{DynamicResource Pillar.Color.Control.Standard.Border.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Standard.Border.Pressed" Color="{DynamicResource Pillar.Color.Control.Standard.Border.Pressed}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.BG.Default" Color="{DynamicResource Pillar.Color.Control.Accent.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.BG.Hover" Color="{DynamicResource Pillar.Color.Control.Accent.BG.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.BG.Enabled" Color="{DynamicResource Pillar.Color.Control.Accent.BG.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.BG.Pressed" Color="{DynamicResource Pillar.Color.Control.Accent.BG.Pressed}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.Border.Default" Color="{DynamicResource Pillar.Color.Control.Accent.Border.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.Border.Hover" Color="{DynamicResource Pillar.Color.Control.Accent.Border.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.Border.Enabled" Color="{DynamicResource Pillar.Color.Control.Accent.Border.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Accent.Border.Pressed" Color="{DynamicResource Pillar.Color.Control.Accent.Border.Pressed}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.BG.Default" Color="{DynamicResource Pillar.Color.Control.Subtle.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.BG.Hover" Color="{DynamicResource Pillar.Color.Control.Subtle.BG.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.BG.Enabled" Color="{DynamicResource Pillar.Color.Control.Subtle.BG.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.BG.Pressed" Color="{DynamicResource Pillar.Color.Control.Subtle.BG.Pressed}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.Border.Default" Color="{DynamicResource Pillar.Color.Control.Subtle.Border.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.Border.Hover" Color="{DynamicResource Pillar.Color.Control.Subtle.Border.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.Border.Enabled" Color="{DynamicResource Pillar.Color.Control.Subtle.Border.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Subtle.Border.Pressed" Color="{DynamicResource Pillar.Color.Control.Subtle.Border.Pressed}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.BG.Default" Color="{DynamicResource Pillar.Color.Control.Opaque.BG.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.BG.Hover" Color="{DynamicResource Pillar.Color.Control.Opaque.BG.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.BG.Enabled" Color="{DynamicResource Pillar.Color.Control.Opaque.BG.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.BG.Pressed" Color="{DynamicResource Pillar.Color.Control.Opaque.BG.Pressed}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.Border.Default" Color="{DynamicResource Pillar.Color.Control.Opaque.Border.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.Border.Hover" Color="{DynamicResource Pillar.Color.Control.Opaque.Border.Hover}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.Border.Enabled" Color="{DynamicResource Pillar.Color.Control.Opaque.Border.Enabled}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Control.Opaque.Border.Pressed" Color="{DynamicResource Pillar.Color.Control.Opaque.Border.Pressed}" />
+
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Default" Color="{DynamicResource Pillar.Color.Text.Default}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Accent" Color="{DynamicResource Pillar.Color.Text.Accent}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Subtle" Color="{DynamicResource Pillar.Color.Text.Subtle}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Title" Color="{DynamicResource Pillar.Color.Text.Title}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Subtitle" Color="{DynamicResource Pillar.Color.Text.Subtitle}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Text.Disabled" Color="{DynamicResource Pillar.Color.Text.Disabled}" />
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     <!-- Core palette. Change these values to explore a different Pillar colorway. -->
 
+    
+    
+    <!--Behind Viewer, SOLID-->
     <Color x:Key="Pillar.Color.Background1">#FF0D1218</Color> <!--Behind Viewer, SOLID-->
     <Color x:Key="Pillar.Color.Background2">#F21A232D</Color> <!--Toolbar & Status Bar-->
     <Color x:Key="Pillar.Color.BackgroundTransparent">#F2181f27</Color> <!--Can be layered-->
-    <Color x:Key="Pillar.Color.3DViewportBG">#FF171D23</Color>
+
     
     <Color x:Key="Pillar.Color.Border">#FF3A4A59</Color>
     <Color x:Key="Pillar.Color.BorderStrong">#FF556979</Color>
@@ -32,23 +187,22 @@
     <Color x:Key="Pillar.Color.AccentSubtleTransparent">#3D35C2B2</Color>
     <Color x:Key="Pillar.Color.AccentSubtle">#3D35C2B2</Color>
 
-    <Color x:Key="Pillar.Color.Success">#FF65C995</Color>
+    <Color x:Key="Pillar.Color.Y">#FF65C995</Color>
+    <Color x:Key="Pillar.Color.X">#FFF07178</Color>
+    <Color x:Key="Pillar.Color.Z">#FF006FC5</Color>
     <Color x:Key="Pillar.Color.Warning">#FFF0B45A</Color>
-    <Color x:Key="Pillar.Color.Danger">#FFF07178</Color>
-    <Color x:Key="Pillar.Color.Info">#FF006FC5</Color>
 
 
     <!-- Application-wide semantic brushes. -->
+
+
+
     <SolidColorBrush x:Key="Pillar.Brush.Background1"
                      Color="{DynamicResource Pillar.Color.Background1}" />
     <SolidColorBrush x:Key="Pillar.Brush.Background2"
                      Color="{DynamicResource Pillar.Color.Background2}" />
-
     <SolidColorBrush x:Key="Pillar.Brush.BackgroundTransparent"
                      Color="{DynamicResource Pillar.Color.BackgroundTransparent}" />    
-    <SolidColorBrush x:Key="Pillar.Brush.3DViewportBG"
-                     Color="{DynamicResource Pillar.Color.3DViewportBG}" />
-    
     <SolidColorBrush x:Key="Pillar.Brush.Element1"
                      Color="{DynamicResource Pillar.Color.Element1}" />
     <SolidColorBrush x:Key="Pillar.Brush.Element2"
@@ -79,15 +233,15 @@
                      Color="#1E4446" />
     <SolidColorBrush x:Key="Pillar.Brush.AccentSubtleTransparent"
                      Color="{DynamicResource Pillar.Color.AccentSubtleTransparent}" />
-    <SolidColorBrush x:Key="Pillar.Brush.Success"
-                     Color="{DynamicResource Pillar.Color.Success}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Y"
+                     Color="{DynamicResource Pillar.Color.Y}" />
+    <SolidColorBrush x:Key="Pillar.Brush.X"
+                     Color="{DynamicResource Pillar.Color.X}" />
+    <SolidColorBrush x:Key="Pillar.Brush.Z"
+                     Color="{DynamicResource Pillar.Color.Z}" />
     <SolidColorBrush x:Key="Pillar.Brush.Warning"
                      Color="{DynamicResource Pillar.Color.Warning}" />
-    <SolidColorBrush x:Key="Pillar.Brush.Danger"
-                     Color="{DynamicResource Pillar.Color.Danger}" />
-    <SolidColorBrush x:Key="Pillar.Brush.Info"
-                     Color="{DynamicResource Pillar.Color.Info}" />
-
+    
     <!-- Standard button roles. These keep all button states under Pillar's palette control. -->
     <SolidColorBrush x:Key="Pillar.Brush.Button.Background"
                      Color="{DynamicResource Pillar.Color.Element1}" />

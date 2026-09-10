@@ -29,6 +29,11 @@ public partial class ScaleToolOptionsControl : UserControl
     public event EventHandler? FinishRequested;
 
     /// <summary>
+    /// Raised when the user asks to discard the Transform Scale preview.
+    /// </summary>
+    public event EventHandler? CancelRequested;
+
+    /// <summary>
     /// Creates the Transform Scale options control.
     /// </summary>
     public ScaleToolOptionsControl()
@@ -256,6 +261,16 @@ public partial class ScaleToolOptionsControl : UserControl
         _ = sender;
         _ = e;
         FinishRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Requests that the owning shell discard the live preview and close the Transform Scale tool.
+    /// </summary>
+    private void CancelScaleButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        CancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

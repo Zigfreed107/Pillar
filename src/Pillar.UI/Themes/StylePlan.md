@@ -22,7 +22,7 @@ Used on UI elements like text labels or drawings that are 'hints' for the user a
 ### Title
 Used on text labels that title a given panel or window.
 
-### Floating
+### Opqaque
 Use on individual controls like buttons that sit on top of the 3D Viewer but don't sit on or within a panel or border that would otherwise help visually isolate them from the detail drawn in the viewer. Generally this is a simple boost to their prominence (eg less transparency) while attempting to keep the look and feel the same to the user.
 
 ## Intra-style variations
@@ -31,7 +31,7 @@ A user can interact with a UI Control via:
 - focus (previously selected but mouse is not over the control)
 - hover
 - enabled (e.g. toggle button, check box)
-- selected (e.g. press a button)
+- pressed (e.g. press a button)
 
 Each **Main Style** has variations depending on the user interaction, but each follows the same escalation in visual prominence:
 
@@ -39,7 +39,7 @@ Each **Main Style** has variations depending on the user interaction, but each f
 - **focused:** increase in border prominence
 - **hover:** highest increase in border prominence
 - **enabled:** hover border with increase in BG prominence
-- **selected:** hover border with highest increase in BG prominence.
+- **pressed:** hover border with highest increase in BG prominence.
 
 
 ### Colours needed
